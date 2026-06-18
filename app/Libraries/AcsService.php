@@ -69,18 +69,54 @@ class AcsService
 
     /**
      * Set PPPoE username dan password ONU via GenieACS.
-     * Otomatis deteksi WAN path berdasarkan brand device.
+     * Fiberhome: create WANPPPConnection jika belum ada, set VLAN + ServiceList lengkap.
+     * Brand lain: set Username, Password, Enable saja.
      *
-     * $params: pppoe_user, pppoe_pass, [brand override]
+     * $extra: ['vlan_internet' => int]
      */
-    public function provisionPppoe(string $deviceId, string $pppoeUser, string $pppoePass, string $brand = 'default'): array
+    public function provisionPppoe(string $deviceId, string $pppoeUser, string $pppoePass, string $brand = 'default', array $extra = []): array
     {
         $brand  = strtolower($brand);
         $paths  = self::WAN_PATHS[$brand] ?? self::WAN_PATHS['default'];
         $wcd    = $paths['wcd_index'];
         $ppp    = $paths['ppp_index'];
         $base   = "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.{$wcd}.WANPPPConnection.{$ppp}";
+        $encodedId = rawurlencode($deviceId);
 
+        if ($brand === 'fiberhome') {
+            // Pastikan WAN PPP slot ada — buat jika belum
+            $this->ensureFiberhomePppWan($encodedId, $wcd);
+
+            $vlanId   = (int)($extra['vlan_internet'] ?? 0);
+            $connName = $vlanId ? "2_INTERNET_R_VID_{$vlanId}" : '2_INTERNET_R_VID';
+
+            $paramValues = [
+                ["{$base}.Enable",           true,        'xsd:boolean'],
+                ["{$base}.ConnectionType",   'IP_Routed', 'xsd:string'],
+                ["{$base}.NATEnabled",       true,        'xsd:boolean'],
+                ["{$base}.X_FH_ServiceList", 'INTERNET',  'xsd:string'],
+                ["{$base}.Username",         $pppoeUser,  'xsd:string'],
+                ["{$base}.Password",         $pppoePass,  'xsd:string'],
+            ];
+
+            if ($vlanId > 0) {
+                $paramValues[] = ["{$base}.VLANEnable", true,      'xsd:boolean'];
+                $paramValues[] = ["{$base}.VLANID",     $vlanId,   'xsd:unsignedInt'];
+                $paramValues[] = ["{$base}.Name",       $connName, 'xsd:string'];
+            }
+
+            $task     = ['name' => 'setParameterValues', 'parameterValues' => $paramValues];
+            $response = $this->request('POST', "/devices/{$encodedId}/tasks?timeout=10000", $task);
+
+            return [
+                'success'  => in_array($response['status'], [200, 201, 202]),
+                'status'   => $response['status'],
+                'body'     => $response['body'],
+                'wan_path' => $base,
+            ];
+        }
+
+        // Default: hanya set Username, Password, Enable
         $task = [
             'name'            => 'setParameterValues',
             'parameterValues' => [
@@ -90,8 +126,7 @@ class AcsService
             ],
         ];
 
-        $encodedId = rawurlencode($deviceId);
-        $response  = $this->request('POST', "/devices/{$encodedId}/tasks?timeout=3000", $task);
+        $response = $this->request('POST', "/devices/{$encodedId}/tasks?timeout=3000", $task);
 
         return [
             'success'  => in_array($response['status'], [200, 201, 202]),
@@ -99,6 +134,34 @@ class AcsService
             'body'     => $response['body'],
             'wan_path' => $base,
         ];
+    }
+
+    /**
+     * Pastikan WANPPPConnection.{ppp} ada di bawah WANConnectionDevice.{wcd}.
+     * Jika belum ada, kirim addObject task ke GenieACS.
+     */
+    private function ensureFiberhomePppWan(string $encodedId, string $wcd): void
+    {
+        $wcdPath = "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.{$wcd}";
+
+        // Cek jumlah WANPPPConnection yang ada
+        $query    = urlencode(json_encode(['_id' => rawurldecode($encodedId)]));
+        $proj     = "{$wcdPath}.WANPPPConnectionNumberOfEntries";
+        $response = $this->request('GET', "/devices?query={$query}&projection={$proj}&limit=1");
+
+        if ($response['status'] === 200) {
+            $devices = json_decode($response['body'], true);
+            $count   = $devices[0]['InternetGatewayDevice']['WANDevice']['1']['WANConnectionDevice'][$wcd]['WANPPPConnectionNumberOfEntries']['_value'] ?? null;
+            if ($count !== null && (int)$count > 0) {
+                return; // WAN PPP sudah ada
+            }
+        }
+
+        // Buat WANPPPConnection baru via addObject
+        $task = ['name' => 'addObject', 'objectName' => "{$wcdPath}.WANPPPConnection."];
+        $this->request('POST', "/devices/{$encodedId}/tasks?timeout=10000", $task);
+        // Beri jeda agar device sempat buat object sebelum setParameterValues dikirim
+        sleep(3);
     }
 
     /**

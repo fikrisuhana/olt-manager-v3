@@ -476,7 +476,9 @@ class OnuController extends Controller
                 $pppoePass = trim($this->request->getPost('pppoe_pass'));
                 $device    = $acsService->findDeviceBySn($onu['sn']);
                 $brand     = $device ? $acsService->getDeviceBrand($device) : 'default';
-                $result    = $acsService->provisionPppoe($deviceId, $pppoeUser, $pppoePass, $brand);
+                $result    = $acsService->provisionPppoe($deviceId, $pppoeUser, $pppoePass, $brand, [
+                    'vlan_internet' => (int)($onu['vlan_internet'] ?? 0),
+                ]);
 
                 if ($result['success']) {
                     $onuModel->update($id, ['pppoe_user' => $pppoeUser]);
