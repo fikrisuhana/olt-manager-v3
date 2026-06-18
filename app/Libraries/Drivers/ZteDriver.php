@@ -224,11 +224,11 @@ class ZteDriver implements OltDriverInterface
         if ($tcont) {
             $ifCmds[] = "tcont 1 name tcont profile {$tcont}";
             $ifCmds[] = "gemport 1 name gemport tcont 1";
+            if ($trafficProfile) {
+                $ifCmds[] = "gemport 1 traffic-limit upstream {$trafficProfile} downstream {$trafficProfile}";
+                $log[] = "Traffic limit: {$trafficProfile}";
+            }
             $log[] = "TCONT profile: {$tcont}";
-        }
-        if ($trafficProfile) {
-            $ifCmds[] = "gemport 1 traffic-limit upstream {$trafficProfile} downstream {$trafficProfile}";
-            $log[] = "Traffic limit: {$trafficProfile}";
         }
         $spIdx = 1;
         if ($vlanInternet) {
