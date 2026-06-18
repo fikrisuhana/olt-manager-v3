@@ -258,10 +258,15 @@ class ZteDriver implements OltDriverInterface
         // Daftarkan ONU di port PON
         $this->telnet->execute("interface gpon-olt_{$board}/{$slot}/{$port}", $this->ifPrompt, 5);
         $result = $this->telnet->execute("onu {$idx} type {$type} sn {$sn}", $this->ifPrompt, 8);
-        if (stripos($result, 'Error') !== false || stripos($result, 'Invalid') !== false) {
-            $this->telnet->execute('exit', $this->configPrompt, 3);
-            $this->telnet->execute('exit', $this->rootPrompt, 3);
-            throw new \Exception("Gagal mendaftarkan ONU: " . trim($result));
+        $log[]  = "OLT response: " . trim(preg_replace('/\s+/', ' ', $result));
+        $errPatterns = ['error', 'invalid', 'failure', 'failed', 'already exist',
+                        'duplicated', 'occupied', 'exist', '% '];
+        foreach ($errPatterns as $pat) {
+            if (stripos($result, $pat) !== false) {
+                $this->telnet->execute('exit', $this->configPrompt, 3);
+                $this->telnet->execute('exit', $this->rootPrompt, 3);
+                throw new \Exception("Gagal mendaftarkan ONU di OLT: " . trim(preg_replace('/\s+/', ' ', $result)));
+            }
         }
         $this->telnet->execute('exit', $this->configPrompt, 3);
         $log[] = "ONU sn={$sn} registered on gpon-olt_{$board}/{$slot}/{$port}:{$idx}";
