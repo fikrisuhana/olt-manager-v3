@@ -251,10 +251,10 @@ class ZteDriver implements OltDriverInterface
             if ($cmd && !str_starts_with($cmd, '#')) $ifCmds[] = $cmd;
         }
 
-        // Gunakan profile yang dipilih user dari UI (sudah diketahui saat fetch dropdown).
-        // Kalau tidak ada, baru lookup ke OLT — ini lebih lambat (extra telnet).
+        // Profile dari UI dropdown (sudah diketahui) → langsung pakai, tidak perlu Telnet.
+        // Fallback: ambil dari config OLT (pppoe_vlan_profile), atau default 'PPPOE'.
         $pppoeProfile = trim($params['pppoe_vlan_profile'] ?? '')
-            ?: $this->getVlanProfileForVlan($vlanInternet);
+            ?: trim($this->config['pppoe_vlan_profile'] ?? 'PPPOE');
 
         // --- Eksekusi CLI ke OLT ---
         $this->telnet->execute('conf t', $this->configPrompt, 5);
@@ -361,19 +361,9 @@ class ZteDriver implements OltDriverInterface
         return $profiles;
     }
 
-    /**
-     * Cari nama onu vlan-profile yang cocok dengan vlan_id.
-     * Fallback ke pppoe_vlan_profile di config OLT jika tidak ketemu.
-     */
     private function getVlanProfileForVlan(int $vlan): string
     {
-        $fallback = trim($this->config['pppoe_vlan_profile'] ?? 'PPPOE');
-        if (!$vlan) return $fallback;
-
-        foreach ($this->getVlanProfiles() as $p) {
-            if ($p['vlan'] === $vlan) return $p['name'];
-        }
-        return $fallback;
+        return trim($this->config['pppoe_vlan_profile'] ?? 'PPPOE');
     }
 
     /**
@@ -394,7 +384,7 @@ class ZteDriver implements OltDriverInterface
             throw new \Exception("VLAN internet dan VLAN ACS keduanya kosong.");
         }
 
-        $pppoeProfile = $this->getVlanProfileForVlan($vlanInternet);
+        $pppoeProfile = trim($this->config['pppoe_vlan_profile'] ?? 'PPPOE');
         $log          = [];
 
         $this->telnet->execute('conf t', $this->configPrompt, 5);
