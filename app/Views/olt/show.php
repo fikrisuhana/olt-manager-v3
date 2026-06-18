@@ -919,15 +919,15 @@ function doAcsPush() {
 function deleteOnu(onuId, sn, btn) {
     if (!confirm(`Hapus ONU ${sn} dari OLT?\nAksi ini akan menghapus konfigurasi dari OLT.`)) return;
     btn.disabled = true;
-    fetch(`/onus/${onuId}/delete`, { method: 'POST',
-        headers: {'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/json'},
-        body: JSON.stringify({'<?= csrf_token() ?>': '<?= csrf_hash() ?>'})
-    })
+    const fd = new FormData();
+    fd.append(_csrf.name, _csrf.hash);
+    fetch(`/onus/${onuId}/delete`, { method: 'POST', body: fd })
     .then(r => r.json())
     .then(data => {
         if (data.success) location.reload();
         else { btn.disabled = false; alert(data.message); }
-    });
+    })
+    .catch(e => { btn.disabled = false; alert('Error: ' + e.message); });
 }
 </script>
 <?= $this->endSection() ?>
