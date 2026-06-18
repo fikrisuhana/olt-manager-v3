@@ -525,9 +525,9 @@ function scanOnu() {
             const warnEl = document.getElementById('scanWarning');
             if (data.no_cache_warning) {
                 warnEl.className = '';
-                warnEl.innerHTML = `<div class="alert alert-warning rounded-0 border-0 border-bottom py-2 px-3 mb-0 small">
-                    <i class="bi bi-exclamation-triangle me-1"></i>Cache belum ada — index mulai dari 1.
-                    Klik <strong>Sync Cache</strong> untuk index akurat.
+                warnEl.innerHTML = `<div class="alert alert-danger rounded-0 border-0 border-bottom py-2 px-3 mb-0 small">
+                    <i class="bi bi-exclamation-triangle-fill me-1"></i><strong>Cache belum ada — index ONU tidak bisa ditentukan dengan aman.</strong>
+                    Klik <strong>Sync Cache</strong> dulu sebelum register ONU baru agar tidak menimpa ONU yang sudah aktif.
                 </div>`;
             } else {
                 warnEl.className = 'd-none';
@@ -539,6 +539,7 @@ function scanOnu() {
                 return;
             }
 
+            const noCache = data.no_cache_warning;
             let rows = data.onus.map(o => {
                 const portLabel = `${o.board}/${o.slot}/${o.port}`;
                 const nextIdx   = o.next_index ?? 1;
@@ -551,9 +552,13 @@ function scanOnu() {
                              <i class="bi bi-arrow-repeat me-1"></i>Konfigurasi Ulang
                          </button>
                        </div>`
-                    : `<button class="btn btn-sm btn-success" onclick="openRegister('${o.sn}','${o.board}','${o.slot}','${o.port}',${nextIdx})">
-                         <i class="bi bi-plus me-1"></i>Register (idx ${nextIdx})
-                       </button>`;
+                    : noCache
+                        ? `<button class="btn btn-sm btn-secondary" disabled title="Sync Cache dulu untuk index yang aman">
+                             <i class="bi bi-lock me-1"></i>Sync Cache dulu
+                           </button>`
+                        : `<button class="btn btn-sm btn-success" onclick="openRegister('${o.sn}','${o.board}','${o.slot}','${o.port}',${nextIdx})">
+                             <i class="bi bi-plus me-1"></i>Register (idx ${nextIdx})
+                           </button>`;
                 return `<tr>
                     <td class="font-monospace small">${o.sn}</td>
                     <td class="small text-muted">${portLabel}</td>
