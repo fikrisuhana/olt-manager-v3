@@ -604,9 +604,8 @@ function previewCli() {
     cli += `  name ${name}\n`;
     cli += `  sn-bind enable sn\n`;
     if (tcont) {
-        cli += `  tcont 1 name tcont profile ${tcont}\n`;
-        cli += `  gemport 1 name gemport tcont 1\n`;
-        cli += `  gemport 1 traffic-limit upstream ${tcont} downstream ${tcont}\n`;
+        cli += `  tcont 1 name tcont_1 profile ${tcont}\n`;
+        cli += `  gemport 1 name gem_1 tcont 1\n`;
     }
     let spIdx = 1;
     if (vlanI) {

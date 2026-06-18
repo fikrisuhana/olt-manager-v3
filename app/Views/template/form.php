@@ -213,8 +213,7 @@ function generateScript() {
 
     if (tcont) {
         lines.push(`tcont 1 name tcont_1 profile ${tcont}`);
-        lines.push(`gemport 1 name gemport tcont 1`);
-        lines.push(`gemport 1 traffic-limit upstream ${tcont} downstream ${tcont}`);
+        lines.push(`gemport 1 name gem_1 tcont 1`);
     }
 
     let spIdx = 1;
