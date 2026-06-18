@@ -27,9 +27,20 @@ class OnuController extends Controller
     public function index()
     {
         $onuModel = new OnuModel();
+        $onus     = $onuModel->getByUser($this->userId);
+
+        $cache   = new OnuCacheService();
+        $acsData = [];
+        foreach (array_unique(array_column($onus, 'olt_id')) as $oltId) {
+            foreach ($cache->loadAcs((int)$oltId)['devices'] as $sn => $info) {
+                $acsData[strtoupper($sn)] = $info;
+            }
+        }
+
         return view('onu/index', [
-            'title' => 'Semua ONU',
-            'onus'  => $onuModel->getByUser($this->userId),
+            'title'   => 'Semua ONU',
+            'onus'    => $onus,
+            'acsData' => $acsData,
         ]);
     }
 
@@ -45,7 +56,16 @@ class OnuController extends Controller
             return redirect()->to('/onus')->with('error', 'ONU tidak ditemukan.');
         }
 
-        return view('onu/show', ['title' => $onu['name'] ?? $onu['sn'], 'onu' => $onu]);
+        $cache    = new OnuCacheService();
+        $acsCache = $cache->loadAcs($onu['olt_id']);
+        $acsInfo  = $acsCache['devices'][strtoupper($onu['sn'])] ?? null;
+
+        return view('onu/show', [
+            'title'        => $onu['name'] ?? $onu['sn'],
+            'onu'          => $onu,
+            'acsInfo'      => $acsInfo,
+            'acsUpdatedAt' => $acsCache['updated_at'],
+        ]);
     }
 
     /**

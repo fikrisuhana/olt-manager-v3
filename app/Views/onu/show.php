@@ -8,8 +8,8 @@
         <span class="text-muted small ms-1"><?= esc("{$onu['board']}/{$onu['slot']}/{$onu['port']}:{$onu['onu_index']}") ?></span>
     </div>
     <div class="ms-auto d-flex gap-2">
-        <button class="btn btn-sm btn-outline-info" onclick="loadAcsInfo()">
-            <i class="bi bi-cloud-download me-1"></i>Muat Info ACS
+        <button class="btn btn-sm btn-outline-info" onclick="loadAcsInfo()" id="btnLoadAcs">
+            <i class="bi bi-arrow-clockwise me-1"></i>Refresh ACS
         </button>
         <button class="btn btn-sm btn-outline-danger" id="btnReboot" onclick="reboot()">
             <i class="bi bi-power me-1"></i>Reboot
@@ -89,13 +89,60 @@
             </div>
         </div>
 
+        <!-- Sinyal ONU -->
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-white border-bottom py-3 d-flex align-items-center justify-content-between">
+                <h6 class="mb-0 fw-semibold"><i class="bi bi-reception-4 me-1"></i>Sinyal Optik</h6>
+                <button class="btn btn-sm btn-outline-secondary py-0" id="btnSignal" onclick="loadSignal()">
+                    <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+                </button>
+            </div>
+            <div class="card-body" id="signalBox">
+                <div class="text-center py-2">
+                    <span class="spinner-border spinner-border-sm text-secondary"></span>
+                    <span class="text-muted small ms-2">Mengambil sinyal dari OLT...</span>
+                </div>
+            </div>
+        </div>
+
         <!-- Status ACS -->
         <div class="card border-0 shadow-sm">
-            <div class="card-header bg-white border-bottom py-3">
+            <div class="card-header bg-white border-bottom py-3 d-flex align-items-center justify-content-between">
                 <h6 class="mb-0 fw-semibold"><i class="bi bi-cloud-check me-1"></i>Status ACS</h6>
+                <?php if ($acsUpdatedAt): ?>
+                    <span class="small text-muted">Cache: <?= date('d/m H:i', strtotime($acsUpdatedAt)) ?></span>
+                <?php endif; ?>
             </div>
             <div class="card-body" id="acsStatusBox">
-                <div class="text-muted small">Klik "Muat Info ACS" untuk melihat status real-time.</div>
+                <?php if ($acsInfo): ?>
+                <?php
+                    $online  = $acsInfo['online'];
+                    $lastInf = $acsInfo['last_inform'] ? date('d/m/Y H:i', strtotime($acsInfo['last_inform'])) : '-';
+                ?>
+                <div class="mb-2 d-flex align-items-center gap-2">
+                    <?php if ($online): ?>
+                        <span class="badge bg-success fs-6 py-1 px-2"><i class="bi bi-wifi me-1"></i>Online</span>
+                    <?php else: ?>
+                        <span class="badge bg-secondary fs-6 py-1 px-2"><i class="bi bi-wifi-off me-1"></i>Offline</span>
+                    <?php endif; ?>
+                    <small class="text-muted">Last inform: <?= $lastInf ?></small>
+                </div>
+                <table class="table table-sm mb-0">
+                    <?php if (!empty($acsInfo['model'])): ?>
+                    <tr><th class="text-muted" style="width:45%">Model</th>
+                        <td><?= esc($acsInfo['model']) ?> (<?= esc($acsInfo['manufacturer'] ?? '-') ?>)</td></tr>
+                    <?php endif; ?>
+                </table>
+                <div class="mt-2 small text-muted"><i class="bi bi-info-circle me-1"></i>Data dari cache. Klik "Refresh ACS" untuk info lengkap (WAN IP, PPPoE, WiFi).</div>
+                <?php else: ?>
+                <div class="text-muted small">
+                    <?php if ($acsUpdatedAt): ?>
+                        ONU tidak ditemukan di ACS cache. Klik "Refresh ACS" untuk cek live.
+                    <?php else: ?>
+                        Belum ada ACS cache. Klik "Sync Cache" di halaman OLT, atau klik "Refresh ACS" untuk cek live.
+                    <?php endif; ?>
+                </div>
+                <?php endif; ?>
             </div>
         </div>
     </div>
@@ -179,6 +226,47 @@
 <script>
 const ONU_ID = <?= $onu['id'] ?>;
 
+document.addEventListener('DOMContentLoaded', () => {
+    loadSignal();
+});
+
+function loadSignal() {
+    const box = document.getElementById('signalBox');
+    const btn = document.getElementById('btnSignal');
+    box.innerHTML = '<div class="text-center py-2"><span class="spinner-border spinner-border-sm text-secondary"></span><span class="text-muted small ms-2">Mengambil sinyal dari OLT...</span></div>';
+    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>'; }
+
+    fetch(`/onus/${ONU_ID}/signal`)
+        .then(r => r.json())
+        .then(data => {
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Refresh'; }
+            if (!data.success) {
+                box.innerHTML = `<div class="text-muted small"><i class="bi bi-x-circle me-1 text-danger"></i>${data.message}</div>`;
+                return;
+            }
+            const s = data.signal;
+            const qClass = { good: 'text-success', warn: 'text-warning', bad: 'text-danger' }[data.quality] ?? 'text-muted';
+            const qIcon  = { good: 'bi-reception-4', warn: 'bi-reception-2', bad: 'bi-reception-0' }[data.quality] ?? 'bi-reception-4';
+            box.innerHTML = `
+                <div class="d-flex align-items-center gap-3 mb-2">
+                    <i class="bi ${qIcon} fs-3 ${qClass}"></i>
+                    <div>
+                        <div class="fw-semibold ${qClass}">${s.onu_rx ?? '?'} dBm</div>
+                        <div class="small text-muted">ONU RX (sinyal di pelanggan)</div>
+                    </div>
+                </div>
+                <table class="table table-sm mb-0">
+                    <tr><th class="text-muted" style="width:50%">OLT RX (dari pelanggan)</th><td class="font-monospace">${s.olt_rx ?? '?'} dBm</td></tr>
+                    <tr><th class="text-muted">ONU TX (kirim ke OLT)</th><td class="font-monospace">${s.onu_tx ?? '?'} dBm</td></tr>
+                    <tr><th class="text-muted">OLT TX (kirim ke pelanggan)</th><td class="font-monospace">${s.olt_tx ?? '?'} dBm</td></tr>
+                </table>`;
+        })
+        .catch(e => {
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Refresh'; }
+            box.innerHTML = `<div class="text-muted small"><i class="bi bi-x-circle me-1 text-danger"></i>Error: ${e.message}</div>`;
+        });
+}
+
 function toggleEdit() {
     const form = document.getElementById('editForm');
     const btn  = document.getElementById('btnToggleEdit');
@@ -239,13 +327,16 @@ function saveInfo() {
 
 function loadAcsInfo() {
     const box = document.getElementById('acsStatusBox');
-    box.innerHTML = '<div class="text-muted small"><span class="spinner-border spinner-border-sm me-1"></span>Memuat...</div>';
+    const btn = document.getElementById('btnLoadAcs');
+    box.innerHTML = '<div class="text-muted small"><span class="spinner-border spinner-border-sm me-1"></span>Memuat dari ACS...</div>';
+    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Loading...'; }
 
     fetch(`/onus/${ONU_ID}/acs-info`)
         .then(r => r.json())
         .then(data => {
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Refresh ACS'; }
             if (!data.success) {
-                box.innerHTML = `<div class="text-danger small">${data.message}</div>`;
+                box.innerHTML = `<div class="text-danger small"><i class="bi bi-x-circle me-1"></i>${data.message}</div>`;
                 return;
             }
             const i = data.info;
@@ -270,7 +361,8 @@ function loadAcsInfo() {
             if (i.wan?.pppoe_user) document.getElementById('pppoe_user').value = i.wan.pppoe_user;
         })
         .catch(e => {
-            box.innerHTML = `<div class="text-danger small">Error: ${e.message}</div>`;
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Refresh ACS'; }
+            box.innerHTML = `<div class="text-danger small"><i class="bi bi-x-circle me-1"></i>Error: ${e.message}</div>`;
         });
 }
 

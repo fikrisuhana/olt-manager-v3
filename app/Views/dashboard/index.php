@@ -24,6 +24,12 @@
                 <div>
                     <div class="fs-2 fw-bold"><?= $total_onus ?></div>
                     <div class="text-muted small">ONU Terprovisi</div>
+                    <?php if ($acs_total > 0): ?>
+                    <div class="mt-1">
+                        <span class="badge bg-success"><?= $online_onus ?> online</span>
+                        <span class="badge bg-secondary ms-1"><?= $acs_total - $online_onus ?> offline</span>
+                    </div>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
