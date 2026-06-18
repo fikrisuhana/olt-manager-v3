@@ -813,7 +813,6 @@ function _setWatchMsg(msg, isSuccess) {
 }
 
 // ── VLAN Profile Dropdown (ZTE) ────────────────────────────────
-const OLT_ID = <?= $olt['id'] ?>;
 let _vlanProfiles = null; // cache per page load
 
 function loadVlanProfiles() {
