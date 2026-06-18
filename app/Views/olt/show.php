@@ -21,6 +21,12 @@
                 title="Sync ulang data ONU terdaftar dari OLT (berat, lakukan sekali / jika ada perubahan)">
             <i class="bi bi-arrow-clockwise me-1"></i>Sync Cache
         </button>
+        <?php if ($cache_updated_at): ?>
+        <button class="btn btn-sm btn-outline-info" id="btnImportCache" onclick="importFromCache()"
+                title="Import semua ONU dari cache ke database (ONU yang sudah ada di-skip)">
+            <i class="bi bi-download me-1"></i>Import ke DB
+        </button>
+        <?php endif; ?>
         <a href="/olts/<?= $olt['id'] ?>/edit" class="btn btn-sm btn-outline-secondary">
             <i class="bi bi-pencil me-1"></i>Edit
         </a>
@@ -385,6 +391,35 @@ function refreshCache() {
         .catch(e => {
             btn.disabled = false;
             btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Sync Cache';
+            alert('Error: ' + e.message);
+        });
+}
+
+function importFromCache() {
+    if (!confirm('Import semua ONU dari cache ke database?\nONU yang sudah ada di DB akan di-skip.')) return;
+
+    const btn = document.getElementById('btnImportCache');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Import...';
+
+    const fd = new FormData();
+    fd.append('<?= csrf_token() ?>', '<?= csrf_hash() ?>');
+
+    fetch(`/olts/${OLT_ID}/import-cache`, { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(data => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-download me-1"></i>Import ke DB';
+            if (data.success) {
+                alert(data.message);
+                if (data.imported > 0) location.reload();
+            } else {
+                alert('Gagal: ' + data.message);
+            }
+        })
+        .catch(e => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-download me-1"></i>Import ke DB';
             alert('Error: ' + e.message);
         });
 }

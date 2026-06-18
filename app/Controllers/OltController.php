@@ -303,6 +303,65 @@ class OltController extends Controller
     }
 
     /**
+     * AJAX: Import ONU dari cache lokal ke database.
+     * ONU yang sudah ada di DB (SN sama) di-skip.
+     */
+    public function importFromCache(int $id)
+    {
+        $this->response->setContentType('application/json');
+
+        $oltModel = new OltModel();
+        $olt = $oltModel->getByUserAndId($this->userId, $id);
+        if (!$olt) {
+            return $this->response->setJSON(['success' => false, 'message' => 'OLT tidak ditemukan.']);
+        }
+
+        $cache    = new OnuCacheService();
+        $cacheData = $cache->load($id);
+
+        if (empty($cacheData['ports'])) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Cache kosong. Jalankan Sync Cache dahulu.']);
+        }
+
+        $onuModel  = new OnuModel();
+        $logModel  = new \App\Models\ProvisionLogModel();
+        $imported  = 0;
+        $skipped   = 0;
+
+        foreach ($cacheData['ports'] as $portKey => $onus) {
+            [$board, $slot, $port] = explode('/', $portKey);
+            foreach ($onus as $onu) {
+                $sn = strtoupper($onu['sn']);
+                if ($onuModel->snExists($id, $sn)) {
+                    $skipped++;
+                    continue;
+                }
+                $onuId = $onuModel->insert([
+                    'olt_id'        => $id,
+                    'sn'            => $sn,
+                    'name'          => $onu['name'] ?: $sn,
+                    'board'         => $board,
+                    'slot'          => $slot,
+                    'port'          => $port,
+                    'onu_index'     => (int)$onu['index'],
+                    'onu_type'      => $onu['type'] ?? 'ALL-ONT',
+                    'status'        => 'registered',
+                    'registered_at' => date('Y-m-d H:i:s'),
+                ]);
+                $logModel->log($this->userId, 'import', 'success', "Import dari cache: {$sn}", $onuId, $id);
+                $imported++;
+            }
+        }
+
+        return $this->response->setJSON([
+            'success'  => true,
+            'imported' => $imported,
+            'skipped'  => $skipped,
+            'message'  => "{$imported} ONU diimpor, {$skipped} sudah ada di DB.",
+        ]);
+    }
+
+    /**
      * AJAX: Ambil daftar TCONT profile dari OLT via Telnet.
      * POST — ip, telnet_port, telnet_user, telnet_pass, brand, olt_id (jika edit)
      */
