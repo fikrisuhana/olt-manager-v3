@@ -166,6 +166,33 @@ class OnuController extends Controller
     }
 
     /**
+     * AJAX: Update info ONU di database (nama, VLAN, TCONT, PPPoE user).
+     * Tidak menyentuh OLT — hanya update record DB.
+     */
+    public function updateInfo(int $id)
+    {
+        $this->response->setContentType('application/json');
+
+        $onuModel = new OnuModel();
+        $onu = $onuModel->getWithOlt($id);
+        if (!$onu || $onu['user_id'] != $this->userId) {
+            return $this->response->setJSON(['success' => false, 'message' => 'ONU tidak ditemukan.']);
+        }
+
+        $data = [
+            'name'          => trim($this->request->getPost('name') ?? '') ?: $onu['name'],
+            'vlan_internet' => (int)($this->request->getPost('vlan_internet') ?: 0) ?: null,
+            'vlan_acs'      => (int)($this->request->getPost('vlan_acs') ?: 0) ?: null,
+            'tcont_profile' => trim($this->request->getPost('tcont_profile') ?? '') ?: null,
+            'pppoe_user'    => trim($this->request->getPost('pppoe_user') ?? '') ?: null,
+        ];
+
+        $onuModel->update($id, $data);
+
+        return $this->response->setJSON(['success' => true, 'message' => 'Info ONU berhasil disimpan.']);
+    }
+
+    /**
      * AJAX: Hapus ONU dari OLT + database
      */
     public function delete(int $id)

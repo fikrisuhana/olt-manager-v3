@@ -47,6 +47,7 @@ $routes->group('', ['filter' => 'auth'], static function ($routes) {
     $routes->post('onus/(:num)/delete',       'OnuController::delete/$1');    // AJAX
     $routes->get('onus/(:num)/signal',        'OnuController::signal/$1');    // AJAX
     $routes->get('onus/(:num)/acs-info',     'OnuController::acsInfo/$1');   // AJAX
+    $routes->post('onus/(:num)/update-info', 'OnuController::updateInfo/$1'); // AJAX
     $routes->post('onus/(:num)/acs-set',     'OnuController::acsSet/$1');    // AJAX
 
     // Templates

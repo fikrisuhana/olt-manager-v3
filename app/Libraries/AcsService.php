@@ -232,28 +232,28 @@ class AcsService
     {
         if (empty($sns)) return [];
 
-        // Batasi 200 SN per request
-        $sns      = array_slice(array_values($sns), 0, 200);
-        $query    = urlencode(json_encode(['_deviceId._SerialNumber' => ['$in' => $sns]]));
-        $proj     = '_id,_deviceId,_lastInform';
-        $response = $this->request('GET', "/devices?query={$query}&projection={$proj}&limit=" . count($sns));
-
-        if ($response['status'] !== 200) return [];
-
-        $devices = json_decode($response['body'], true) ?? [];
-        $result  = [];
+        $result    = [];
         $tenMinAgo = strtotime('-10 minutes');
 
-        foreach ($devices as $d) {
-            $sn      = $d['_deviceId']['_SerialNumber'] ?? '';
-            $lastInf = $d['_lastInform'] ?? null;
-            $result[strtoupper($sn)] = [
-                'device_id'    => $d['_id'],
-                'last_inform'  => $lastInf,
-                'manufacturer' => $d['_deviceId']['_Manufacturer'] ?? '',
-                'model'        => $d['_deviceId']['_ProductClass'] ?? '',
-                'online'       => $lastInf && strtotime($lastInf) >= $tenMinAgo,
-            ];
+        // Chunk 100 SN per request — hindari URL terlalu panjang
+        foreach (array_chunk(array_values($sns), 100) as $chunk) {
+            $query    = urlencode(json_encode(['_deviceId._SerialNumber' => ['$in' => $chunk]]));
+            $proj     = '_id,_deviceId,_lastInform';
+            $response = $this->request('GET', "/devices?query={$query}&projection={$proj}&limit=" . count($chunk));
+
+            if ($response['status'] !== 200) continue;
+
+            foreach (json_decode($response['body'], true) ?? [] as $d) {
+                $sn      = $d['_deviceId']['_SerialNumber'] ?? '';
+                $lastInf = $d['_lastInform'] ?? null;
+                $result[strtoupper($sn)] = [
+                    'device_id'    => $d['_id'],
+                    'last_inform'  => $lastInf,
+                    'manufacturer' => $d['_deviceId']['_Manufacturer'] ?? '',
+                    'model'        => $d['_deviceId']['_ProductClass'] ?? '',
+                    'online'       => $lastInf && strtotime($lastInf) >= $tenMinAgo,
+                ];
+            }
         }
 
         return $result;

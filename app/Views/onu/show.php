@@ -21,37 +21,71 @@
     <!-- Info ONU -->
     <div class="col-lg-5">
         <div class="card border-0 shadow-sm mb-4">
-            <div class="card-header bg-white border-bottom py-3">
+            <div class="card-header bg-white border-bottom py-3 d-flex align-items-center justify-content-between">
                 <h6 class="mb-0 fw-semibold"><i class="bi bi-router me-1"></i>Info ONU</h6>
+                <button class="btn btn-sm btn-outline-secondary py-0" onclick="toggleEdit()" id="btnToggleEdit">
+                    <i class="bi bi-pencil me-1"></i>Edit
+                </button>
             </div>
             <div class="card-body">
-                <table class="table table-sm mb-0">
+                <!-- Info display -->
+                <table class="table table-sm mb-0" id="infoTable">
                     <tr><th class="text-muted" style="width:40%">SN</th><td><code><?= esc($onu['sn']) ?></code></td></tr>
-                    <tr><th class="text-muted">Nama</th><td><?= esc($onu['name'] ?? '-') ?></td></tr>
+                    <tr><th class="text-muted">Nama</th><td id="disp_name"><?= esc($onu['name'] ?? '-') ?></td></tr>
                     <tr><th class="text-muted">OLT</th><td><?= esc($onu['olt_name'] ?? '-') ?> <span class="text-muted small">(<?= esc($onu['olt_ip'] ?? '') ?>)</span></td></tr>
                     <tr><th class="text-muted">Port</th><td><?= esc("{$onu['board']}/{$onu['slot']}/{$onu['port']}:{$onu['onu_index']}") ?></td></tr>
                     <tr><th class="text-muted">Tipe</th><td><?= esc($onu['onu_type'] ?? '-') ?></td></tr>
-                    <?php if (!empty($onu['vlan_internet']) || !empty($onu['vlan_acs'])): ?>
                     <tr>
                         <th class="text-muted">VLAN</th>
-                        <td class="small">
+                        <td class="small" id="disp_vlan">
                             <?php if ($onu['vlan_internet']): ?>
                                 <span class="badge bg-primary me-1">Internet: <?= $onu['vlan_internet'] ?></span>
                             <?php endif; ?>
                             <?php if ($onu['vlan_acs']): ?>
                                 <span class="badge bg-secondary">ACS: <?= $onu['vlan_acs'] ?></span>
                             <?php endif; ?>
+                            <?php if (!$onu['vlan_internet'] && !$onu['vlan_acs']): ?>
+                                <span class="text-muted">—</span>
+                            <?php endif; ?>
                         </td>
                     </tr>
-                    <?php endif; ?>
-                    <?php if (!empty($onu['tcont_profile'])): ?>
-                    <tr><th class="text-muted">TCONT</th><td><code><?= esc($onu['tcont_profile']) ?></code></td></tr>
-                    <?php endif; ?>
+                    <tr><th class="text-muted">TCONT</th><td id="disp_tcont"><?= $onu['tcont_profile'] ? '<code>'.esc($onu['tcont_profile']).'</code>' : '<span class="text-muted">—</span>' ?></td></tr>
+                    <tr><th class="text-muted">PPPoE User</th><td id="disp_pppoe"><code><?= esc($onu['pppoe_user'] ?? '—') ?></code></td></tr>
                     <tr><th class="text-muted">Terdaftar</th><td class="small"><?= date('d/m/Y H:i', strtotime($onu['registered_at'])) ?></td></tr>
-                    <?php if (!empty($onu['pppoe_user'])): ?>
-                    <tr><th class="text-muted">PPPoE User</th><td><code><?= esc($onu['pppoe_user']) ?></code></td></tr>
-                    <?php endif; ?>
                 </table>
+
+                <!-- Edit form (hidden by default) -->
+                <div id="editForm" class="d-none border-top mt-3 pt-3">
+                    <div class="row g-2">
+                        <div class="col-12">
+                            <label class="form-label small fw-medium">Nama Pelanggan</label>
+                            <input type="text" id="edit_name" class="form-control form-control-sm" value="<?= esc($onu['name'] ?? '') ?>">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-medium">VLAN Internet</label>
+                            <input type="number" id="edit_vlan_internet" class="form-control form-control-sm" value="<?= esc($onu['vlan_internet'] ?? '') ?>" placeholder="misal: 100">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-medium">VLAN ACS</label>
+                            <input type="number" id="edit_vlan_acs" class="form-control form-control-sm" value="<?= esc($onu['vlan_acs'] ?? '') ?>" placeholder="misal: 155">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-medium">TCONT Profile</label>
+                            <input type="text" id="edit_tcont" class="form-control form-control-sm" value="<?= esc($onu['tcont_profile'] ?? '') ?>" placeholder="misal: 250M">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-medium">PPPoE Username</label>
+                            <input type="text" id="edit_pppoe_user" class="form-control form-control-sm" value="<?= esc($onu['pppoe_user'] ?? '') ?>" placeholder="user@isp">
+                        </div>
+                    </div>
+                    <div id="editResult" class="mt-2 d-none"></div>
+                    <div class="mt-3 d-flex gap-2">
+                        <button class="btn btn-primary btn-sm" onclick="saveInfo()">
+                            <i class="bi bi-check-circle me-1"></i>Simpan
+                        </button>
+                        <button class="btn btn-light btn-sm" onclick="toggleEdit()">Batal</button>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -120,6 +154,64 @@
 <?= $this->section('scripts') ?>
 <script>
 const ONU_ID = <?= $onu['id'] ?>;
+
+function toggleEdit() {
+    const form = document.getElementById('editForm');
+    const btn  = document.getElementById('btnToggleEdit');
+    const show = form.classList.contains('d-none');
+    form.classList.toggle('d-none', !show);
+    btn.innerHTML = show
+        ? '<i class="bi bi-x-circle me-1"></i>Batal'
+        : '<i class="bi bi-pencil me-1"></i>Edit';
+    if (show) document.getElementById('editResult').classList.add('d-none');
+}
+
+function saveInfo() {
+    const fd = new FormData();
+    fd.append('name',           document.getElementById('edit_name').value.trim());
+    fd.append('vlan_internet',  document.getElementById('edit_vlan_internet').value.trim());
+    fd.append('vlan_acs',       document.getElementById('edit_vlan_acs').value.trim());
+    fd.append('tcont_profile',  document.getElementById('edit_tcont').value.trim());
+    fd.append('pppoe_user',     document.getElementById('edit_pppoe_user').value.trim());
+    fd.append('<?= csrf_token() ?>', '<?= csrf_hash() ?>');
+
+    const el = document.getElementById('editResult');
+    el.className = 'mt-2 small';
+    el.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Menyimpan...';
+    el.classList.remove('d-none');
+
+    fetch(`/onus/${ONU_ID}/update-info`, { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(data => {
+            el.className = `mt-2 small alert alert-${data.success ? 'success' : 'danger'} py-1`;
+            el.textContent = data.message || (data.success ? 'Tersimpan.' : 'Gagal.');
+            if (data.success) {
+                // Update tampilan langsung tanpa reload
+                const name        = document.getElementById('edit_name').value.trim();
+                const vInt        = document.getElementById('edit_vlan_internet').value.trim();
+                const vAcs        = document.getElementById('edit_vlan_acs').value.trim();
+                const tcont       = document.getElementById('edit_tcont').value.trim();
+                const pppoe       = document.getElementById('edit_pppoe_user').value.trim();
+
+                document.getElementById('disp_name').textContent  = name || '-';
+                document.getElementById('disp_tcont').innerHTML   = tcont ? `<code>${tcont}</code>` : '<span class="text-muted">—</span>';
+                document.getElementById('disp_pppoe').innerHTML   = `<code>${pppoe || '—'}</code>`;
+
+                let vlanHtml = '';
+                if (vInt) vlanHtml += `<span class="badge bg-primary me-1">Internet: ${vInt}</span>`;
+                if (vAcs) vlanHtml += `<span class="badge bg-secondary">ACS: ${vAcs}</span>`;
+                if (!vInt && !vAcs) vlanHtml = '<span class="text-muted">—</span>';
+                document.getElementById('disp_vlan').innerHTML = vlanHtml;
+
+                // Sync PPPoE field di form bawah
+                if (pppoe) document.getElementById('pppoe_user').value = pppoe;
+            }
+        })
+        .catch(e => {
+            el.className = 'mt-2 small alert alert-danger py-1';
+            el.textContent = 'Error: ' + e.message;
+        });
+}
 
 function loadAcsInfo() {
     const box = document.getElementById('acsStatusBox');
