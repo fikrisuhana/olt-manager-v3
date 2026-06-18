@@ -280,6 +280,24 @@ class ZteDriver implements OltDriverInterface
                 $log[] = "WARN: '{$cmd}' → " . trim(substr($out, -120));
             }
         }
+
+        // pon-onu-mng: set ACS URL via OMCI agar ONU bisa konek ke GenieACS
+        $acsUrl = trim($this->config['acs_url'] ?? '');
+        if ($acsUrl && $vlanAcs) {
+            $mngCmds = [
+                "pon-onu-mng iphost 1 dhcp",
+                "pon-onu-mng wan-service 1 gemport 1 vlan {$vlanAcs} cos 0 user-vlan {$vlanAcs} user-cos 0",
+                "pon-onu-mng tr069 acs-url {$acsUrl}",
+            ];
+            foreach ($mngCmds as $cmd) {
+                $out = $this->telnet->execute($cmd, $this->ifPrompt, 5);
+                if (stripos($out, 'Error') !== false || stripos($out, 'Invalid') !== false) {
+                    $log[] = "WARN pon-onu-mng: '{$cmd}' → " . trim(substr($out, -120));
+                }
+            }
+            $log[] = "pon-onu-mng ACS: {$acsUrl} via VLAN {$vlanAcs}";
+        }
+
         $this->telnet->execute('exit', $this->configPrompt, 3);
         $log[] = 'gpon-onu interface configured';
 

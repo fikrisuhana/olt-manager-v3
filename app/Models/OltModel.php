@@ -11,7 +11,7 @@ class OltModel extends Model
     protected $allowedFields = [
         'user_id', 'name', 'ip', 'brand', 'model',
         'telnet_port', 'telnet_user', 'telnet_pass',
-        'snmp_community', 'snmp_port', 'tcont_profiles', 'traffic_profiles', 'description',
+        'snmp_community', 'snmp_port', 'tcont_profiles', 'traffic_profiles', 'description', 'acs_url',
     ];
     protected $useTimestamps = true;
 

@@ -93,6 +93,18 @@
                     </div>
 
                     <h6 class="fw-semibold mb-3 text-muted text-uppercase" style="font-size:.75rem;letter-spacing:.05em">
+                        ACS / GenieACS
+                    </h6>
+
+                    <div class="mb-4">
+                        <label class="form-label">ACS URL (TR-069)</label>
+                        <input type="text" name="acs_url" class="form-control"
+                               value="<?= esc($olt['acs_url'] ?? '') ?>"
+                               placeholder="http://136.1.1.8:7547">
+                        <div class="form-text">URL CWMP GenieACS — diset otomatis ke ONU via OMCI saat register (ZTE). Kosongkan jika tidak pakai ACS.</div>
+                    </div>
+
+                    <h6 class="fw-semibold mb-3 text-muted text-uppercase" style="font-size:.75rem;letter-spacing:.05em">
                         Konfigurasi Provisioning
                     </h6>
 
