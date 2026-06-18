@@ -281,32 +281,33 @@ class ZteDriver implements OltDriverInterface
             }
         }
 
-        // pon-onu-mng: set PPPoE WAN + DHCP management/ACS via OMCI
-        $acsUrl    = trim($this->config['acs_url'] ?? '');
-        $pppoeUser = trim($params['pppoe_user'] ?? '');
-        $pppoePass = trim($params['pppoe_pass'] ?? '');
-        $mngCmds   = [];
-
-        if ($vlanInternet && $pppoeUser && $pppoePass) {
-            $mngCmds[] = "pon-onu-mng wan-service 1 gemport 1 vlan {$vlanInternet} cos 0 user-vlan {$vlanInternet} user-cos 0";
-            $mngCmds[] = "pon-onu-mng iphost 1 pppoe username {$pppoeUser} password {$pppoePass}";
-            $log[]     = "pon-onu-mng PPPoE: {$pppoeUser} via VLAN {$vlanInternet}";
-        }
-        if ($acsUrl && $vlanAcs) {
-            $mngCmds[] = "pon-onu-mng wan-service 2 gemport 1 vlan {$vlanAcs} cos 0 user-vlan {$vlanAcs} user-cos 0";
-            $mngCmds[] = "pon-onu-mng iphost 2 dhcp";
-            $mngCmds[] = "pon-onu-mng tr069 acs-url {$acsUrl}";
-            $log[]     = "pon-onu-mng ACS: {$acsUrl} via VLAN {$vlanAcs}";
-        }
-        foreach ($mngCmds as $cmd) {
-            $out = $this->telnet->execute($cmd, $this->ifPrompt, 5);
-            if (stripos($out, 'Error') !== false || stripos($out, 'Invalid') !== false) {
-                $log[] = "WARN pon-onu-mng: '{$cmd}' → " . trim(substr($out, -120));
-            }
-        }
-
         $this->telnet->execute('exit', $this->configPrompt, 3);
         $log[] = 'gpon-onu interface configured';
+
+        // pon-onu-mng: blok terpisah — service mapping VLAN ke veip
+        // Syntax diverifikasi dari running-config ZTE C320:
+        //   pon-onu-mng gpon-onu_B/S/P:I
+        //     service hsi gemport 1 vlan {internet}
+        //     service acs gemport 1 vlan {acs}
+        //     vlan port veip_1 mode hybrid
+        if ($vlanInternet || $vlanAcs) {
+            $this->telnet->execute("pon-onu-mng gpon-onu_{$board}/{$slot}/{$port}:{$idx}", $this->mngPrompt, 5);
+            if ($vlanInternet) {
+                $out = $this->telnet->execute("service hsi gemport 1 vlan {$vlanInternet}", $this->mngPrompt, 5);
+                if (stripos($out, 'Error') !== false || stripos($out, 'Invalid') !== false) {
+                    $log[] = "WARN pon-onu-mng: service hsi → " . trim(substr($out, -120));
+                }
+            }
+            if ($vlanAcs) {
+                $out = $this->telnet->execute("service acs gemport 1 vlan {$vlanAcs}", $this->mngPrompt, 5);
+                if (stripos($out, 'Error') !== false || stripos($out, 'Invalid') !== false) {
+                    $log[] = "WARN pon-onu-mng: service acs → " . trim(substr($out, -120));
+                }
+            }
+            $this->telnet->execute("vlan port veip_1 mode hybrid", $this->mngPrompt, 5);
+            $this->telnet->execute('exit', $this->configPrompt, 3);
+            $log[] = "pon-onu-mng: hsi={$vlanInternet} acs={$vlanAcs} veip_1 hybrid";
+        }
 
         // Keluar config mode dan simpan
         $this->telnet->execute('exit', $this->rootPrompt, 3);
@@ -334,39 +335,33 @@ class ZteDriver implements OltDriverInterface
         int $vlanAcs, string $acsUrl,
         int $vlanInternet = 0, string $pppoeUser = '', string $pppoePass = ''
     ): array {
-        $log  = [];
-        $cmds = [];
-
-        // PPPoE WAN
-        if ($vlanInternet && $pppoeUser && $pppoePass) {
-            $cmds[] = "pon-onu-mng wan-service 1 gemport 1 vlan {$vlanInternet} cos 0 user-vlan {$vlanInternet} user-cos 0";
-            $cmds[] = "pon-onu-mng iphost 1 pppoe username {$pppoeUser} password {$pppoePass}";
+        if (!$vlanInternet && !$vlanAcs) {
+            throw new \Exception("VLAN internet dan VLAN ACS keduanya kosong.");
         }
 
-        // DHCP management + ACS
-        if ($vlanAcs && $acsUrl) {
-            $cmds[] = "pon-onu-mng wan-service 2 gemport 1 vlan {$vlanAcs} cos 0 user-vlan {$vlanAcs} user-cos 0";
-            $cmds[] = "pon-onu-mng iphost 2 dhcp";
-            $cmds[] = "pon-onu-mng tr069 acs-url {$acsUrl}";
-        }
-
-        if (empty($cmds)) {
-            throw new \Exception("Tidak ada parameter pon-onu-mng yang valid (ACS URL / PPPoE credentials kosong).");
-        }
-
+        $log = [];
         $this->telnet->execute('conf t', $this->configPrompt, 5);
-        $this->telnet->execute("interface gpon-onu_{$board}/{$slot}/{$port}:{$onuIndex}", $this->ifPrompt, 5);
+        $this->telnet->execute("pon-onu-mng gpon-onu_{$board}/{$slot}/{$port}:{$onuIndex}", $this->mngPrompt, 5);
 
-        foreach ($cmds as $cmd) {
-            $out   = $this->telnet->execute($cmd, $this->ifPrompt, 5);
-            $log[] = "{$cmd} → " . trim(preg_replace('/\s+/', ' ', $out));
+        if ($vlanInternet) {
+            $out   = $this->telnet->execute("service hsi gemport 1 vlan {$vlanInternet}", $this->mngPrompt, 5);
+            $log[] = "service hsi vlan {$vlanInternet} → " . trim(preg_replace('/\s+/', ' ', $out));
             if (stripos($out, 'Error') !== false || stripos($out, 'Invalid') !== false) {
                 $this->telnet->execute('exit', $this->configPrompt, 3);
                 $this->telnet->execute('exit', $this->rootPrompt, 3);
-                throw new \Exception("Gagal: {$cmd} → " . trim(preg_replace('/\s+/', ' ', $out)));
+                throw new \Exception("Gagal service hsi: " . trim(preg_replace('/\s+/', ' ', $out)));
             }
         }
-
+        if ($vlanAcs) {
+            $out   = $this->telnet->execute("service acs gemport 1 vlan {$vlanAcs}", $this->mngPrompt, 5);
+            $log[] = "service acs vlan {$vlanAcs} → " . trim(preg_replace('/\s+/', ' ', $out));
+            if (stripos($out, 'Error') !== false || stripos($out, 'Invalid') !== false) {
+                $this->telnet->execute('exit', $this->configPrompt, 3);
+                $this->telnet->execute('exit', $this->rootPrompt, 3);
+                throw new \Exception("Gagal service acs: " . trim(preg_replace('/\s+/', ' ', $out)));
+            }
+        }
+        $this->telnet->execute("vlan port veip_1 mode hybrid", $this->mngPrompt, 5);
         $this->telnet->execute('exit', $this->configPrompt, 3);
         $this->telnet->execute('exit', $this->rootPrompt, 3);
         $this->telnet->execute('write', $this->rootPrompt, 20);

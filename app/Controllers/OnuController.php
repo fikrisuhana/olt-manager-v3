@@ -546,28 +546,20 @@ class OnuController extends Controller
         }
 
         $vlanInternet = (int)($onu['vlan_internet'] ?? 0);
-        $pppoeUser    = trim($this->request->getPost('pppoe_user') ?? $onu['pppoe_user'] ?? '');
-        $pppoePass    = trim($this->request->getPost('pppoe_pass') ?? '');
 
         try {
             $driver = OltDriverFactory::make($olt);
             $driver->connect();
             $result = $driver->applyPonMng(
                 $onu['board'], $onu['slot'], $onu['port'], $onu['onu_index'],
-                $vlanAcs, $acsUrl,
-                $vlanInternet, $pppoeUser, $pppoePass
+                $vlanAcs, $acsUrl, $vlanInternet
             );
             $driver->disconnect();
-
-            $msg = 'pon-onu-mng berhasil dipush.';
-            if ($pppoeUser && $pppoePass) $msg .= " PPPoE ({$pppoeUser}) + ACS terkonfigurasi.";
-            else $msg .= ' ACS DHCP terkonfigurasi. ONU akan konek ke GenieACS dalam beberapa menit.';
-
-            if ($pppoeUser) {
-                $onuModel->update($id, ['pppoe_user' => $pppoeUser]);
-            }
-
-            return $this->response->setJSON(['success' => true, 'message' => $msg, 'log' => $result['log']]);
+            return $this->response->setJSON([
+                'success' => true,
+                'message' => 'pon-onu-mng berhasil dipush. ONU akan konek ke ACS — push PPPoE dari halaman ini setelah online.',
+                'log'     => $result['log'],
+            ]);
         } catch (\Exception $e) {
             return $this->response->setJSON(['success' => false, 'message' => $e->getMessage()]);
         }
