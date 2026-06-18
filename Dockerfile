@@ -14,6 +14,7 @@ RUN apt-get update -y && apt-get install -y --no-install-recommends \
     && docker-php-ext-configure intl \
     && docker-php-ext-install \
         pdo_mysql \
+        mysqli \
         intl \
         zip \
         opcache \
