@@ -231,6 +231,39 @@
     </div>
 </div>
 
+<!-- Modal Set ACS + PPPoE -->
+<div id="setAcsModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1055;align-items:center;justify-content:center">
+    <div class="card border-0 shadow-lg" style="width:380px;max-width:95vw">
+        <div class="card-header d-flex align-items-center justify-content-between py-3">
+            <h6 class="mb-0 fw-semibold"><i class="bi bi-plug me-1"></i>Push pon-onu-mng ke ONU</h6>
+            <button type="button" class="btn-close" onclick="closeSetAcsModal()"></button>
+        </div>
+        <div class="card-body">
+            <p class="small text-muted mb-3">
+                Set PPPoE WAN + DHCP management (ACS) via OMCI langsung dari OLT.
+                Password wajib diisi agar PPPoE terkonfigurasi.
+            </p>
+            <div class="mb-2">
+                <label class="form-label small fw-medium">PPPoE Username</label>
+                <input type="text" id="sacs_pppoe_user" class="form-control form-control-sm"
+                       value="<?= esc($onu['pppoe_user'] ?? '') ?>" placeholder="username@isp">
+            </div>
+            <div class="mb-3">
+                <label class="form-label small fw-medium">PPPoE Password <span class="text-danger">*</span></label>
+                <input type="text" id="sacs_pppoe_pass" class="form-control form-control-sm" placeholder="password PPPoE">
+                <div class="form-text">Kosongkan jika hanya ingin set ACS saja (tanpa PPPoE).</div>
+            </div>
+            <div id="setAcsResult" class="mt-2 small" style="min-height:1.5rem"></div>
+        </div>
+        <div class="card-footer d-flex gap-2">
+            <button id="btnDoSetAcs" class="btn btn-warning btn-sm" onclick="doSetAcs()">
+                <i class="bi bi-check-circle me-1"></i>Push
+            </button>
+            <button class="btn btn-light btn-sm" onclick="closeSetAcsModal()">Batal</button>
+        </div>
+    </div>
+</div>
+
 <?= $this->endSection() ?>
 <?= $this->section('scripts') ?>
 <script>
@@ -487,27 +520,40 @@ function setWifi() {
 }
 
 function setAcsMng() {
-    const btn = document.getElementById('btnSetAcs');
+    document.getElementById('setAcsModal').style.display = 'flex';
+}
+
+function closeSetAcsModal() {
+    document.getElementById('setAcsModal').style.display = 'none';
+}
+
+function doSetAcs() {
+    const btn  = document.getElementById('btnDoSetAcs');
+    const res  = document.getElementById('setAcsResult');
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Pushing...';
+    res.className = 'mt-2 small text-muted';
+    res.textContent = 'Menghubungi OLT...';
 
     const fd = new FormData();
+    fd.append('pppoe_user', document.getElementById('sacs_pppoe_user').value.trim());
+    fd.append('pppoe_pass', document.getElementById('sacs_pppoe_pass').value.trim());
     fd.append('<?= csrf_token() ?>', '<?= csrf_hash() ?>');
 
     fetch(`/onus/${ONU_ID}/set-acs`, { method: 'POST', body: fd })
         .then(r => r.json())
         .then(data => {
             btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-plug me-1"></i>Set ACS';
-            alert(data.success
-                ? '✓ ' + data.message
-                : '✗ ' + data.message);
-            if (data.success) loadAcsInfo();
+            btn.innerHTML = '<i class="bi bi-check-circle me-1"></i>Push';
+            res.className = 'mt-2 small alert alert-' + (data.success ? 'success' : 'danger') + ' py-1';
+            res.textContent = data.success ? data.message : data.message;
+            if (data.success) setTimeout(() => { closeSetAcsModal(); loadAcsInfo(); }, 2000);
         })
         .catch(e => {
             btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-plug me-1"></i>Set ACS';
-            alert('Error: ' + e.message);
+            btn.innerHTML = '<i class="bi bi-check-circle me-1"></i>Push';
+            res.className = 'mt-2 small alert alert-danger py-1';
+            res.textContent = 'Error: ' + e.message;
         });
 }
 
