@@ -199,10 +199,9 @@ class OnuController extends Controller
             $logModel->log($this->userId, 'register', 'success',
                 implode(' | ', $result['log']), $onuId, $oltId);
 
-            // ZTE OLT: PPPoE sudah diset via pon-onu-mng saat register.
-            // watch_acs=true agar UI tahu ONU sudah online di ACS (untuk edit WiFi dll).
-            // push_via_acs=false untuk ZTE — jangan auto-push dari ACS, cukup dari OLT.
-            $isZte = strtoupper($olt['brand'] ?? '') === 'ZTE';
+            // ZTE ONU (tipe ZTE-F*): PPPoE sudah diset via pon-onu-mng → skip ACS push
+            // Non-ZTE ONU (ALL-ONT, Fiberhome, dll): push PPPoE via ACS setelah online
+            $isZteOnu = stripos($onuType, 'ZTE') === 0;
             return $this->response->setJSON([
                 'success'      => true,
                 'message'      => "ONU {$sn} berhasil didaftarkan (index {$onuIndex}).",
@@ -211,7 +210,7 @@ class OnuController extends Controller
                 'sn'           => $sn,
                 'onu_index'    => $onuIndex,
                 'watch_acs'    => !empty($pppoeUser),
-                'push_via_acs' => !empty($pppoeUser) && !$isZte,
+                'push_via_acs' => !empty($pppoeUser) && !$isZteOnu,
             ]);
         } catch (\Exception $e) {
             $logModel->log($this->userId, 'register', 'failed', $e->getMessage(), null, $oltId);
@@ -402,15 +401,16 @@ class OnuController extends Controller
             return $this->response->setJSON(['success' => false, 'message' => 'ONU tidak ditemukan.']);
         }
 
-        $oltModel = new OltModel();
-        $olt      = $oltModel->find($onu['olt_id']);
-        $oltBrand = strtoupper($olt['brand'] ?? '');
+        $oltModel  = new OltModel();
+        $olt       = $oltModel->find($onu['olt_id']);
+        // ZTE ONU (ZTE-F609, ZTE-F670L, dll): PPPoE via OLT pon-onu-mng
+        // Non-ZTE ONU (ALL-ONT, Fiberhome, dll): PPPoE via ACS/TR-069
+        $isZteOnu  = stripos($onu['onu_type'] ?? '', 'ZTE') === 0;
 
         $action = $this->request->getPost('action'); // 'pppoe' | 'wifi' | 'reboot'
 
-        // ZTE OLT: push PPPoE via pon-onu-mng (OMCI) langsung dari OLT — bukan TR-069
-        // Ini sekaligus set VLAN + PPPoE dalam 1 blok, konsisten dengan register
-        if ($action === 'pppoe' && $oltBrand === 'ZTE') {
+        // ZTE ONU: push PPPoE via pon-onu-mng (OMCI) — set VLAN + PPPoE sekaligus
+        if ($action === 'pppoe' && $isZteOnu) {
             $pppoeUser    = trim($this->request->getPost('pppoe_user'));
             $pppoePass    = trim($this->request->getPost('pppoe_pass'));
             $vlanAcs      = (int)($onu['vlan_acs'] ?? 0);
