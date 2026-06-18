@@ -313,6 +313,61 @@ class ZteDriver implements OltDriverInterface
      * Ambil SN ONU yang aktif di slot tertentu.
      * Return SN uppercase, atau null jika slot kosong.
      */
+    /**
+     * Push pon-onu-mng (OMCI) ke ONU yang sudah terdaftar — tanpa delete/re-register.
+     *
+     * Set 2 hal sekaligus:
+     *   1. PPPoE WAN (vlan_internet) — jika pppoe_user + pppoe_pass diisi
+     *   2. DHCP management + ACS URL (vlan_acs) — jika acs_url + vlan_acs diisi
+     *
+     * iphost 1 = PPPoE internet, iphost 2 = DHCP management/ACS
+     */
+    public function applyPonMng(
+        string $board, string $slot, string $port, string $onuIndex,
+        int $vlanAcs, string $acsUrl,
+        int $vlanInternet = 0, string $pppoeUser = '', string $pppoePass = ''
+    ): array {
+        $log  = [];
+        $cmds = [];
+
+        // PPPoE WAN
+        if ($vlanInternet && $pppoeUser && $pppoePass) {
+            $cmds[] = "pon-onu-mng wan-service 1 gemport 1 vlan {$vlanInternet} cos 0 user-vlan {$vlanInternet} user-cos 0";
+            $cmds[] = "pon-onu-mng iphost 1 pppoe username {$pppoeUser} password {$pppoePass}";
+        }
+
+        // DHCP management + ACS
+        if ($vlanAcs && $acsUrl) {
+            $cmds[] = "pon-onu-mng wan-service 2 gemport 1 vlan {$vlanAcs} cos 0 user-vlan {$vlanAcs} user-cos 0";
+            $cmds[] = "pon-onu-mng iphost 2 dhcp";
+            $cmds[] = "pon-onu-mng tr069 acs-url {$acsUrl}";
+        }
+
+        if (empty($cmds)) {
+            throw new \Exception("Tidak ada parameter pon-onu-mng yang valid (ACS URL / PPPoE credentials kosong).");
+        }
+
+        $this->telnet->execute('conf t', $this->configPrompt, 5);
+        $this->telnet->execute("interface gpon-onu_{$board}/{$slot}/{$port}:{$onuIndex}", $this->ifPrompt, 5);
+
+        foreach ($cmds as $cmd) {
+            $out   = $this->telnet->execute($cmd, $this->ifPrompt, 5);
+            $log[] = "{$cmd} → " . trim(preg_replace('/\s+/', ' ', $out));
+            if (stripos($out, 'Error') !== false || stripos($out, 'Invalid') !== false) {
+                $this->telnet->execute('exit', $this->configPrompt, 3);
+                $this->telnet->execute('exit', $this->rootPrompt, 3);
+                throw new \Exception("Gagal: {$cmd} → " . trim(preg_replace('/\s+/', ' ', $out)));
+            }
+        }
+
+        $this->telnet->execute('exit', $this->configPrompt, 3);
+        $this->telnet->execute('exit', $this->rootPrompt, 3);
+        $this->telnet->execute('write', $this->rootPrompt, 20);
+        $log[] = 'pon-onu-mng saved';
+
+        return ['success' => true, 'log' => $log];
+    }
+
     public function getSnAtIndex(string $board, string $slot, string $port, string $onuIndex): ?string
     {
         $output = $this->telnet->execute(

@@ -50,6 +50,7 @@ $routes->group('', ['filter' => 'auth'], static function ($routes) {
     $routes->post('onus/(:num)/update-info', 'OnuController::updateInfo/$1'); // AJAX
     $routes->post('onus/(:num)/acs-set',      'OnuController::acsSet/$1');       // AJAX
     $routes->get('onus/(:num)/fetch-config',  'OnuController::fetchConfig/$1');  // AJAX
+    $routes->post('onus/(:num)/set-acs',      'OnuController::setAcs/$1');        // AJAX
 
     // Templates
     $routes->get('templates',               'TemplateController::index');

@@ -8,6 +8,9 @@
         <span class="text-muted small ms-1"><?= esc("{$onu['board']}/{$onu['slot']}/{$onu['port']}:{$onu['onu_index']}") ?></span>
     </div>
     <div class="ms-auto d-flex gap-2">
+        <button class="btn btn-sm btn-outline-warning" onclick="setAcsMng()" id="btnSetAcs">
+            <i class="bi bi-plug me-1"></i>Set ACS
+        </button>
         <button class="btn btn-sm btn-outline-info" onclick="loadAcsInfo()" id="btnLoadAcs">
             <i class="bi bi-arrow-clockwise me-1"></i>Refresh ACS
         </button>
@@ -480,6 +483,31 @@ function setWifi() {
         .then(data => {
             el.className = `mt-2 small alert alert-${data.success ? 'success' : 'danger'}`;
             el.textContent = data.success ? 'WiFi berhasil diubah.' : (data.message || 'Gagal.');
+        });
+}
+
+function setAcsMng() {
+    const btn = document.getElementById('btnSetAcs');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Pushing...';
+
+    const fd = new FormData();
+    fd.append('<?= csrf_token() ?>', '<?= csrf_hash() ?>');
+
+    fetch(`/onus/${ONU_ID}/set-acs`, { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(data => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-plug me-1"></i>Set ACS';
+            alert(data.success
+                ? '✓ ' + data.message
+                : '✗ ' + data.message);
+            if (data.success) loadAcsInfo();
+        })
+        .catch(e => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-plug me-1"></i>Set ACS';
+            alert('Error: ' + e.message);
         });
 }
 

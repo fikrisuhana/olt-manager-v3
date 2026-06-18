@@ -23,6 +23,9 @@ interface OltDriverInterface
     /** Hapus ONU dari OLT */
     public function deleteOnu(string $board, string $slot, string $port, string $onuIndex): bool;
 
+    /** Push pon-onu-mng (PPPoE + ACS DHCP) ke ONU yang sudah terdaftar (tanpa re-register) */
+    public function applyPonMng(string $board, string $slot, string $port, string $onuIndex, int $vlanAcs, string $acsUrl, int $vlanInternet = 0, string $pppoeUser = '', string $pppoePass = ''): array;
+
     /** Ambil SN ONU aktif di slot tertentu (null = kosong) */
     public function getSnAtIndex(string $board, string $slot, string $port, string $onuIndex): ?string;
 

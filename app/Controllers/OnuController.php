@@ -521,6 +521,41 @@ class OnuController extends Controller
         }
     }
 
+    public function setAcs(int $id)
+    {
+        $onuModel = new OnuModel();
+        $onu = $onuModel->getWithOlt($id);
+        if (!$onu || $onu['user_id'] != $this->userId) {
+            return $this->response->setJSON(['success' => false, 'message' => 'ONU tidak ditemukan.']);
+        }
+
+        $oltModel = new OltModel();
+        $olt = $oltModel->find($onu['olt_id']);
+
+        $acsUrl  = trim($olt['acs_url'] ?? '');
+        $vlanAcs = (int)($onu['vlan_acs'] ?? 0);
+
+        if (!$acsUrl) {
+            return $this->response->setJSON(['success' => false, 'message' => 'ACS URL belum diset di konfigurasi OLT. Edit OLT → isi ACS URL.']);
+        }
+        if (!$vlanAcs) {
+            return $this->response->setJSON(['success' => false, 'message' => 'VLAN ACS belum diset di ONU ini. Edit info ONU → isi VLAN ACS.']);
+        }
+
+        try {
+            $driver = OltDriverFactory::make($olt);
+            $driver->connect();
+            $result = $driver->applyPonMng(
+                $onu['board'], $onu['slot'], $onu['port'], $onu['onu_index'],
+                $vlanAcs, $acsUrl
+            );
+            $driver->disconnect();
+            return $this->response->setJSON(['success' => true, 'message' => 'pon-onu-mng berhasil dipush. ONU akan konek ke ACS dalam beberapa menit.', 'log' => $result['log']]);
+        } catch (\Exception $e) {
+            return $this->response->setJSON(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
     private function tryAcsProvision(string $sn, string $pppoeUser, string $pppoePass, string $oltBrand = 'ZTE'): ?array
     {
         try {
