@@ -371,37 +371,18 @@ function saveInfo(autoReload = false) {
     fetch(`/onus/${ONU_ID}/update-info`, { method: 'POST', body: fd })
         .then(r => r.json())
         .then(data => {
-            if (autoReload) {
-                if (data.success) location.reload();
-                return;
-            }
-            el.className = `mt-2 small alert alert-${data.success ? 'success' : 'danger'} py-1`;
-            el.textContent = data.message || (data.success ? 'Tersimpan.' : 'Gagal.');
             if (data.success) {
-                // Update tampilan langsung tanpa reload
-                const name        = document.getElementById('edit_name').value.trim();
-                const vInt        = document.getElementById('edit_vlan_internet').value.trim();
-                const vAcs        = document.getElementById('edit_vlan_acs').value.trim();
-                const tcont       = document.getElementById('edit_tcont').value.trim();
-                const pppoe       = document.getElementById('edit_pppoe_user').value.trim();
-
-                document.getElementById('disp_name').textContent  = name || '-';
-                document.getElementById('disp_tcont').innerHTML   = tcont ? `<code>${tcont}</code>` : '<span class="text-muted">—</span>';
-                document.getElementById('disp_pppoe').innerHTML   = `<code>${pppoe || '—'}</code>`;
-
-                let vlanHtml = '';
-                if (vInt) vlanHtml += `<span class="badge bg-primary me-1">Internet: ${vInt}</span>`;
-                if (vAcs) vlanHtml += `<span class="badge bg-secondary">ACS: ${vAcs}</span>`;
-                if (!vInt && !vAcs) vlanHtml = '<span class="text-muted">—</span>';
-                document.getElementById('disp_vlan').innerHTML = vlanHtml;
-
-                // Sync PPPoE field di form bawah
-                if (pppoe) document.getElementById('pppoe_user').value = pppoe;
+                location.reload();
+            } else {
+                el.className = 'mt-2 small alert alert-danger py-1';
+                el.textContent = data.message || 'Gagal menyimpan.';
+                el.classList.remove('d-none');
             }
         })
         .catch(e => {
             el.className = 'mt-2 small alert alert-danger py-1';
             el.textContent = 'Error: ' + e.message;
+            el.classList.remove('d-none');
         });
 }
 
