@@ -17,6 +17,7 @@ class OltController extends Controller
     public function __construct()
     {
         $this->userId = (int) session()->get('user_id');
+        session_write_close();
     }
 
     public function index()

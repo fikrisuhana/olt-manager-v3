@@ -19,6 +19,8 @@ class OnuController extends Controller
     public function __construct()
     {
         $this->userId = (int) session()->get('user_id');
+        // Release session file lock so concurrent AJAX requests don't block each other
+        session_write_close();
     }
 
     /**
