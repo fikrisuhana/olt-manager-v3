@@ -167,22 +167,18 @@ class OltController extends Controller
 
             $driver = OltDriverFactory::make($olt);
             $driver->connect();
-            $registeredOnus = $driver->getRegisteredOnus();
+            $registeredOnus  = $driver->getRegisteredOnus();
+            $tcontProfiles   = $driver->getTcontProfiles();
+            $trafficProfiles = $driver->getTrafficProfiles();
             $driver->disconnect();
 
             $cache->save($id, $registeredOnus);
 
-            // Sekaligus fetch profiles (TCONT + traffic) dan simpan ke DB
-            try {
-                $tcontProfiles   = $driver->getTcontProfiles();
-                $trafficProfiles = $driver->getTrafficProfiles();
-                $oltModel->update($id, [
-                    'tcont_profiles'   => implode("\n", $tcontProfiles),
-                    'traffic_profiles' => implode("\n", $trafficProfiles),
-                ]);
-            } catch (\Exception $e) {
-                // Profile fetch gagal — tidak critical
-            }
+            // Simpan profiles ke DB
+            $oltModel->update($id, [
+                'tcont_profiles'   => implode("\n", $tcontProfiles),
+                'traffic_profiles' => implode("\n", $trafficProfiles),
+            ]);
 
             // Sekaligus fetch ACS status untuk semua SN yang ada di OLT
             $acsMessage = '';
