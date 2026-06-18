@@ -56,6 +56,13 @@
 
                 <!-- Edit form (hidden by default) -->
                 <div id="editForm" class="d-none border-top mt-3 pt-3">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <span class="small fw-medium text-muted">Edit Konfigurasi</span>
+                        <button type="button" class="btn btn-sm btn-outline-info py-0" id="btnFetchConfig" onclick="fetchConfigFromOlt()">
+                            <i class="bi bi-cloud-download me-1"></i>Ambil dari OLT
+                        </button>
+                    </div>
+                    <div id="fetchConfigResult" class="d-none mb-2"></div>
                     <div class="row g-2">
                         <div class="col-12">
                             <label class="form-label small fw-medium">Nama Pelanggan</label>
@@ -265,6 +272,48 @@ function loadSignal() {
         .catch(e => {
             if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Refresh'; }
             box.innerHTML = `<div class="text-muted small"><i class="bi bi-x-circle me-1 text-danger"></i>Error: ${e.message}</div>`;
+        });
+}
+
+function fetchConfigFromOlt() {
+    const btn = document.getElementById('btnFetchConfig');
+    const res = document.getElementById('fetchConfigResult');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Mengambil...';
+    res.className = 'mb-2 small text-muted';
+    res.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Menghubungi OLT...';
+    res.classList.remove('d-none');
+
+    fetch(`/onus/${ONU_ID}/fetch-config`)
+        .then(r => r.json())
+        .then(data => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-cloud-download me-1"></i>Ambil dari OLT';
+            if (!data.success) {
+                res.className = 'mb-2 small alert alert-danger py-1';
+                res.textContent = 'Gagal: ' + data.message;
+                return;
+            }
+            const c = data.config;
+            if (c.tcont_profile)   document.getElementById('edit_tcont').value          = c.tcont_profile;
+            if (c.vlan_internet)   document.getElementById('edit_vlan_internet').value  = c.vlan_internet;
+            if (c.vlan_acs)        document.getElementById('edit_vlan_acs').value        = c.vlan_acs;
+
+            const spList = Object.entries(c.service_ports || {});
+            const spInfo = spList.map(([sp, vlan]) => `SP${sp}=VLAN${vlan}`).join(', ');
+
+            res.className = 'mb-2 small alert alert-success py-1';
+            res.innerHTML = `<i class="bi bi-check-circle me-1"></i>Data dari ${data.source === 'olt' ? 'OLT' : 'DB'}: `
+                + `TCONT <strong>${c.tcont_profile || '—'}</strong>`
+                + (c.vlan_internet ? `, VLAN Internet <strong>${c.vlan_internet}</strong>` : '')
+                + (c.vlan_acs      ? `, VLAN ACS <strong>${c.vlan_acs}</strong>`           : '')
+                + (data.note       ? `<br><span class="text-muted">${data.note}</span>`    : '');
+        })
+        .catch(e => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-cloud-download me-1"></i>Ambil dari OLT';
+            res.className = 'mb-2 small alert alert-danger py-1';
+            res.textContent = 'Error: ' + e.message;
         });
 }
 

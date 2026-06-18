@@ -34,4 +34,10 @@ interface OltDriverInterface
 
     /** Ambil daftar nama traffic/bandwidth profile dari OLT */
     public function getTrafficProfiles(): array;
+
+    /**
+     * Ambil konfigurasi aktif satu ONU (VLAN, TCONT, traffic-limit).
+     * Return: ['tcont_profile'=>'', 'traffic_profile'=>'', 'vlan_internet'=>0, 'vlan_acs'=>0, 'service_ports'=>[sp=>vlan]]
+     */
+    public function getOnuConfig(string $board, string $slot, string $port, string $onuIndex): array;
 }

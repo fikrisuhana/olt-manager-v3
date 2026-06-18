@@ -387,6 +387,54 @@ class ZteDriver implements OltDriverInterface
         return array_values(array_unique(array_filter($profiles)));
     }
 
+    /**
+     * Ambil konfigurasi aktif ONU dari running-config OLT.
+     * Command: show running-config interface gpon-onu_B/S/P:I
+     *
+     * Parse: tcont profile, traffic-limit profile, semua service-port VLAN.
+     * Konvensi: sp1 = vlan_internet, sp2 = vlan_acs (sesuai urutan registerOnu)
+     */
+    public function getOnuConfig(string $board, string $slot, string $port, string $onuIndex): array
+    {
+        $output = $this->telnet->execute(
+            "show running-config interface gpon-onu_{$board}/{$slot}/{$port}:{$onuIndex}",
+            $this->rootPrompt, 10
+        );
+
+        $result = [
+            'tcont_profile'   => '',
+            'traffic_profile' => '',
+            'vlan_internet'   => 0,
+            'vlan_acs'        => 0,
+            'service_ports'   => [],
+        ];
+
+        foreach (explode("\n", $output) as $line) {
+            $line = trim($line);
+
+            // tcont 1 name tcont profile 250M
+            if (preg_match('/^tcont\s+\d+\s+name\s+\S+\s+profile\s+(\S+)/i', $line, $m)) {
+                $result['tcont_profile'] = $m[1];
+            }
+            // gemport 1 traffic-limit upstream 200M downstream 200M
+            if (preg_match('/^gemport\s+\d+\s+traffic-limit\s+upstream\s+(\S+)/i', $line, $m)) {
+                $result['traffic_profile'] = $m[1];
+            }
+            // service-port 1 vport 1 user-vlan 155 vlan 155
+            if (preg_match('/^service-port\s+(\d+)\s+vport\s+\d+\s+user-vlan\s+(\d+)/i', $line, $m)) {
+                $result['service_ports'][(int)$m[1]] = (int)$m[2];
+            }
+        }
+
+        // Konvensi registerOnu: sp1 = internet, sp2 = ACS
+        ksort($result['service_ports']);
+        $spList = array_values($result['service_ports']);
+        $result['vlan_internet'] = $spList[0] ?? 0;
+        $result['vlan_acs']      = $spList[1] ?? 0;
+
+        return $result;
+    }
+
     public function getBrand(): string { return 'ZTE'; }
     public function getModel(): string { return $this->config['model'] ?? 'C320'; }
 }

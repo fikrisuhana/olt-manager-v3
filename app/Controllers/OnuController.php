@@ -415,6 +415,74 @@ class OnuController extends Controller
         }
     }
 
+    /**
+     * AJAX: Ambil konfigurasi ONU aktif dari OLT (VLAN, TCONT, traffic-limit).
+     * Untuk ZTE: parse running-config via Telnet.
+     * Untuk brand lain: kembalikan WAN info dari ACS cache sebagai fallback.
+     */
+    public function fetchConfig(int $id)
+    {
+        $this->response->setContentType('application/json');
+
+        $onuModel = new OnuModel();
+        $onu = $onuModel->getWithOlt($id);
+        if (!$onu || $onu['user_id'] != $this->userId) {
+            return $this->response->setJSON(['success' => false, 'message' => 'ONU tidak ditemukan.']);
+        }
+
+        $oltModel = new OltModel();
+        $olt = $oltModel->find($onu['olt_id']);
+
+        // Non-ZTE: fetch WAN VLAN dari ACS live (atau cache)
+        if (strtoupper($olt['brand'] ?? '') !== 'ZTE') {
+            $acsModel = new AcsServerModel();
+            $acs      = $acsModel->getDefault($this->userId);
+            $wanVlan  = 0;
+            $source   = 'db';
+            if ($acs) {
+                try {
+                    $acsService = new AcsService($acs);
+                    $device     = $acsService->findDeviceBySn($onu['sn']);
+                    if ($device) {
+                        $brand  = $acsService->getDeviceBrand($device);
+                        $info   = $acsService->getDeviceInfo($device['_id'], $brand);
+                        $wanVlan = (int)($info['wan']['vlan'] ?? 0);
+                        $source  = 'acs';
+                    }
+                } catch (\Exception $e) { /* fallback ke DB */ }
+            }
+            return $this->response->setJSON([
+                'success' => true,
+                'source'  => $source,
+                'config'  => [
+                    'tcont_profile'   => $onu['tcont_profile'] ?? '',
+                    'traffic_profile' => '',
+                    'vlan_internet'   => $wanVlan ?: ($onu['vlan_internet'] ?? 0),
+                    'vlan_acs'        => $onu['vlan_acs'] ?? 0,
+                    'service_ports'   => [],
+                ],
+                'note' => "Brand {$olt['brand']}: VLAN diambil dari ACS" . ($wanVlan ? " (VLAN {$wanVlan})" : " (tidak ditemukan, pakai data DB)"),
+            ]);
+        }
+
+        try {
+            $driver = OltDriverFactory::make($olt);
+            $driver->connect();
+            $config = $driver->getOnuConfig(
+                $onu['board'], $onu['slot'], $onu['port'], $onu['onu_index']
+            );
+            $driver->disconnect();
+
+            return $this->response->setJSON([
+                'success' => true,
+                'source'  => 'olt',
+                'config'  => $config,
+            ]);
+        } catch (\Exception $e) {
+            return $this->response->setJSON(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
     private function tryAcsProvision(string $sn, string $pppoeUser, string $pppoePass, string $oltBrand = 'ZTE'): ?array
     {
         try {
