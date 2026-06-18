@@ -236,7 +236,31 @@ const ONU_ID = <?= $onu['id'] ?>;
 document.addEventListener('DOMContentLoaded', () => {
     loadSignal();
     loadAcsInfo();
+    <?php if (!$onu['vlan_internet'] && !$onu['vlan_acs'] && !$onu['tcont_profile']): ?>
+    autoSyncConfig();
+    <?php endif; ?>
 });
+
+function autoSyncConfig() {
+    fetch(`/onus/${ONU_ID}/fetch-config`)
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) return;
+            const c = data.config;
+            if (!c.vlan_internet && !c.tcont_profile) return; // OLT juga kosong, skip
+
+            // Isi form dan simpan otomatis
+            document.getElementById('edit_vlan_internet').value = c.vlan_internet || '';
+            document.getElementById('edit_vlan_acs').value      = c.vlan_acs      || '';
+            document.getElementById('edit_tcont').value         = c.tcont_profile  || '';
+            // Nama tidak diubah — pertahankan nama yang ada
+            document.getElementById('edit_name').value =
+                document.getElementById('disp_name').textContent.trim() || '';
+
+            saveInfo(true); // true = reload setelah simpan
+        })
+        .catch(() => {});
+}
 
 function loadSignal() {
     const box = document.getElementById('signalBox');
@@ -328,7 +352,7 @@ function toggleEdit() {
     if (show) document.getElementById('editResult').classList.add('d-none');
 }
 
-function saveInfo() {
+function saveInfo(autoReload = false) {
     const fd = new FormData();
     fd.append('name',           document.getElementById('edit_name').value.trim());
     fd.append('vlan_internet',  document.getElementById('edit_vlan_internet').value.trim());
@@ -338,13 +362,19 @@ function saveInfo() {
     fd.append('<?= csrf_token() ?>', '<?= csrf_hash() ?>');
 
     const el = document.getElementById('editResult');
-    el.className = 'mt-2 small';
-    el.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Menyimpan...';
-    el.classList.remove('d-none');
+    if (!autoReload) {
+        el.className = 'mt-2 small';
+        el.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Menyimpan...';
+        el.classList.remove('d-none');
+    }
 
     fetch(`/onus/${ONU_ID}/update-info`, { method: 'POST', body: fd })
         .then(r => r.json())
         .then(data => {
+            if (autoReload) {
+                if (data.success) location.reload();
+                return;
+            }
             el.className = `mt-2 small alert alert-${data.success ? 'success' : 'danger'} py-1`;
             el.textContent = data.message || (data.success ? 'Tersimpan.' : 'Gagal.');
             if (data.success) {
