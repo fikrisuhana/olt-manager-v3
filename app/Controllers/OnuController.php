@@ -112,8 +112,11 @@ class OnuController extends Controller
             return $this->response->setJSON(['success' => false, 'message' => 'SN, nama, tipe ONU wajib diisi.']);
         }
 
-        // Cek duplikat SN di database
-        if ($onuModel->snExists($oltId, $sn)) {
+        $force      = (bool)$this->request->getPost('force');
+        $existingOnu = $onuModel->getByOltAndSn($oltId, $sn);
+
+        // Cek duplikat SN — kecuali force re-register
+        if ($existingOnu && !$force) {
             return $this->response->setJSON(['success' => false, 'message' => "SN {$sn} sudah terdaftar di OLT ini."]);
         }
 
@@ -146,24 +149,40 @@ class OnuController extends Controller
                 throw new \Exception(implode("\n", $result['log'] ?? ['Registrasi gagal']));
             }
 
-            // Simpan ke database
-            $onuId = $onuModel->insert([
-                'olt_id'        => $oltId,
-                'sn'            => $sn,
-                'name'          => $name,
-                'board'         => $board,
-                'slot'          => $slot,
-                'port'          => $port,
-                'onu_index'     => $onuIndex,
-                'onu_type'      => $onuType,
-                'vlan_internet' => $vlanInternet ?: null,
-                'vlan_acs'      => $vlanAcs ?: null,
-                'tcont_profile' => $tcontProfile ?: null,
-                'pppoe_user'    => $pppoeUser ?: null,
-                'status'        => 'registered',
-                'template_id'   => $templateId ?: null,
-                'registered_at' => date('Y-m-d H:i:s'),
-            ]);
+            // Update DB jika re-register, insert jika baru
+            if ($existingOnu) {
+                $onuId = $existingOnu['id'];
+                $onuModel->update($onuId, [
+                    'board'         => $board,
+                    'slot'          => $slot,
+                    'port'          => $port,
+                    'onu_index'     => $onuIndex,
+                    'onu_type'      => $onuType,
+                    'vlan_internet' => $vlanInternet ?: null,
+                    'vlan_acs'      => $vlanAcs ?: null,
+                    'tcont_profile' => $tcontProfile ?: null,
+                    'status'        => 'registered',
+                    'registered_at' => date('Y-m-d H:i:s'),
+                ]);
+            } else {
+                $onuId = $onuModel->insert([
+                    'olt_id'        => $oltId,
+                    'sn'            => $sn,
+                    'name'          => $name,
+                    'board'         => $board,
+                    'slot'          => $slot,
+                    'port'          => $port,
+                    'onu_index'     => $onuIndex,
+                    'onu_type'      => $onuType,
+                    'vlan_internet' => $vlanInternet ?: null,
+                    'vlan_acs'      => $vlanAcs ?: null,
+                    'tcont_profile' => $tcontProfile ?: null,
+                    'pppoe_user'    => $pppoeUser ?: null,
+                    'status'        => 'registered',
+                    'template_id'   => $templateId ?: null,
+                    'registered_at' => date('Y-m-d H:i:s'),
+                ]);
+            }
 
             // Update cache ONU
             $cache = new OnuCacheService();

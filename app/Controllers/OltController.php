@@ -128,9 +128,10 @@ class OltController extends Controller
             $noCacheWarning = empty($cacheData['ports']);
 
             foreach ($uncfgOnus as &$onu) {
-                $portKey = "{$onu['board']}/{$onu['slot']}/{$onu['port']}";
+                $existing = $onuModel->getByOltAndSn($id, $onu['sn']);
                 $onu['next_index']         = $cache->nextIndex($id, $onu['board'], $onu['slot'], $onu['port']);
-                $onu['already_registered'] = $onuModel->snExists($id, $onu['sn']);
+                $onu['already_registered'] = $existing !== null;
+                $onu['existing_id']        = $existing['id'] ?? null;
             }
 
             return $this->response->setJSON([

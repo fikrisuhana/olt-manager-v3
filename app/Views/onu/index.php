@@ -103,7 +103,9 @@ document.getElementById('searchOnu')?.addEventListener('input', function() {
 
 function deleteOnu(onuId, sn, btn) {
     if (!confirm(`Hapus ONU ${sn} dari OLT?\nAksi ini akan menghapus konfigurasi ONU dari OLT.`)) return;
+    const origHtml = btn.innerHTML;
     btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
 
     const fd = new FormData();
     fd.append(_csrf.name, _csrf.hash);
@@ -115,10 +117,11 @@ function deleteOnu(onuId, sn, btn) {
                 btn.closest('tr').remove();
             } else {
                 btn.disabled = false;
+                btn.innerHTML = origHtml;
                 alert('Gagal: ' + data.message);
             }
         })
-        .catch(e => { btn.disabled = false; alert('Error: ' + e.message); });
+        .catch(e => { btn.disabled = false; btn.innerHTML = origHtml; alert('Error: ' + e.message); });
 }
 </script>
 <?= $this->endSection() ?>

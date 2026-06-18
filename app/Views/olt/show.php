@@ -200,6 +200,7 @@
                     <input type="hidden" id="r_slot" name="slot">
                     <input type="hidden" id="r_port" name="port">
                     <input type="hidden" id="r_onu_index" name="onu_index">
+                    <input type="hidden" id="r_force" name="force" value="0">
 
                     <!-- SN + Info -->
                     <div class="row g-3 mb-3">
@@ -542,7 +543,14 @@ function scanOnu() {
                 const portLabel = `${o.board}/${o.slot}/${o.port}`;
                 const nextIdx   = o.next_index ?? 1;
                 const badge = o.already_registered
-                    ? '<span class="badge bg-secondary">Sudah di DB</span>'
+                    ? `<div class="d-flex gap-1 align-items-center">
+                         <span class="badge bg-secondary">Sudah di DB</span>
+                         ${o.existing_id ? `<a href="/onus/${o.existing_id}" class="btn btn-sm btn-outline-secondary py-0 px-1" title="Lihat ONU"><i class="bi bi-eye"></i></a>` : ''}
+                         <button class="btn btn-sm btn-outline-warning py-0 px-1" title="Konfigurasi ulang ke OLT"
+                             onclick="openRegister('${o.sn}','${o.board}','${o.slot}','${o.port}',${nextIdx},true)">
+                             <i class="bi bi-arrow-repeat me-1"></i>Konfigurasi Ulang
+                         </button>
+                       </div>`
                     : `<button class="btn btn-sm btn-success" onclick="openRegister('${o.sn}','${o.board}','${o.slot}','${o.port}',${nextIdx})">
                          <i class="bi bi-plus me-1"></i>Register (idx ${nextIdx})
                        </button>`;
@@ -570,14 +578,21 @@ function scanOnu() {
         });
 }
 
-function openRegister(sn, board, slot, port, idx) {
+function openRegister(sn, board, slot, port, idx, force = false) {
     document.getElementById('r_sn').value    = sn;
     document.getElementById('r_board').value = board;
     document.getElementById('r_slot').value  = slot;
     document.getElementById('r_port').value  = port;
     document.getElementById('r_onu_index').value = idx;
+    document.getElementById('r_force').value     = force ? '1' : '0';
     document.getElementById('registerLog').classList.add('d-none');
     document.getElementById('registerLogContent').textContent = '';
+
+    // Ubah judul modal jika re-register
+    const title = document.querySelector('#registerModal .modal-title');
+    title.innerHTML = force
+        ? '<i class="bi bi-arrow-repeat me-1"></i>Konfigurasi Ulang ONU'
+        : '<i class="bi bi-plus-circle me-1"></i>Register ONU';
 
     // Reset form
     document.querySelector('[name="name"]').value          = '';
@@ -918,16 +933,18 @@ function doAcsPush() {
 
 function deleteOnu(onuId, sn, btn) {
     if (!confirm(`Hapus ONU ${sn} dari OLT?\nAksi ini akan menghapus konfigurasi dari OLT.`)) return;
+    const origHtml = btn.innerHTML;
     btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
     const fd = new FormData();
     fd.append(_csrf.name, _csrf.hash);
     fetch(`/onus/${onuId}/delete`, { method: 'POST', body: fd })
     .then(r => r.json())
     .then(data => {
         if (data.success) location.reload();
-        else { btn.disabled = false; alert(data.message); }
+        else { btn.disabled = false; btn.innerHTML = origHtml; alert(data.message); }
     })
-    .catch(e => { btn.disabled = false; alert('Error: ' + e.message); });
+    .catch(e => { btn.disabled = false; btn.innerHTML = origHtml; alert('Error: ' + e.message); });
 }
 </script>
 <?= $this->endSection() ?>
