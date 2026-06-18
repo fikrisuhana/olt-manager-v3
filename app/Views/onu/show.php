@@ -228,6 +228,7 @@ const ONU_ID = <?= $onu['id'] ?>;
 
 document.addEventListener('DOMContentLoaded', () => {
     loadSignal();
+    loadAcsInfo();
 });
 
 function loadSignal() {
@@ -328,41 +329,59 @@ function saveInfo() {
 function loadAcsInfo() {
     const box = document.getElementById('acsStatusBox');
     const btn = document.getElementById('btnLoadAcs');
-    box.innerHTML = '<div class="text-muted small"><span class="spinner-border spinner-border-sm me-1"></span>Memuat dari ACS...</div>';
+    // Tambah spinner di bawah konten yang ada (jangan hapus cache dulu)
+    let spinner = document.getElementById('acsLoadingRow');
+    if (!spinner) {
+        spinner = document.createElement('div');
+        spinner.id = 'acsLoadingRow';
+        spinner.className = 'mt-2 small text-muted';
+        spinner.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Memuat data live dari ACS...';
+        box.appendChild(spinner);
+    }
     if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Loading...'; }
 
     fetch(`/onus/${ONU_ID}/acs-info`)
         .then(r => r.json())
         .then(data => {
             if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Refresh ACS'; }
+            document.getElementById('acsLoadingRow')?.remove();
             if (!data.success) {
-                box.innerHTML = `<div class="text-danger small"><i class="bi bi-x-circle me-1"></i>${data.message}</div>`;
+                // Gagal: tambah pesan error di bawah cache yang ada
+                const err = document.createElement('div');
+                err.className = 'mt-2 small text-danger';
+                err.innerHTML = `<i class="bi bi-x-circle me-1"></i>${data.message}`;
+                box.appendChild(err);
                 return;
             }
             const i = data.info;
-            const online = i.online
-                ? '<span class="badge bg-success">Online</span>'
-                : '<span class="badge bg-secondary">Offline</span>';
+            const online  = i.online
+                ? '<span class="badge bg-success fs-6 py-1 px-2"><i class="bi bi-wifi me-1"></i>Online</span>'
+                : '<span class="badge bg-secondary fs-6 py-1 px-2"><i class="bi bi-wifi-off me-1"></i>Offline</span>';
             const lastInf = i.last_inform ? new Date(i.last_inform).toLocaleString('id') : '-';
 
             box.innerHTML = `
-                <div class="mb-2">${online} <small class="text-muted ms-2">Last Inform: ${lastInf}</small></div>
+                <div class="mb-2 d-flex align-items-center gap-2">${online}
+                    <small class="text-muted">Last Inform: ${lastInf}</small>
+                </div>
                 <table class="table table-sm mb-0">
                     <tr><th class="text-muted" style="width:45%">Model</th><td>${i.model || '-'} (${i.manufacturer || '-'})</td></tr>
-                    <tr><th class="text-muted">IP (PPPoE)</th><td>${i.wan?.ip || '-'}</td></tr>
+                    <tr><th class="text-muted">WAN IP (PPPoE)</th><td class="font-monospace">${i.wan?.ip || '-'}</td></tr>
                     <tr><th class="text-muted">PPPoE User</th><td>${i.wan?.pppoe_user || '-'}</td></tr>
                     <tr><th class="text-muted">WAN Status</th><td>${i.wan?.status || '-'}</td></tr>
                     <tr><th class="text-muted">Uptime</th><td>${i.wan?.uptime ? Math.floor(i.wan.uptime/3600)+'j '+Math.floor((i.wan.uptime%3600)/60)+'m' : '-'}</td></tr>
                     <tr><th class="text-muted">WiFi SSID</th><td>${i.wifi?.ssid || '-'}</td></tr>
                 </table>`;
 
-            // Pre-fill WiFi SSID field
             if (i.wifi?.ssid) document.getElementById('wifi_ssid').value = i.wifi.ssid;
             if (i.wan?.pppoe_user) document.getElementById('pppoe_user').value = i.wan.pppoe_user;
         })
         .catch(e => {
             if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Refresh ACS'; }
-            box.innerHTML = `<div class="text-danger small"><i class="bi bi-x-circle me-1"></i>Error: ${e.message}</div>`;
+            document.getElementById('acsLoadingRow')?.remove();
+            const err = document.createElement('div');
+            err.className = 'mt-2 small text-danger';
+            err.innerHTML = `<i class="bi bi-x-circle me-1"></i>Error: ${e.message}`;
+            box.appendChild(err);
         });
 }
 
