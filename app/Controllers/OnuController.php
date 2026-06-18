@@ -197,17 +197,19 @@ class OnuController extends Controller
             $logModel->log($this->userId, 'register', 'success',
                 implode(' | ', $result['log']), $onuId, $oltId);
 
-            // ZTE OLT: PPPoE sudah di-push via pon-onu-mng saat register — tidak perlu ACS watcher
-            // Non-ZTE: ACS watcher menunggu ONU online lalu push PPPoE via TR-069
+            // ZTE OLT: PPPoE sudah diset via pon-onu-mng saat register.
+            // watch_acs=true agar UI tahu ONU sudah online di ACS (untuk edit WiFi dll).
+            // push_via_acs=false untuk ZTE — jangan auto-push dari ACS, cukup dari OLT.
             $isZte = strtoupper($olt['brand'] ?? '') === 'ZTE';
             return $this->response->setJSON([
-                'success'   => true,
-                'message'   => "ONU {$sn} berhasil didaftarkan (index {$onuIndex}).",
-                'log'       => $result['log'],
-                'onu_id'    => $onuId,
-                'sn'        => $sn,
-                'onu_index' => $onuIndex,
-                'watch_acs' => !empty($pppoeUser) && !$isZte,
+                'success'      => true,
+                'message'      => "ONU {$sn} berhasil didaftarkan (index {$onuIndex}).",
+                'log'          => $result['log'],
+                'onu_id'       => $onuId,
+                'sn'           => $sn,
+                'onu_index'    => $onuIndex,
+                'watch_acs'    => !empty($pppoeUser),
+                'push_via_acs' => !empty($pppoeUser) && !$isZte,
             ]);
         } catch (\Exception $e) {
             $logModel->log($this->userId, 'register', 'failed', $e->getMessage(), null, $oltId);

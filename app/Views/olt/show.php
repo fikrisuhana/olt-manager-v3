@@ -686,9 +686,10 @@ document.getElementById('registerForm').addEventListener('submit', function(e) {
                 logContent.style.color = '#86efac';
                 if (data.watch_acs && data.onu_id && pppoePass) {
                     // Tunggu sebentar, tutup modal, mulai polling ACS
+                    // push_via_acs=false (ZTE): hanya tunggu ONU online, jangan auto-push ke ACS
                     setTimeout(() => {
                         bootstrap.Modal.getInstance(document.getElementById('registerModal'))?.hide();
-                        startAcsWatch(data.onu_id, data.sn, pppoeUser, pppoePass);
+                        startAcsWatch(data.onu_id, data.sn, pppoeUser, pppoePass, data.push_via_acs !== false);
                     }, 1500);
                 } else {
                     setTimeout(() => location.reload(), 1500);
@@ -709,9 +710,9 @@ const _csrf = { name: '<?= csrf_token() ?>', hash: '<?= csrf_hash() ?>' };
 let _acsWatch = { interval: null, attempt: 0, onuId: 0, sn: '', user: '', pass: '' };
 const ACS_MAX_ATTEMPT = 20; // 5 menit × 15 detik
 
-function startAcsWatch(onuId, sn, user, pass) {
+function startAcsWatch(onuId, sn, user, pass, pushViaAcs = true) {
     if (_acsWatch.interval) clearInterval(_acsWatch.interval);
-    Object.assign(_acsWatch, { interval: null, attempt: 0, onuId, sn, user, pass });
+    Object.assign(_acsWatch, { interval: null, attempt: 0, onuId, sn, user, pass, pushViaAcs });
 
     document.getElementById('acsWatchSn').textContent = sn;
     _setWatchMsg('Menunggu ONU online di ACS...', false);
@@ -744,8 +745,15 @@ function _pollAcs() {
             if (data.success) {
                 clearInterval(_acsWatch.interval);
                 _acsWatch.interval = null;
-                _setWatchMsg('ONU ditemukan! Mendorong konfigurasi PPPoE...', false);
-                _pushAcs();
+                document.getElementById('acsWatchSpinner').classList.add('d-none');
+                if (_acsWatch.pushViaAcs) {
+                    _setWatchMsg('ONU ditemukan! Mendorong konfigurasi PPPoE via ACS...', false);
+                    document.getElementById('acsWatchSpinner').classList.remove('d-none');
+                    _pushAcs();
+                } else {
+                    _setWatchMsg('ONU online di ACS! PPPoE sudah diset via OLT.', true);
+                    setTimeout(() => location.reload(), 3000);
+                }
             }
         })
         .catch(() => {});
