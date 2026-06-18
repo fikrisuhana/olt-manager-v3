@@ -23,6 +23,9 @@ interface OltDriverInterface
     /** Hapus ONU dari OLT */
     public function deleteOnu(string $board, string $slot, string $port, string $onuIndex): bool;
 
+    /** Ambil SN ONU aktif di slot tertentu (null = kosong) */
+    public function getSnAtIndex(string $board, string $slot, string $port, string $onuIndex): ?string;
+
     /** Ambil info sinyal RX/TX ONU */
     public function getOnuSignal(string $board, string $slot, string $port, string $onuIndex): array;
 

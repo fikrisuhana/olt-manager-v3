@@ -89,6 +89,7 @@ class FiberhomeDriver implements OltDriverInterface
 
     public function getTcontProfiles(): array { return []; }
     public function getTrafficProfiles(): array { return []; }
+    public function getSnAtIndex(string $board, string $slot, string $port, string $onuIndex): ?string { return null; }
     public function getOnuConfig(string $board, string $slot, string $port, string $onuIndex): array
     {
         return ['tcont_profile' => '', 'traffic_profile' => '', 'vlan_internet' => 0, 'vlan_acs' => 0, 'service_ports' => []];

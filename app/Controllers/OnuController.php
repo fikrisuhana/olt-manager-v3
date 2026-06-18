@@ -256,12 +256,26 @@ class OnuController extends Controller
         try {
             $driver = OltDriverFactory::make($olt);
             $driver->connect();
+
+            // Verifikasi SN di OLT sebelum delete — cegah hapus ONU lain yang kebetulan di slot sama
+            $snOnOlt = $driver->getSnAtIndex($onu['board'], $onu['slot'], $onu['port'], $onu['onu_index']);
+            if ($snOnOlt !== null && strtoupper($snOnOlt) !== strtoupper($onu['sn'])) {
+                $driver->disconnect();
+                // Slot diisi ONU lain — hanya hapus dari DB, jangan sentuh OLT
+                $onuModel->update($id, ['status' => 'deleted']);
+                $logModel = new ProvisionLogModel();
+                $logModel->log($this->userId, 'delete', 'success',
+                    "ONU {$onu['sn']} dihapus dari DB saja (slot {$onu['board']}/{$onu['slot']}/{$onu['port']}:{$onu['onu_index']} di OLT berisi SN lain: {$snOnOlt})",
+                    $id, $onu['olt_id']);
+                return $this->response->setJSON(['success' => true,
+                    'message' => "ONU {$onu['sn']} dihapus dari DB. (Slot di OLT berisi ONU lain, tidak disentuh.)"]);
+            }
+
             $driver->deleteOnu($onu['board'], $onu['slot'], $onu['port'], $onu['onu_index']);
             $driver->disconnect();
 
             $onuModel->update($id, ['status' => 'deleted']);
 
-            // Update cache
             $cache = new OnuCacheService();
             $cache->removeOnu($onu['olt_id'], $onu['board'], $onu['slot'], $onu['port'], (int)$onu['onu_index']);
 

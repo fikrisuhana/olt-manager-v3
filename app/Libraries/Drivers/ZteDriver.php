@@ -291,6 +291,27 @@ class ZteDriver implements OltDriverInterface
         return ['success' => true, 'log' => $log];
     }
 
+    /**
+     * Ambil SN ONU yang aktif di slot tertentu.
+     * Return SN uppercase, atau null jika slot kosong.
+     */
+    public function getSnAtIndex(string $board, string $slot, string $port, string $onuIndex): ?string
+    {
+        $output = $this->telnet->execute(
+            "show gpon onu baseinfo gpon-olt_{$board}/{$slot}/{$port}",
+            $this->rootPrompt, 10
+        );
+        // Format: gpon-onu_1/2/7:1    ZTE-F609    sn    SN:ZTEGD346D870    ready
+        foreach (explode("\n", $output) as $line) {
+            if (preg_match("/gpon-onu_{$board}\/{$slot}\/{$port}:{$onuIndex}\s/i", $line)) {
+                if (preg_match('/\bSN:([A-Za-z0-9]{8,20})\b/i', $line, $m)) {
+                    return strtoupper($m[1]);
+                }
+            }
+        }
+        return null;
+    }
+
     public function deleteOnu(string $board, string $slot, string $port, string $onuIndex): bool
     {
         $this->telnet->execute('conf t', $this->configPrompt);
