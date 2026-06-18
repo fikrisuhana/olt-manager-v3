@@ -60,11 +60,14 @@ cp .env.example .env
 Edit `.env` — cukup sesuaikan baris ini:
 
 ```env
-APP_URL=http://IP_SERVER:8080/
 APP_PORT=8080
 DB_PASS=password_kuat
 DB_ROOT_PASS=root_password_kuat
 ENCRYPTION_KEY=   # generate: php -r "echo bin2hex(random_bytes(32));"
+
+# APP_URL: kosongkan untuk auto-detect (redirect ikut IP/domain yang dipakai browser)
+# Isi hanya jika pakai reverse proxy SSL: APP_URL=https://gpon.domain.com/
+APP_URL=
 ```
 
 **2. Jalankan:**

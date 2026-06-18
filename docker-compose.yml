@@ -12,7 +12,7 @@ services:
       - "${APP_PORT:-8080}:80"
     environment:
       CI_ENVIRONMENT: ${APP_ENV:-production}
-      APP_BASE_URL: ${APP_URL:-http://localhost:8080/}
+      APP_BASE_URL: ${APP_URL:-}
       DB_HOST: mysql
       DB_NAME: gpon_manager
       DB_USER: gpon

@@ -9,7 +9,7 @@ if [ ! -f "$ENV_FILE" ]; then
     cat > "$ENV_FILE" << EOF
 CI_ENVIRONMENT = ${CI_ENVIRONMENT:-production}
 
-app.baseURL       = '${APP_BASE_URL:-http://localhost/}'
+app.baseURL       = '${APP_BASE_URL:-}'
 app.indexPage     = ''
 app.forceGlobalSecureRequests = false
 
