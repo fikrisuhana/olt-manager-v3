@@ -1,0 +1,408 @@
+<?php
+
+namespace App\Controllers;
+
+use App\Models\OltModel;
+use App\Models\OnuModel;
+use App\Models\TemplateModel;
+use App\Models\AcsServerModel;
+use App\Models\ProvisionLogModel;
+use App\Libraries\OltDriverFactory;
+use App\Libraries\AcsService;
+use App\Libraries\OnuCacheService;
+use CodeIgniter\Controller;
+
+class OnuController extends Controller
+{
+    private int $userId;
+
+    public function __construct()
+    {
+        $this->userId = (int) session()->get('user_id');
+    }
+
+    /**
+     * Daftar semua ONU milik user
+     */
+    public function index()
+    {
+        $onuModel = new OnuModel();
+        return view('onu/index', [
+            'title' => 'Semua ONU',
+            'onus'  => $onuModel->getByUser($this->userId),
+        ]);
+    }
+
+    /**
+     * Detail ONU
+     */
+    public function show(int $id)
+    {
+        $onuModel = new OnuModel();
+        $onu = $onuModel->getWithOlt($id);
+
+        if (!$onu || $onu['user_id'] != $this->userId) {
+            return redirect()->to('/onus')->with('error', 'ONU tidak ditemukan.');
+        }
+
+        return view('onu/show', ['title' => $onu['name'] ?? $onu['sn'], 'onu' => $onu]);
+    }
+
+    /**
+     * AJAX: Register ONU ke OLT
+     * POST /olts/{olt_id}/onu/register
+     */
+    public function register(int $oltId)
+    {
+        $this->response->setContentType('application/json');
+
+        $oltModel      = new OltModel();
+        $onuModel      = new OnuModel();
+        $templateModel = new TemplateModel();
+        $logModel      = new ProvisionLogModel();
+
+        $olt = $oltModel->getByUserAndId($this->userId, $oltId);
+        if (!$olt) {
+            return $this->response->setJSON(['success' => false, 'message' => 'OLT tidak ditemukan.']);
+        }
+
+        $sn           = strtoupper(trim($this->request->getPost('sn')));
+        $name         = trim($this->request->getPost('name'));
+        $onuType      = trim($this->request->getPost('onu_type'));
+        $board        = trim($this->request->getPost('board'));
+        $slot         = trim($this->request->getPost('slot'));
+        $port         = trim($this->request->getPost('port'));
+        $onuIndex     = (int) $this->request->getPost('onu_index');
+        $templateId   = (int) $this->request->getPost('template_id');
+        $vlanInternet = (int) $this->request->getPost('vlan_internet');
+        $vlanAcs      = (int) $this->request->getPost('vlan_acs');
+        $tcontProfile = trim($this->request->getPost('tcont_profile') ?? '');
+        $pppoeUser    = trim($this->request->getPost('pppoe_user') ?? '');
+        $pppoePass    = trim($this->request->getPost('pppoe_pass') ?? '');
+        $acsEnable    = $this->request->getPost('acs_enable');
+
+        // Auto-determine index dari cache jika tidak dikirim atau 0
+        if ($onuIndex <= 0) {
+            $cache    = new OnuCacheService();
+            $onuIndex = $cache->nextIndex($oltId, $board, $slot, $port);
+        }
+
+        if (empty($sn) || empty($name) || empty($onuType) || empty($board)) {
+            return $this->response->setJSON(['success' => false, 'message' => 'SN, nama, tipe ONU wajib diisi.']);
+        }
+
+        // Cek duplikat SN di database
+        if ($onuModel->snExists($oltId, $sn)) {
+            return $this->response->setJSON(['success' => false, 'message' => "SN {$sn} sudah terdaftar di OLT ini."]);
+        }
+
+        // Ambil script tambahan dari template (opsional)
+        $template = $templateId ? $templateModel->getByUserAndId($this->userId, $templateId) : null;
+        $ifExtra  = $template['gpon_onu_script'] ?? '';
+
+        try {
+            $driver = OltDriverFactory::make($olt);
+            $driver->connect();
+
+            $result = $driver->registerOnu([
+                'board'           => $board,
+                'slot'            => $slot,
+                'port'            => $port,
+                'onu_index'       => (string)$onuIndex,
+                'onu_type'        => $onuType,
+                'sn'              => $sn,
+                'name'            => $name,
+                'vlan_internet'   => $vlanInternet,
+                'vlan_acs'        => $vlanAcs,
+                'tcont_profile'   => $tcontProfile,
+                'gpon_onu_script' => $ifExtra,
+            ]);
+
+            $driver->disconnect();
+
+            if (!$result['success']) {
+                throw new \Exception(implode("\n", $result['log'] ?? ['Registrasi gagal']));
+            }
+
+            // Simpan ke database
+            $onuId = $onuModel->insert([
+                'olt_id'        => $oltId,
+                'sn'            => $sn,
+                'name'          => $name,
+                'board'         => $board,
+                'slot'          => $slot,
+                'port'          => $port,
+                'onu_index'     => $onuIndex,
+                'onu_type'      => $onuType,
+                'vlan_internet' => $vlanInternet ?: null,
+                'vlan_acs'      => $vlanAcs ?: null,
+                'tcont_profile' => $tcontProfile ?: null,
+                'pppoe_user'    => $pppoeUser ?: null,
+                'status'        => 'registered',
+                'template_id'   => $templateId ?: null,
+                'registered_at' => date('Y-m-d H:i:s'),
+            ]);
+
+            // Update cache ONU
+            $cache = new OnuCacheService();
+            $cache->addOnu($oltId, $board, $slot, $port, $onuIndex, $sn, $onuType, $name);
+
+            $logModel->log($this->userId, 'register', 'success',
+                implode(' | ', $result['log']), $onuId, $oltId);
+
+            // Auto-provision PPPoE via ACS jika user centang
+            $acsResult = null;
+            if ($acsEnable && !empty($pppoeUser)) {
+                $acsResult = $this->tryAcsProvision($sn, $pppoeUser, $pppoePass, $olt['brand'] ?? 'ZTE');
+            }
+
+            return $this->response->setJSON([
+                'success'    => true,
+                'message'    => "ONU {$sn} berhasil didaftarkan (index {$onuIndex}).",
+                'log'        => $result['log'],
+                'onu_index'  => $onuIndex,
+                'acs_result' => $acsResult,
+            ]);
+        } catch (\Exception $e) {
+            $logModel->log($this->userId, 'register', 'failed', $e->getMessage(), null, $oltId);
+            return $this->response->setJSON(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * AJAX: Hapus ONU dari OLT + database
+     */
+    public function delete(int $id)
+    {
+        $this->response->setContentType('application/json');
+
+        $onuModel = new OnuModel();
+        $onu = $onuModel->getWithOlt($id);
+
+        if (!$onu || $onu['user_id'] != $this->userId) {
+            return $this->response->setJSON(['success' => false, 'message' => 'ONU tidak ditemukan.']);
+        }
+
+        $oltModel = new OltModel();
+        $olt = $oltModel->find($onu['olt_id']);
+
+        try {
+            $driver = OltDriverFactory::make($olt);
+            $driver->connect();
+            $driver->deleteOnu($onu['board'], $onu['slot'], $onu['port'], $onu['onu_index']);
+            $driver->disconnect();
+
+            $onuModel->update($id, ['status' => 'deleted']);
+
+            // Update cache
+            $cache = new OnuCacheService();
+            $cache->removeOnu($onu['olt_id'], $onu['board'], $onu['slot'], $onu['port'], (int)$onu['onu_index']);
+
+            $logModel = new ProvisionLogModel();
+            $logModel->log($this->userId, 'delete', 'success', "ONU {$onu['sn']} dihapus", $id, $onu['olt_id']);
+
+            return $this->response->setJSON(['success' => true, 'message' => "ONU {$onu['sn']} berhasil dihapus."]);
+        } catch (\Exception $e) {
+            return $this->response->setJSON(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * AJAX: Ambil sinyal RX/TX ONU dari OLT
+     */
+    public function signal(int $id)
+    {
+        $this->response->setContentType('application/json');
+
+        $onuModel = new OnuModel();
+        $onu = $onuModel->getWithOlt($id);
+        if (!$onu || $onu['user_id'] != $this->userId) {
+            return $this->response->setJSON(['success' => false, 'message' => 'ONU tidak ditemukan.']);
+        }
+
+        $oltModel = new OltModel();
+        $olt = $oltModel->find($onu['olt_id']);
+
+        try {
+            $driver = OltDriverFactory::make($olt);
+            $driver->connect();
+            $signal = $driver->getOnuSignal($onu['board'], $onu['slot'], $onu['port'], $onu['onu_index']);
+            $driver->disconnect();
+
+            // Tentukan kualitas sinyal berdasarkan ONU RX (sinyal di pelanggan)
+            $onuRx = (float)($signal['onu_rx'] ?? 0);
+            $quality = 'unknown';
+            if ($onuRx !== 0.0) {
+                if ($onuRx >= -25) $quality = 'good';
+                elseif ($onuRx >= -28) $quality = 'warn';
+                else $quality = 'bad';
+            }
+
+            return $this->response->setJSON([
+                'success' => true,
+                'signal'  => $signal,
+                'quality' => $quality,
+                'label'   => "OLT-RX: {$signal['olt_rx']} | ONU-RX: {$signal['onu_rx']} dBm",
+            ]);
+        } catch (\Exception $e) {
+            return $this->response->setJSON(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * AJAX: Ambil info lengkap ONU dari GenieACS (WAN, WiFi, status)
+     */
+    public function acsInfo(int $id)
+    {
+        $this->response->setContentType('application/json');
+
+        $onuModel = new OnuModel();
+        $onu = $onuModel->getWithOlt($id);
+        if (!$onu || $onu['user_id'] != $this->userId) {
+            return $this->response->setJSON(['success' => false, 'message' => 'ONU tidak ditemukan.']);
+        }
+
+        $acsModel = new AcsServerModel();
+        $acs      = $acsModel->getDefault($this->userId);
+        if (!$acs) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Tidak ada ACS server default.']);
+        }
+
+        try {
+            $acsService = new AcsService($acs);
+
+            // Cari device untuk mendapatkan device_id dan manufacturer
+            $device   = $acsService->findDeviceBySn($onu['sn']);
+            if (!$device) {
+                return $this->response->setJSON(['success' => false, 'message' => 'Device belum terdaftar di ACS.']);
+            }
+            $deviceId = $device['_id'];
+
+            // Cache device_id ke DB jika belum tersimpan
+            if (empty($onu['acs_device_id'])) {
+                $onuModel->update($id, ['acs_device_id' => $deviceId]);
+            }
+
+            // Deteksi brand dari manufacturer ACS (bukan brand OLT)
+            $brand = $acsService->getDeviceBrand($device);
+            $info  = $acsService->getDeviceInfo($deviceId, $brand);
+
+            return $this->response->setJSON([
+                'success'   => true,
+                'device_id' => $deviceId,
+                'info'      => $info,
+            ]);
+        } catch (\Exception $e) {
+            return $this->response->setJSON(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * AJAX: Push setting WiFi / PPPoE ke ONU via ACS
+     * POST /onus/{id}/acs-set
+     */
+    public function acsSet(int $id)
+    {
+        $this->response->setContentType('application/json');
+
+        $onuModel = new OnuModel();
+        $onu = $onuModel->getWithOlt($id);
+        if (!$onu || $onu['user_id'] != $this->userId) {
+            return $this->response->setJSON(['success' => false, 'message' => 'ONU tidak ditemukan.']);
+        }
+
+        $acsModel = new AcsServerModel();
+        $acs      = $acsModel->getDefault($this->userId);
+        if (!$acs) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Tidak ada ACS server default.']);
+        }
+
+        $action = $this->request->getPost('action'); // 'pppoe' | 'wifi' | 'reboot'
+
+        try {
+            $acsService = new AcsService($acs);
+            $deviceId   = $onu['acs_device_id'];
+
+            if (!$deviceId) {
+                $device   = $acsService->findDeviceBySn($onu['sn']);
+                if (!$device) {
+                    return $this->response->setJSON(['success' => false, 'message' => 'Device belum terdaftar di ACS.']);
+                }
+                $deviceId = $device['_id'];
+                $onuModel->update($id, ['acs_device_id' => $deviceId]);
+            }
+
+            $logModel = new ProvisionLogModel();
+
+            if ($action === 'pppoe') {
+                $pppoeUser = trim($this->request->getPost('pppoe_user'));
+                $pppoePass = trim($this->request->getPost('pppoe_pass'));
+                $device    = $acsService->findDeviceBySn($onu['sn']);
+                $brand     = $device ? $acsService->getDeviceBrand($device) : 'default';
+                $result    = $acsService->provisionPppoe($deviceId, $pppoeUser, $pppoePass, $brand);
+
+                if ($result['success']) {
+                    $onuModel->update($id, ['pppoe_user' => $pppoeUser]);
+                }
+
+                $logModel->log($this->userId, 'acs_pppoe', $result['success'] ? 'success' : 'failed',
+                    "PPPoE user={$pppoeUser} path={$result['wan_path']}", $id, $onu['olt_id']);
+
+                return $this->response->setJSON(array_merge(['success' => $result['success']], $result));
+
+            } elseif ($action === 'wifi') {
+                $ssid    = trim($this->request->getPost('ssid'));
+                $wifiKey = trim($this->request->getPost('wifi_key'));
+                $result  = $acsService->setWifi($deviceId, $ssid, $wifiKey);
+
+                $logModel->log($this->userId, 'acs_wifi', $result['success'] ? 'success' : 'failed',
+                    "WiFi SSID={$ssid}", $id, $onu['olt_id']);
+
+                return $this->response->setJSON($result);
+
+            } elseif ($action === 'reboot') {
+                $ok = $acsService->rebootDevice($deviceId);
+                $logModel->log($this->userId, 'acs_reboot', $ok ? 'success' : 'failed', "Reboot ONU {$onu['sn']}", $id, $onu['olt_id']);
+                return $this->response->setJSON(['success' => $ok]);
+            }
+
+            return $this->response->setJSON(['success' => false, 'message' => 'Action tidak dikenali.']);
+        } catch (\Exception $e) {
+            return $this->response->setJSON(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
+    private function tryAcsProvision(string $sn, string $pppoeUser, string $pppoePass, string $oltBrand = 'ZTE'): ?array
+    {
+        try {
+            $acsModel = new AcsServerModel();
+            $acs = $acsModel->getDefault($this->userId);
+            if (!$acs) return ['status' => 'skip', 'message' => 'Tidak ada ACS server default'];
+
+            $acsService = new AcsService($acs);
+
+            // Cari device di GenieACS berdasarkan SN
+            $device = $acsService->findDeviceBySn($sn);
+            if (!$device) {
+                return ['status' => 'not_found', 'message' => 'Device belum terkoneksi ke ACS'];
+            }
+
+            $deviceId    = $device['_id'];
+            $deviceBrand = $acsService->getDeviceBrand($device);
+
+            // Push PPPoE credentials
+            $result = $acsService->provisionPppoe($deviceId, $pppoeUser, $pppoePass, $deviceBrand);
+
+            $logModel = new ProvisionLogModel();
+            $logModel->log(
+                $this->userId, 'acs_provision',
+                $result['success'] ? 'success' : 'failed',
+                "ACS PPPoE provision sn={$sn} user={$pppoeUser} brand={$deviceBrand} path={$result['wan_path']}"
+            );
+
+            return array_merge($result, ['device_id' => $deviceId, 'brand' => $deviceBrand]);
+        } catch (\Exception $e) {
+            return ['status' => 'error', 'message' => $e->getMessage()];
+        }
+    }
+}

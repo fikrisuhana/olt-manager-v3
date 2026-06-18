@@ -1,0 +1,71 @@
+version: '3.8'
+
+# ============================================================
+# GPON Manager — Development / Local
+# Jalankan: docker compose up -d
+# ============================================================
+
+services:
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gpon-manager-app
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    environment:
+      CI_ENVIRONMENT: development
+      APP_BASE_URL: "http://localhost:8080/"
+      DB_HOST: mysql
+      DB_NAME: gpon_manager
+      DB_USER: gpon
+      DB_PASS: gpon_secret
+    volumes:
+      # Mount writable agar log, cache, onu_cache persist di host
+      - ./writable:/var/www/html/writable
+      # Mount source code untuk hot-reload saat development
+      # PENTING: vendor di-protect pakai anonymous volume supaya tidak ditimpa vendor Windows
+      - .:/var/www/html
+      - gpon_vendor:/var/www/html/vendor
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - gpon-net
+
+  mysql:
+    image: mysql:8.0
+    container_name: gpon-manager-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root_secret
+      MYSQL_DATABASE: gpon_manager
+      MYSQL_USER: gpon
+      MYSQL_PASSWORD: gpon_secret
+    ports:
+      - "3306:3306"      # buka ke host untuk akses via DBeaver/TablePlus
+    volumes:
+      - gpon_mysql_data:/var/lib/mysql
+      # SQL di sini dijalankan otomatis saat container pertama kali dibuat
+      - ./database/migrations/001_create_gpon_tables.sql:/docker-entrypoint-initdb.d/001_schema.sql
+      - ./database/seeds/AdminSeeder.sql:/docker-entrypoint-initdb.d/099_seed.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "gpon", "-pgpon_secret"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    networks:
+      - gpon-net
+
+volumes:
+  gpon_mysql_data:
+    driver: local
+  gpon_vendor:
+    driver: local
+
+networks:
+  gpon-net:
+    driver: bridge

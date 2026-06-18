@@ -1,0 +1,352 @@
+<?php
+
+namespace App\Libraries\Drivers;
+
+use App\Libraries\TelnetService;
+
+/**
+ * Driver untuk OLT ZTE (C320, C600, C650, dll)
+ * Diverifikasi langsung dengan ZTE C320 v1.2
+ *
+ * Format output aktual OLT:
+ * - show gpon onu baseinfo gpon-olt_B/S/P → list ONU + SN per port
+ * - show gpon onu state                   → status semua ONU (format: B/S/P:I enable enable working)
+ * - show pon power attenuation            → up Rx :-26.072(dbm) | down Rx:-21.670(dbm)
+ */
+class ZteDriver implements OltDriverInterface
+{
+    private TelnetService $telnet;
+    private array $config;
+
+    private array $rootPrompt   = ['ZXAN#', 'ISCOM#'];
+    private array $configPrompt = ['config)#'];
+    private array $ifPrompt     = ['config-if)#'];
+    private array $mngPrompt    = ['config-pon-onu)#', 'config-if-pon)#'];
+    private array $anyPrompt    = ['ZXAN#', 'ISCOM#', 'config)#', 'config-if)#'];
+
+    public function __construct(array $config)
+    {
+        $this->config = $config;
+        $this->telnet = new TelnetService();
+    }
+
+    public function connect(): void
+    {
+        $this->telnet->connect(
+            $this->config['ip'],
+            (int)($this->config['telnet_port'] ?? 23),
+            $this->config['telnet_user'],
+            $this->config['telnet_pass']
+        );
+        // Disable pager agar output tidak terpotong "--More--"
+        $this->telnet->execute('terminal length 0', array_merge($this->rootPrompt, ['#']), 5);
+    }
+
+    public function disconnect(): void
+    {
+        $this->telnet->disconnect();
+    }
+
+    /**
+     * ONU yang belum dikonfigurasi.
+     * Jika tidak ada, OLT kembalikan: %Code 62310-GPONSRV : No related information to show.
+     * Output saat ada: gpon-onu_1/1/1:X   FHTTXXXXXXXX   unknown
+     */
+    public function getUnconfiguredOnus(): array
+    {
+        $output = $this->telnet->execute('show gpon onu uncfg', $this->rootPrompt, 20);
+
+        if (stripos($output, 'No related information') !== false) {
+            return [];
+        }
+
+        $onus  = [];
+        $lines = explode("\n", $output);
+        foreach ($lines as $line) {
+            $line = trim($line);
+            // Format: gpon-onu_1/1/1:3   FHTTXXXXXXXX   unknown
+            if (preg_match('/gpon-onu_(\d+)\/(\d+)\/(\d+):(\d+)\s+([A-Za-z0-9]{8,20})\s+(\S+)/', $line, $m)) {
+                $onus[] = [
+                    'board'     => $m[1],
+                    'slot'      => $m[2],
+                    'port'      => $m[3],
+                    'onu_index' => $m[4],
+                    'sn'        => strtoupper($m[5]),
+                    'state'     => $m[6],
+                ];
+            }
+        }
+        return $onus;
+    }
+
+    /**
+     * ONU yang sudah terdaftar dengan SN.
+     * Menggunakan "show gpon onu baseinfo gpon-olt_B/S/P" per port.
+     * Format: gpon-onu_1/1/1:1    ALL-ONT     sn      SN:FHTT05FFE238         ready
+     *
+     * Alur: parse "show gpon onu state" untuk tahu port apa saja yang ada,
+     * kemudian query baseinfo per port.
+     */
+    public function getRegisteredOnus(): array
+    {
+        // Ambil port unik dari state output
+        $stateOutput = $this->telnet->execute('show gpon onu state', $this->rootPrompt, 20);
+        $ports = $this->parseUniquePorts($stateOutput);
+
+        if (empty($ports)) return [];
+
+        $onus = [];
+        foreach ($ports as $portKey) {
+            $baseinfoOutput = $this->telnet->execute(
+                "show gpon onu baseinfo gpon-olt_{$portKey}",
+                $this->rootPrompt, 20
+            );
+            $parsed = $this->parseBaseinfoOutput($baseinfoOutput, $portKey);
+            $onus   = array_merge($onus, $parsed);
+        }
+        return $onus;
+    }
+
+    /**
+     * Parse "show gpon onu state" untuk mendapatkan daftar port unik.
+     * Format baris: 1/1/1:1     enable       enable      working      1(GPON)
+     */
+    private function parseUniquePorts(string $output): array
+    {
+        $ports = [];
+        foreach (explode("\n", $output) as $line) {
+            $line = trim($line);
+            // Format: B/S/P:I  state  state  phase  channel
+            if (preg_match('/^(\d+)\/(\d+)\/(\d+):\d+\s/', $line, $m)) {
+                $portKey = "{$m[1]}/{$m[2]}/{$m[3]}";
+                $ports[$portKey] = true;
+            }
+        }
+        return array_keys($ports);
+    }
+
+    /**
+     * Parse output "show gpon onu baseinfo gpon-olt_B/S/P"
+     * Format: gpon-onu_1/1/1:1    ALL-ONT     sn      SN:FHTT05FFE238         ready
+     * Ada kasus line wrap untuk nama type yang panjang (misal HG8243C-OPEN)
+     */
+    private function parseBaseinfoOutput(string $output, string $port): array
+    {
+        $onus   = [];
+        $lines  = explode("\n", $output);
+        $count  = count($lines);
+
+        for ($i = 0; $i < $count; $i++) {
+            $line = trim($lines[$i]);
+            // Match normal line
+            if (preg_match('/gpon-onu_(\d+)\/(\d+)\/(\d+):(\d+)\s+(\S+)\s+\S+\s+SN:([A-Za-z0-9]+)\s+(\S+)/', $line, $m)) {
+                $onus[] = [
+                    'board'     => $m[1],
+                    'slot'      => $m[2],
+                    'port'      => $m[3],
+                    'onu_index' => $m[4],
+                    'onu_type'  => $m[5],
+                    'sn'        => strtoupper($m[6]),
+                    'status'    => $m[7],
+                ];
+            }
+            // Handle line wrap: gpon-onu_1/1/1:40   HG8243C-OPE sn      SN:... ready
+            // followed by next line:                     N
+            elseif (preg_match('/gpon-onu_(\d+)\/(\d+)\/(\d+):(\d+)\s+(\S+)$/', $line, $m)) {
+                // Check next line for continuation
+                $nextLine = trim($lines[$i + 1] ?? '');
+                if (preg_match('/^([A-Z0-9]+)\s+\S+\s+SN:([A-Za-z0-9]+)\s+(\S+)/', $nextLine, $nm)) {
+                    $onus[] = [
+                        'board'     => $m[1],
+                        'slot'      => $m[2],
+                        'port'      => $m[3],
+                        'onu_index' => $m[4],
+                        'onu_type'  => $m[5] . $nm[1],
+                        'sn'        => strtoupper($nm[2]),
+                        'status'    => $nm[3],
+                    ];
+                    $i++; // skip next line
+                }
+            }
+        }
+        return $onus;
+    }
+
+    /**
+     * Register ONU ke OLT via Telnet CLI.
+     *
+     * Params wajib : board, slot, port, onu_index, onu_type, sn, name
+     * Params config : vlan_internet, vlan_acs, tcont_profile, pppoe_user (untuk disimpan ke DB)
+     * Params extra  : gpon_onu_script (script tambahan untuk gpon-onu interface)
+     *
+     * CLI yang digenerate (diverifikasi vs ZTE C320 v1.2):
+     *   interface gpon-olt_1/1/1
+     *     onu 1 type ALL-ONT sn FHTTXXXXXXXX
+     *   exit
+     *   interface gpon-onu_1/1/1:1
+     *     name PELANGGAN
+     *     sn-bind enable sn
+     *     tcont 1 name tcont profile 250M
+     *     gemport 1 name gemport tcont 1
+     *     gemport 1 traffic-limit upstream 250M downstream 250M   ← hanya jika tcont_profile diisi
+     *     service-port 1 vport 1 user-vlan 100 vlan 100           ← vlan_internet
+     *     service-port 2 vport 1 user-vlan 155 vlan 155           ← vlan_acs
+     *   exit
+     *   write
+     *
+     * Catatan PPPoE: tidak dikonfigurasi via OMCI (pon-onu-mng ip-host tidak dipakai).
+     * PPPoE dipush via GenieACS/TR-069 setelah ONU online — untuk semua brand ONU.
+     */
+    public function registerOnu(array $params): array
+    {
+        $board = $params['board'];
+        $slot  = $params['slot'];
+        $port  = $params['port'];
+        $idx   = $params['onu_index'];
+        $type  = $params['onu_type'];
+        $sn    = $params['sn'];
+        $name  = $params['name'];
+        $log   = [];
+
+        // Parameter terstruktur
+        $vlanInternet = (int)($params['vlan_internet'] ?? 0);
+        $vlanAcs      = (int)($params['vlan_acs'] ?? 0);
+        $tcont        = trim($params['tcont_profile'] ?? '');
+
+        // Script tambahan dari template (opsional)
+        $ifExtra = trim($params['gpon_onu_script'] ?? '');
+
+        // --- Build perintah gpon-onu interface ---
+        // Format diverifikasi dari "show running-config interface" ZTE C320 v1.2
+        $ifCmds = [];
+        $ifCmds[] = 'sn-bind enable sn';
+        if ($tcont) {
+            $ifCmds[] = "tcont 1 name tcont profile {$tcont}";
+            $ifCmds[] = "gemport 1 name gemport tcont 1";
+            $ifCmds[] = "gemport 1 traffic-limit upstream {$tcont} downstream {$tcont}";
+            $log[] = "TCONT profile: {$tcont}";
+        }
+        $spIdx = 1;
+        if ($vlanInternet) {
+            $ifCmds[] = "service-port {$spIdx} vport 1 user-vlan {$vlanInternet} vlan {$vlanInternet}";
+            $spIdx++;
+            $log[] = "VLAN internet: {$vlanInternet}";
+        }
+        if ($vlanAcs) {
+            $ifCmds[] = "service-port {$spIdx} vport 1 user-vlan {$vlanAcs} vlan {$vlanAcs}";
+            $log[] = "VLAN ACS: {$vlanAcs}";
+        }
+        foreach (explode("\n", $ifExtra) as $cmd) {
+            $cmd = trim($cmd);
+            if ($cmd && !str_starts_with($cmd, '#')) $ifCmds[] = $cmd;
+        }
+
+        // --- Eksekusi CLI ke OLT ---
+        $this->telnet->execute('conf t', $this->configPrompt, 5);
+        $log[] = 'Entered configuration mode';
+
+        // Daftarkan ONU di port PON
+        $this->telnet->execute("interface gpon-olt_{$board}/{$slot}/{$port}", $this->ifPrompt, 5);
+        $result = $this->telnet->execute("onu {$idx} type {$type} sn {$sn}", $this->ifPrompt, 8);
+        if (stripos($result, 'Error') !== false || stripos($result, 'Invalid') !== false) {
+            $this->telnet->execute('exit', $this->configPrompt, 3);
+            $this->telnet->execute('exit', $this->rootPrompt, 3);
+            throw new \Exception("Gagal mendaftarkan ONU: " . trim($result));
+        }
+        $this->telnet->execute('exit', $this->configPrompt, 3);
+        $log[] = "ONU sn={$sn} registered on gpon-olt_{$board}/{$slot}/{$port}:{$idx}";
+
+        // Konfigurasi interface gpon-onu
+        $this->telnet->execute("interface gpon-onu_{$board}/{$slot}/{$port}:{$idx}", $this->ifPrompt, 5);
+        $this->telnet->execute("name {$name}", $this->ifPrompt, 3);
+        foreach ($ifCmds as $cmd) {
+            $out = $this->telnet->execute($cmd, $this->ifPrompt, 5);
+            if (stripos($out, 'Error') !== false || stripos($out, 'Invalid') !== false) {
+                $log[] = "WARN: '{$cmd}' → " . trim(substr($out, -120));
+            }
+        }
+        $this->telnet->execute('exit', $this->configPrompt, 3);
+        $log[] = 'gpon-onu interface configured';
+
+        // Keluar config mode dan simpan
+        $this->telnet->execute('exit', $this->rootPrompt, 3);
+        $this->telnet->execute('write', $this->rootPrompt, 20);
+        $log[] = 'Configuration saved (write)';
+
+        return ['success' => true, 'log' => $log];
+    }
+
+    public function deleteOnu(string $board, string $slot, string $port, string $onuIndex): bool
+    {
+        $this->telnet->execute('conf t', $this->configPrompt);
+        $this->telnet->execute("interface gpon-olt_{$board}/{$slot}/{$port}", $this->ifPrompt);
+        $this->telnet->execute("no onu {$onuIndex}", $this->ifPrompt, 10);
+        $this->telnet->execute('exit', $this->configPrompt);
+        $this->telnet->execute('exit', $this->rootPrompt);
+        $this->telnet->execute('write', $this->rootPrompt, 20);
+        return true;
+    }
+
+    /**
+     * Sinyal ONU dari OLT.
+     * Format aktual OLT C320:
+     *   up      Rx :-26.072(dbm)      Tx:3.170(dbm)        29.242(dB)
+     *   down    Tx :10.571(dbm)       Rx:-21.670(dbm)      32.241(dB)
+     *
+     * Yang relevan untuk monitoring pelanggan:
+     *   - olt_rx   = up Rx   = sinyal upstream diterima OLT dari ONU
+     *   - onu_rx   = down Rx = sinyal downstream diterima ONU dari OLT (kualitas sinyal pelanggan)
+     *   - onu_tx   = up Tx   = daya transmit ONU
+     */
+    public function getOnuSignal(string $board, string $slot, string $port, string $onuIndex): array
+    {
+        $output = $this->telnet->execute(
+            "show pon power attenuation gpon-onu_{$board}/{$slot}/{$port}:{$onuIndex}",
+            $this->rootPrompt, 10
+        );
+
+        $result = ['olt_rx' => null, 'onu_tx' => null, 'olt_tx' => null, 'onu_rx' => null];
+
+        // up line: Rx :-26.072(dbm)  Tx:3.170(dbm)
+        if (preg_match('/up\s+Rx\s*:([\-\d\.]+)\(dbm\)/i', $output, $m)) {
+            $result['olt_rx'] = $m[1];
+        }
+        if (preg_match('/up\s+Rx[^\n]+Tx\s*:([\-\d\.]+)\(dbm\)/i', $output, $m)) {
+            $result['onu_tx'] = $m[1];
+        }
+        // down line: Tx :10.571(dbm)  Rx:-21.670(dbm)
+        if (preg_match('/down\s+Tx\s*:([\-\d\.]+)\(dbm\)/i', $output, $m)) {
+            $result['olt_tx'] = $m[1];
+        }
+        if (preg_match('/down\s+Tx[^\n]+Rx\s*:([\-\d\.]+)\(dbm\)/i', $output, $m)) {
+            $result['onu_rx'] = $m[1];
+        }
+
+        return $result;
+    }
+
+    /**
+     * Detail lengkap satu ONU dari OLT.
+     * Command: show gpon onu detail-info gpon-onu_B/S/P:I
+     */
+    public function getOnuDetail(string $board, string $slot, string $port, string $onuIndex): array
+    {
+        $output = $this->telnet->execute(
+            "show gpon onu detail-info gpon-onu_{$board}/{$slot}/{$port}:{$onuIndex}",
+            $this->rootPrompt, 10
+        );
+
+        $detail = ['name' => null, 'sn' => null, 'distance' => null, 'online_duration' => null, 'phase_state' => null];
+
+        if (preg_match('/Name:\s*(.+)/i', $output, $m))          $detail['name']            = trim($m[1]);
+        if (preg_match('/Serial number:\s*([A-Za-z0-9]+)/i', $output, $m)) $detail['sn']   = strtoupper(trim($m[1]));
+        if (preg_match('/ONU Distance:\s*(.+)/i', $output, $m))  $detail['distance']        = trim($m[1]);
+        if (preg_match('/Online Duration:\s*(.+)/i', $output, $m))$detail['online_duration'] = trim($m[1]);
+        if (preg_match('/Phase state:\s*(\S+)/i', $output, $m))  $detail['phase_state']     = trim($m[1]);
+
+        return $detail;
+    }
+
+    public function getBrand(): string { return 'ZTE'; }
+    public function getModel(): string { return $this->config['model'] ?? 'C320'; }
+}

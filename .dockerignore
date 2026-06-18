@@ -1,0 +1,33 @@
+# Git
+.git
+.gitignore
+
+# Docker files sendiri tidak perlu di-copy ke image
+docker-compose*.yml
+.dockerignore
+
+# Dev tools
+.vscode
+.idea
+*.md
+
+# Vendor HARUS di-ignore — Dockerfile sudah composer install sendiri di dalam container.
+# Kalau tidak di-ignore, COPY . . akan overwrite vendor Linux dengan vendor Windows (binary beda!)
+vendor/
+
+# Test dan docs
+tests/
+.phpunit*
+phpunit.xml*
+
+# Logs dan cache lokal (akan di-mount sebagai volume)
+writable/logs/*
+writable/cache/*
+writable/session/*
+writable/onu_cache/*
+writable/debugbar/*
+
+# Env files sensitif — jangan masuk image
+.env
+.env.*
+!.env.example
