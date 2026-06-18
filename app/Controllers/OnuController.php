@@ -197,6 +197,9 @@ class OnuController extends Controller
             $logModel->log($this->userId, 'register', 'success',
                 implode(' | ', $result['log']), $onuId, $oltId);
 
+            // ZTE OLT: PPPoE sudah di-push via pon-onu-mng saat register — tidak perlu ACS watcher
+            // Non-ZTE: ACS watcher menunggu ONU online lalu push PPPoE via TR-069
+            $isZte = strtoupper($olt['brand'] ?? '') === 'ZTE';
             return $this->response->setJSON([
                 'success'   => true,
                 'message'   => "ONU {$sn} berhasil didaftarkan (index {$onuIndex}).",
@@ -204,7 +207,7 @@ class OnuController extends Controller
                 'onu_id'    => $onuId,
                 'sn'        => $sn,
                 'onu_index' => $onuIndex,
-                'watch_acs' => !empty($pppoeUser),
+                'watch_acs' => !empty($pppoeUser) && !$isZte,
             ]);
         } catch (\Exception $e) {
             $logModel->log($this->userId, 'register', 'failed', $e->getMessage(), null, $oltId);
