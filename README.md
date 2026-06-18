@@ -49,65 +49,51 @@ Aplikasi web multi-user untuk manajemen ONU/ONT pada OLT GPON. Mendukung registr
 
 ## Instalasi via Docker
 
-### Development / Lokal
+**1. Clone dan edit konfigurasi:**
 
 ```bash
 git clone <repo-url> gpon-manager
 cd gpon-manager
+cp .env.example .env
+```
 
-# Build + jalankan semua service
+Edit `.env` — cukup sesuaikan baris ini:
+
+```env
+APP_URL=http://IP_SERVER:8080/
+APP_PORT=8080
+DB_PASS=password_kuat
+DB_ROOT_PASS=root_password_kuat
+ENCRYPTION_KEY=   # generate: php -r "echo bin2hex(random_bytes(32));"
+```
+
+**2. Jalankan:**
+
+```bash
 docker compose up -d --build
-
-# Cek log
-docker compose logs -f app
 ```
 
-Akses di **http://localhost:8080** — MySQL otomatis membuat database, menjalankan migration, dan seed admin saat pertama kali container dibuat.
+Akses di `http://IP_SERVER:8080`. MySQL otomatis membuat database, menjalankan migration, dan seed admin saat pertama kali container dibuat.
 
-### Production / IP Langsung (tanpa domain)
-
-**1. Edit `docker-compose.prod.yml`** — sesuaikan bagian berikut:
-
-```yaml
-APP_BASE_URL: "http://IP_SERVER:8080/"
-DB_PASS: password_kuat
-MYSQL_ROOT_PASSWORD: root_password_kuat
-MYSQL_PASSWORD: password_kuat        # harus sama dengan DB_PASS
-ENCRYPTION_KEY: "isi_hasil_generate"
-```
-
-**2. Generate `ENCRYPTION_KEY`** (sekali saja):
-
-```bash
-php -r "echo bin2hex(random_bytes(32));"
-```
-
-**3. Build dan jalankan:**
-
-```bash
-docker build -t gpon-manager:latest .
-docker compose -f docker-compose.prod.yml up -d
-```
-
-Akses di `http://IP_SERVER:8080`. Pastikan port 8080 tidak diblok firewall:
+Pastikan port 8080 tidak diblok firewall:
 ```bash
 ufw allow 8080
 ```
 
-### Production dengan Domain + SSL (EasyEngine / reverse proxy)
+### Dengan Domain + SSL (EasyEngine / reverse proxy)
 
-Jalankan app di port lokal, lalu proxy lewat nginx:
+Di `.env`, bind ke lokal saja:
+```env
+APP_PORT=127.0.0.1:8080
+APP_URL=https://gpon.domain.com/
+```
 
+Lalu buat reverse proxy di EasyEngine:
 ```bash
-# Pastikan port di prod compose: "127.0.0.1:8080:80"
-docker build -t gpon-manager:latest .
-docker compose -f docker-compose.prod.yml up -d
-
-# EasyEngine — buat reverse proxy ke app
 ee site create gpon.domain.com --type=proxy --proxy=127.0.0.1:8080
 ```
 
-> File `.env` **tidak perlu disentuh** — semua konfigurasi diinjek via `docker-compose.prod.yml`.
+> Semua konfigurasi cukup di `.env` — `docker-compose.yml` tidak perlu disentuh.
 
 ---
 
@@ -305,14 +291,9 @@ docker compose exec app bash
 # Restart app saja
 docker compose restart app
 
-# Update kode (development)
+# Update kode
 git pull
-docker compose restart app
-
-# Update kode (production)
-git pull
-docker build -t gpon-manager:latest .
-docker compose -f docker-compose.prod.yml up -d app
+docker compose up -d --build app
 
 # Backup database
 docker compose exec mysql mysqldump -u gpon -pgpon_secret gpon_manager > backup_$(date +%Y%m%d).sql
