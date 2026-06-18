@@ -50,8 +50,15 @@
                                             data-port="<?= $olt['telnet_port'] ?>"
                                             data-user="<?= esc($olt['telnet_user']) ?>"
                                             data-brand="<?= esc($olt['brand']) ?>"
-                                            data-model="<?= esc($olt['model']) ?>">
+                                            data-model="<?= esc($olt['model']) ?>"
+                                            data-tcont="<?= esc(str_replace("\n", '|', $olt['tcont_profiles'] ?? '')) ?>"
+                                            data-traffic="<?= esc(str_replace("\n", '|', $olt['traffic_profiles'] ?? '')) ?>">
                                         <?= esc($olt['name']) ?> (<?= esc($olt['ip']) ?>)
+                                        <?php if (!empty($olt['tcont_profiles'])): ?>
+                                            — <?= count(array_filter(explode("\n", $olt['tcont_profiles']))) ?> profile
+                                        <?php else: ?>
+                                            — belum sync
+                                        <?php endif; ?>
                                     </option>
                                     <?php endforeach; ?>
                                 </select>
@@ -129,6 +136,35 @@
 <?= $this->section('scripts') ?>
 <script>
 const _csrf = { name: '<?= csrf_token() ?>', hash: '<?= csrf_hash() ?>' };
+
+// Auto-populate profiles dari cache DB saat OLT dipilih
+document.getElementById('refOlt').addEventListener('change', function() {
+    const opt = this.options[this.selectedIndex];
+    if (!opt.value) return;
+
+    const tcont   = (opt.dataset.tcont   || '').split('|').map(p => p.trim()).filter(p => p);
+    const traffic = (opt.dataset.traffic || '').split('|').map(p => p.trim()).filter(p => p);
+    const res     = document.getElementById('fetchOltResult');
+
+    if (tcont.length || traffic.length) {
+        showProfilePicker(tcont,   'f_tcont',   'tcontPicker',   updateScriptPreview);
+        showProfilePicker(traffic, 'f_traffic', 'trafficPicker', updateScriptPreview);
+        res.className  = 'mt-1 small text-success';
+        res.textContent = `Cache: TCONT ${tcont.length} | Traffic ${traffic.length} profile — klik "Ambil TCONT" untuk refresh dari OLT`;
+        res.classList.remove('d-none');
+
+        // Isi field dengan nilai pertama jika belum terisi
+        if (!document.getElementById('f_tcont').value && tcont.length)
+            document.getElementById('f_tcont').value = tcont[0];
+        if (!document.getElementById('f_traffic').value && traffic.length)
+            document.getElementById('f_traffic').value = traffic[0];
+        updateScriptPreview();
+    } else {
+        res.className  = 'mt-1 small text-warning';
+        res.textContent = 'Belum ada cache profile — klik "Ambil TCONT" untuk fetch dari OLT';
+        res.classList.remove('d-none');
+    }
+});
 
 function fetchTcontFromOlt() {
     const sel = document.getElementById('refOlt');

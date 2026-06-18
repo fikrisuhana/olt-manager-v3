@@ -427,12 +427,11 @@ class OltController extends Controller
                 'brand'       => $brand,
                 'model'       => $this->request->getPost('model') ?? '',
             ];
-            $driver   = OltDriverFactory::make($oltConfig);
+            $driver          = OltDriverFactory::make($oltConfig);
             $driver->connect();
-            $profiles = $driver->getTcontProfiles();
-            $driver->disconnect();
-
+            $profiles        = $driver->getTcontProfiles();
             $trafficProfiles = $driver->getTrafficProfiles();
+            $driver->disconnect();
 
             // Simpan ke DB sekalian
             if ($oltId > 0) {
