@@ -96,12 +96,21 @@
                         ACS / GenieACS
                     </h6>
 
-                    <div class="mb-4">
-                        <label class="form-label">ACS URL (TR-069)</label>
-                        <input type="text" name="acs_url" class="form-control"
-                               value="<?= esc($olt['acs_url'] ?? '') ?>"
-                               placeholder="http://136.1.1.8:7547">
-                        <div class="form-text">URL CWMP GenieACS — diset otomatis ke ONU via OMCI saat register (ZTE). Kosongkan jika tidak pakai ACS.</div>
+                    <div class="row g-3 mb-4">
+                        <div class="col-8">
+                            <label class="form-label">ACS URL (TR-069)</label>
+                            <input type="text" name="acs_url" class="form-control"
+                                   value="<?= esc($olt['acs_url'] ?? '') ?>"
+                                   placeholder="http://136.1.1.8:7547">
+                            <div class="form-text">URL CWMP GenieACS — diset otomatis ke ONU via OMCI saat register (ZTE). Kosongkan jika tidak pakai ACS.</div>
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label">PPPoE VLAN Profile</label>
+                            <input type="text" name="pppoe_vlan_profile" class="form-control"
+                                   value="<?= esc($olt['pppoe_vlan_profile'] ?? 'PPPOE') ?>"
+                                   placeholder="PPPOE">
+                            <div class="form-text">Nama vlan-profile untuk wan-ip PPPoE di pon-onu-mng.</div>
+                        </div>
                     </div>
 
                     <h6 class="fw-semibold mb-3 text-muted text-uppercase" style="font-size:.75rem;letter-spacing:.05em">

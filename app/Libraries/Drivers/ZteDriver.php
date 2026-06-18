@@ -291,6 +291,10 @@ class ZteDriver implements OltDriverInterface
         //     service acs gemport 1 vlan {acs}
         //     vlan port veip_1 mode hybrid
         if ($vlanInternet || $vlanAcs) {
+            $pppoeUser    = trim($params['pppoe_user'] ?? '');
+            $pppoePass    = trim($params['pppoe_pass'] ?? '');
+            $pppoeProfile = trim($this->config['pppoe_vlan_profile'] ?? 'PPPOE');
+
             $this->telnet->execute("pon-onu-mng gpon-onu_{$board}/{$slot}/{$port}:{$idx}", $this->mngPrompt, 5);
             if ($vlanInternet) {
                 $out = $this->telnet->execute("service hsi gemport 1 vlan {$vlanInternet}", $this->mngPrompt, 5);
@@ -305,6 +309,22 @@ class ZteDriver implements OltDriverInterface
                 }
             }
             $this->telnet->execute("vlan port veip_1 mode hybrid", $this->mngPrompt, 5);
+
+            // PPPoE WAN via pon-onu-mng (ZTE ONU — diverifikasi dari running-config C320)
+            if ($pppoeUser && $pppoePass) {
+                $out = $this->telnet->execute(
+                    "wan-ip 1 mode pppoe username {$pppoeUser} password {$pppoePass} vlan-profile {$pppoeProfile} host 1",
+                    $this->mngPrompt, 5
+                );
+                if (stripos($out, 'Error') !== false || stripos($out, 'Invalid') !== false) {
+                    $log[] = "WARN pon-onu-mng: wan-ip pppoe → " . trim(substr($out, -120));
+                } else {
+                    $this->telnet->execute("wan-ip 1 ping-response enable traceroute-response enable", $this->mngPrompt, 5);
+                    $this->telnet->execute("security-mgmt 212 state enable mode forward protocol web", $this->mngPrompt, 5);
+                    $log[] = "pon-onu-mng PPPoE: {$pppoeUser} profile={$pppoeProfile}";
+                }
+            }
+
             $this->telnet->execute('exit', $this->configPrompt, 3);
             $log[] = "pon-onu-mng: hsi={$vlanInternet} acs={$vlanAcs} veip_1 hybrid";
         }
@@ -339,7 +359,9 @@ class ZteDriver implements OltDriverInterface
             throw new \Exception("VLAN internet dan VLAN ACS keduanya kosong.");
         }
 
-        $log = [];
+        $pppoeProfile = trim($this->config['pppoe_vlan_profile'] ?? 'PPPOE');
+        $log          = [];
+
         $this->telnet->execute('conf t', $this->configPrompt, 5);
         $this->telnet->execute("pon-onu-mng gpon-onu_{$board}/{$slot}/{$port}:{$onuIndex}", $this->mngPrompt, 5);
 
@@ -362,6 +384,22 @@ class ZteDriver implements OltDriverInterface
             }
         }
         $this->telnet->execute("vlan port veip_1 mode hybrid", $this->mngPrompt, 5);
+
+        if ($pppoeUser && $pppoePass) {
+            $out   = $this->telnet->execute(
+                "wan-ip 1 mode pppoe username {$pppoeUser} password {$pppoePass} vlan-profile {$pppoeProfile} host 1",
+                $this->mngPrompt, 5
+            );
+            $log[] = "wan-ip pppoe {$pppoeUser} → " . trim(preg_replace('/\s+/', ' ', $out));
+            if (stripos($out, 'Error') !== false || stripos($out, 'Invalid') !== false) {
+                $log[] = "WARN wan-ip pppoe gagal, lanjut tanpa PPPoE config";
+            } else {
+                $this->telnet->execute("wan-ip 1 ping-response enable traceroute-response enable", $this->mngPrompt, 5);
+                $this->telnet->execute("security-mgmt 212 state enable mode forward protocol web", $this->mngPrompt, 5);
+                $log[] = "PPPoE configured via pon-onu-mng: {$pppoeUser}";
+            }
+        }
+
         $this->telnet->execute('exit', $this->configPrompt, 3);
         $this->telnet->execute('exit', $this->rootPrompt, 3);
         $this->telnet->execute('write', $this->rootPrompt, 20);
