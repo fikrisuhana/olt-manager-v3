@@ -172,6 +172,18 @@ class OltController extends Controller
 
             $cache->save($id, $registeredOnus);
 
+            // Sekaligus fetch profiles (TCONT + traffic) dan simpan ke DB
+            try {
+                $tcontProfiles   = $driver->getTcontProfiles();
+                $trafficProfiles = $driver->getTrafficProfiles();
+                $oltModel->update($id, [
+                    'tcont_profiles'   => implode("\n", $tcontProfiles),
+                    'traffic_profiles' => implode("\n", $trafficProfiles),
+                ]);
+            } catch (\Exception $e) {
+                // Profile fetch gagal — tidak critical
+            }
+
             // Sekaligus fetch ACS status untuk semua SN yang ada di OLT
             $acsMessage = '';
             $acsModel   = new AcsServerModel();
@@ -424,10 +436,25 @@ class OltController extends Controller
             $profiles = $driver->getTcontProfiles();
             $driver->disconnect();
 
+            $trafficProfiles = $driver->getTrafficProfiles();
+
+            // Simpan ke DB sekalian
+            if ($oltId > 0) {
+                $oltModel = new OltModel();
+                $olt2 = $oltModel->getByUserAndId($this->userId, $oltId);
+                if ($olt2) {
+                    $oltModel->update($oltId, [
+                        'tcont_profiles'   => implode("\n", $profiles),
+                        'traffic_profiles' => implode("\n", $trafficProfiles),
+                    ]);
+                }
+            }
+
             return $this->response->setJSON([
-                'success'  => true,
-                'profiles' => $profiles,
-                'count'    => count($profiles),
+                'success'          => true,
+                'profiles'         => $profiles,
+                'traffic_profiles' => $trafficProfiles,
+                'count'            => count($profiles),
             ]);
         } catch (\Exception $e) {
             return $this->response->setJSON(['success' => false, 'message' => $e->getMessage()]);
@@ -446,8 +473,9 @@ class OltController extends Controller
             'telnet_pass'     => $this->request->getPost('telnet_pass'),
             'snmp_community'  => $this->request->getPost('snmp_community') ?: 'public',
             'snmp_port'       => (int)($this->request->getPost('snmp_port') ?: 161),
-            'tcont_profiles'  => $this->request->getPost('tcont_profiles') ?: null,
-            'description'     => $this->request->getPost('description'),
+            'tcont_profiles'   => $this->request->getPost('tcont_profiles') ?: null,
+            'traffic_profiles' => $this->request->getPost('traffic_profiles') ?: null,
+            'description'      => $this->request->getPost('description'),
         ];
     }
 

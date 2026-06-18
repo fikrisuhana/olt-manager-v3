@@ -77,11 +77,17 @@
                                    value="<?= esc($template['vlan_management'] ?? 100) ?>"
                                    oninput="updateScriptPreview()">
                         </div>
-                        <div class="col-4">
+                        <div class="col-2">
                             <label class="form-label">TCONT Profile</label>
                             <input type="text" name="tcont_profile" id="f_tcont" class="form-control"
                                    value="<?= esc($template['tcont_profile'] ?? '') ?>"
-                                   placeholder="misal: UP-1G" oninput="updateScriptPreview()">
+                                   placeholder="250M" oninput="updateScriptPreview()">
+                        </div>
+                        <div class="col-2">
+                            <label class="form-label">Traffic Limit</label>
+                            <input type="text" name="traffic_profile" id="f_traffic" class="form-control"
+                                   value="<?= esc($template['traffic_profile'] ?? '') ?>"
+                                   placeholder="200M" oninput="updateScriptPreview()">
                         </div>
                     </div>
 
@@ -156,18 +162,18 @@ function fetchTcontFromOlt() {
                 res.textContent = 'Gagal: ' + data.message;
                 return;
             }
+            const bwCount = (data.traffic_profiles || []).length;
             res.className = 'mt-1 small text-success';
-            res.textContent = `${data.count} profile ditemukan: ${data.profiles.join(', ')}`;
+            res.textContent = `TCONT: ${data.count} | Traffic: ${bwCount} profile`;
 
-            // Isi TCONT field dengan profile pertama (jika belum terisi)
             const tcontEl = document.getElementById('f_tcont');
             if (!tcontEl.value && data.profiles.length > 0) {
                 tcontEl.value = data.profiles[0];
                 updateScriptPreview();
             }
 
-            // Tampilkan sebagai dropdown sementara di samping
-            showTcontPicker(data.profiles);
+            showProfilePicker(data.profiles, 'f_tcont', 'tcontPicker', updateScriptPreview);
+            showProfilePicker(data.traffic_profiles || [], 'f_traffic', 'trafficPicker', updateScriptPreview);
         })
         .catch(e => {
             btn.disabled = false;
@@ -177,13 +183,14 @@ function fetchTcontFromOlt() {
         });
 }
 
-function showTcontPicker(profiles) {
-    const existingPicker = document.getElementById('tcontPicker');
-    if (existingPicker) existingPicker.remove();
+function showProfilePicker(profiles, fieldId, pickerId, onChange) {
+    const existing = document.getElementById(pickerId);
+    if (existing) existing.remove();
+    if (!profiles.length) return;
 
-    const tcontEl = document.getElementById('f_tcont');
+    const targetEl = document.getElementById(fieldId);
     const picker = document.createElement('div');
-    picker.id = 'tcontPicker';
+    picker.id = pickerId;
     picker.className = 'mt-1 d-flex flex-wrap gap-1';
     profiles.forEach(p => {
         const btn = document.createElement('button');
@@ -191,29 +198,33 @@ function showTcontPicker(profiles) {
         btn.className = 'btn btn-sm btn-outline-primary py-0 px-2';
         btn.textContent = p;
         btn.onclick = () => {
-            tcontEl.value = p;
-            updateScriptPreview();
-            picker.querySelectorAll('button').forEach(b => b.classList.remove('active', 'btn-primary'));
-            btn.classList.add('active', 'btn-primary');
+            targetEl.value = p;
+            if (onChange) onChange();
+            picker.querySelectorAll('button').forEach(b => { b.classList.remove('active','btn-primary'); b.classList.add('btn-outline-primary'); });
+            btn.classList.add('active','btn-primary');
             btn.classList.remove('btn-outline-primary');
         };
         picker.appendChild(btn);
     });
-    tcontEl.parentElement.appendChild(picker);
+    targetEl.parentElement.appendChild(picker);
 }
 
 function generateScript() {
-    const vlanI  = parseInt(document.getElementById('f_vlan_internet').value) || 0;
-    const vlanM  = parseInt(document.getElementById('f_vlan_mgmt').value) || 0;
-    const tcont  = document.getElementById('f_tcont').value.trim();
-    const brand  = document.querySelector('[name="brand"]').value;
-    const wan    = document.querySelector('[name="wan_type"]').value;
+    const vlanI   = parseInt(document.getElementById('f_vlan_internet').value) || 0;
+    const vlanM   = parseInt(document.getElementById('f_vlan_mgmt').value) || 0;
+    const tcont   = document.getElementById('f_tcont').value.trim();
+    const traffic = document.getElementById('f_traffic').value.trim();
+    const brand   = document.querySelector('[name="brand"]').value;
+    const wan     = document.querySelector('[name="wan_type"]').value;
 
     let lines = [];
 
     if (tcont) {
-        lines.push(`tcont 1 name tcont_1 profile ${tcont}`);
-        lines.push(`gemport 1 name gem_1 tcont 1`);
+        lines.push(`tcont 1 name tcont profile ${tcont}`);
+        lines.push(`gemport 1 name gemport tcont 1`);
+        if (traffic) {
+            lines.push(`gemport 1 traffic-limit upstream ${traffic} downstream ${traffic}`);
+        }
     }
 
     let spIdx = 1;

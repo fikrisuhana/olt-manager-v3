@@ -236,13 +236,12 @@
                                        placeholder="155" min="1" max="4094">
                                 <div class="form-text">service-port 2 vport 1</div>
                             </div>
-                            <div class="col-4">
+                            <?php
+                                $tcontOptions   = array_filter(array_map('trim', explode("\n", $olt['tcont_profiles'] ?? '')));
+                                $trafficOptions = array_filter(array_map('trim', explode("\n", $olt['traffic_profiles'] ?? '')));
+                            ?>
+                            <div class="col-3">
                                 <label class="form-label small fw-medium">TCONT Profile</label>
-                                <?php
-                                    $tcontOptions = array_filter(
-                                        array_map('trim', explode("\n", $olt['tcont_profiles'] ?? ''))
-                                    );
-                                ?>
                                 <?php if (!empty($tcontOptions)): ?>
                                 <select name="tcont_profile" class="form-select form-select-sm">
                                     <option value="">-- Pilih --</option>
@@ -251,9 +250,21 @@
                                     <?php endforeach; ?>
                                 </select>
                                 <?php else: ?>
-                                <input type="text" name="tcont_profile" class="form-control form-control-sm"
-                                       placeholder="250M">
-                                <div class="form-text text-warning small"><i class="bi bi-exclamation-triangle me-1"></i>Isi di <a href="/olts/<?= $olt['id'] ?>/edit">Edit OLT</a></div>
+                                <input type="text" name="tcont_profile" class="form-control form-control-sm" placeholder="250M">
+                                <div class="form-text text-warning small"><i class="bi bi-exclamation-triangle me-1"></i><a href="/olts/<?= $olt['id'] ?>/edit">Sync Cache</a> dulu</div>
+                                <?php endif; ?>
+                            </div>
+                            <div class="col-3">
+                                <label class="form-label small fw-medium">Traffic Limit</label>
+                                <?php if (!empty($trafficOptions)): ?>
+                                <select name="traffic_profile" class="form-select form-select-sm">
+                                    <option value="">-- Tidak ada --</option>
+                                    <?php foreach ($trafficOptions as $opt): ?>
+                                        <option value="<?= esc($opt) ?>"><?= esc($opt) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <?php else: ?>
+                                <input type="text" name="traffic_profile" class="form-control form-control-sm" placeholder="200M (opsional)">
                                 <?php endif; ?>
                             </div>
                         </div>
@@ -604,8 +615,8 @@ function previewCli() {
     cli += `  name ${name}\n`;
     cli += `  sn-bind enable sn\n`;
     if (tcont) {
-        cli += `  tcont 1 name tcont_1 profile ${tcont}\n`;
-        cli += `  gemport 1 name gem_1 tcont 1\n`;
+        cli += `  tcont 1 name tcont profile ${tcont}\n`;
+        cli += `  gemport 1 name gemport tcont 1\n`;
     }
     let spIdx = 1;
     if (vlanI) {

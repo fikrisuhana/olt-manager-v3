@@ -220,10 +220,15 @@ class ZteDriver implements OltDriverInterface
         // Format diverifikasi dari "show running-config interface" ZTE C320 v1.2
         $ifCmds = [];
         $ifCmds[] = 'sn-bind enable sn';
+        $trafficProfile = trim($params['traffic_profile'] ?? '');
         if ($tcont) {
-            $ifCmds[] = "tcont 1 name tcont_1 profile {$tcont}";
-            $ifCmds[] = "gemport 1 name gem_1 tcont 1";
+            $ifCmds[] = "tcont 1 name tcont profile {$tcont}";
+            $ifCmds[] = "gemport 1 name gemport tcont 1";
             $log[] = "TCONT profile: {$tcont}";
+        }
+        if ($trafficProfile) {
+            $ifCmds[] = "gemport 1 traffic-limit upstream {$trafficProfile} downstream {$trafficProfile}";
+            $log[] = "Traffic limit: {$trafficProfile}";
         }
         $spIdx = 1;
         if ($vlanInternet) {
@@ -358,26 +363,28 @@ class ZteDriver implements OltDriverInterface
     public function getTcontProfiles(): array
     {
         $output = $this->telnet->execute('show gpon profile tcont', $this->rootPrompt, 10);
-        return $this->parseTcontOutput($output);
+        return $this->parseProfileNames($output);
     }
 
-    private function parseTcontOutput(string $output): array
+    public function getTrafficProfiles(): array
+    {
+        $output = $this->telnet->execute('show gpon profile traffic', $this->rootPrompt, 10);
+        return $this->parseProfileNames($output);
+    }
+
+    /**
+     * Parse daftar nama profile dari output ZTE "show gpon profile tcont/traffic".
+     * Format output: setiap profile diawali baris "Profile name :NAMA"
+     */
+    private function parseProfileNames(string $output): array
     {
         $profiles = [];
         foreach (explode("\n", $output) as $line) {
-            $line = trim($line);
-            if (empty($line)) continue;
-            // Skip separator lines and header lines
-            if (preg_match('/^[-=]+$/', $line)) continue;
-            if (preg_match('/^(profile.?name|type|assured|max.?bw|bandwidth|GPON)/i', $line)) continue;
-            // First token is profile name — must be alphanumeric (no pure numbers, no special chars)
-            $parts = preg_split('/\s+/', $line, 2);
-            $name  = $parts[0] ?? '';
-            if (preg_match('/^[a-zA-Z0-9][a-zA-Z0-9_\-\.]*$/', $name)) {
-                $profiles[] = $name;
+            if (preg_match('/^Profile\s+name\s*:\s*(\S+)/i', trim($line), $m)) {
+                $profiles[] = trim($m[1]);
             }
         }
-        return array_values(array_unique($profiles));
+        return array_values(array_unique(array_filter($profiles)));
     }
 
     public function getBrand(): string { return 'ZTE'; }

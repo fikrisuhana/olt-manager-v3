@@ -87,11 +87,8 @@ class FiberhomeDriver implements OltDriverInterface
         return ['rx' => null, 'tx' => null];
     }
 
-    public function getTcontProfiles(): array
-    {
-        // TODO: implement untuk Fiberhome (command berbeda)
-        return [];
-    }
+    public function getTcontProfiles(): array { return []; }
+    public function getTrafficProfiles(): array { return []; }
 
     public function getBrand(): string { return 'Fiberhome'; }
     public function getModel(): string { return $this->config['model'] ?? 'AN5516'; }

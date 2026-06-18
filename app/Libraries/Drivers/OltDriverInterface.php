@@ -31,4 +31,7 @@ interface OltDriverInterface
 
     /** Ambil daftar nama TCONT profile dari OLT */
     public function getTcontProfiles(): array;
+
+    /** Ambil daftar nama traffic/bandwidth profile dari OLT */
+    public function getTrafficProfiles(): array;
 }

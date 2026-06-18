@@ -96,27 +96,47 @@
                         Konfigurasi Provisioning
                     </h6>
 
-                    <div class="mb-4">
+                    <div class="mb-3">
                         <div class="d-flex align-items-center gap-2 mb-2">
-                            <label class="form-label mb-0">TCONT Profiles</label>
+                            <label class="form-label mb-0">TCONT &amp; Traffic Profiles</label>
                             <button type="button" class="btn btn-sm btn-outline-primary" id="btnSyncTcont" onclick="syncTcont()">
                                 <i class="bi bi-arrow-repeat me-1"></i>Sync dari OLT
                             </button>
                             <span id="syncTcontResult" class="small"></span>
                         </div>
-                        <div class="border rounded p-2 bg-white" id="tcontContainer" style="min-height:56px">
-                            <div id="tcontTags" class="d-flex flex-wrap gap-1 mb-2"></div>
-                            <div class="d-flex gap-1">
-                                <input type="text" id="tcontNewInput" class="form-control form-control-sm"
-                                       placeholder="Tambah profile..." style="max-width:160px"
-                                       onkeydown="if(event.key==='Enter'){event.preventDefault();addTcontProfile();}">
-                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="addTcontProfile()">
-                                    <i class="bi bi-plus-lg"></i>
-                                </button>
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <div class="form-text mb-1">TCONT / DBA Profile</div>
+                                <div class="border rounded p-2 bg-white" id="tcontContainer" style="min-height:48px">
+                                    <div id="tcontTags" class="d-flex flex-wrap gap-1 mb-1"></div>
+                                    <div class="d-flex gap-1">
+                                        <input type="text" id="tcontNewInput" class="form-control form-control-sm"
+                                               placeholder="Tambah..." style="max-width:120px"
+                                               onkeydown="if(event.key==='Enter'){event.preventDefault();addTcontProfile();}">
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="addTcontProfile()">
+                                            <i class="bi bi-plus-lg"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <textarea name="tcont_profiles" id="tcontHidden" class="d-none"></textarea>
+                            </div>
+                            <div class="col-6">
+                                <div class="form-text mb-1">Traffic / Bandwidth Profile</div>
+                                <div class="border rounded p-2 bg-white" id="trafficContainer" style="min-height:48px">
+                                    <div id="trafficTags" class="d-flex flex-wrap gap-1 mb-1"></div>
+                                    <div class="d-flex gap-1">
+                                        <input type="text" id="trafficNewInput" class="form-control form-control-sm"
+                                               placeholder="Tambah..." style="max-width:120px"
+                                               onkeydown="if(event.key==='Enter'){event.preventDefault();addTrafficProfile();}">
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="addTrafficProfile()">
+                                            <i class="bi bi-plus-lg"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <textarea name="traffic_profiles" id="trafficHidden" class="d-none"></textarea>
                             </div>
                         </div>
-                        <textarea name="tcont_profiles" id="tcontHidden" class="d-none"></textarea>
-                        <div class="form-text">Profile sesuai yang dikonfigurasi di OLT — tampil sebagai dropdown saat register ONU.</div>
+                        <div class="form-text mt-1">Tampil sebagai dropdown saat register ONU — klik "Sync dari OLT" untuk auto-isi.</div>
                     </div>
 
                     <div class="d-flex gap-2 align-items-center flex-wrap">
@@ -138,10 +158,12 @@
 <?= $this->endSection() ?>
 <?= $this->section('scripts') ?>
 <script>
-// ── TCONT Profile tag-input ─────────────────────────────────────
-(function initTcont() {
-    const existing = `<?= esc($olt['tcont_profiles'] ?? '', 'js') ?>`.trim();
-    if (existing) existing.split('\n').forEach(p => addTcontTag(p.trim()));
+// ── TCONT + Traffic Profile tag-input ───────────────────────────
+(function initProfiles() {
+    const tcont = `<?= esc($olt['tcont_profiles'] ?? '', 'js') ?>`.trim();
+    if (tcont) tcont.split('\n').forEach(p => addTcontTag(p.trim()));
+    const traffic = `<?= esc($olt['traffic_profiles'] ?? '', 'js') ?>`.trim();
+    if (traffic) traffic.split('\n').forEach(p => addTrafficTag(p.trim()));
 })();
 
 function addTcontTag(name) {
@@ -170,8 +192,35 @@ function addTcontProfile() {
 
 function updateTcontHidden() {
     const tags  = document.querySelectorAll('#tcontTags [data-name]');
-    const names = Array.from(tags).map(t => t.dataset.name);
-    document.getElementById('tcontHidden').value = names.join('\n');
+    document.getElementById('tcontHidden').value = Array.from(tags).map(t => t.dataset.name).join('\n');
+}
+
+function addTrafficTag(name) {
+    name = name.trim();
+    if (!name) return;
+    for (const el of document.querySelectorAll('#trafficTags [data-name]')) {
+        if (el.dataset.name.toLowerCase() === name.toLowerCase()) return;
+    }
+    const tag = document.createElement('span');
+    tag.className = 'badge bg-light text-dark border d-inline-flex align-items-center gap-1 py-1 px-2';
+    tag.dataset.name = name;
+    tag.innerHTML = `<span class="font-monospace">${name}</span>`
+        + `<button type="button" class="btn-close ms-1" style="font-size:.55rem"
+            onclick="this.closest('[data-name]').remove();updateTrafficHidden()"></button>`;
+    document.getElementById('trafficTags').appendChild(tag);
+    updateTrafficHidden();
+}
+
+function addTrafficProfile() {
+    const input = document.getElementById('trafficNewInput');
+    addTrafficTag(input.value);
+    input.value = '';
+    input.focus();
+}
+
+function updateTrafficHidden() {
+    const tags = document.querySelectorAll('#trafficTags [data-name]');
+    document.getElementById('trafficHidden').value = Array.from(tags).map(t => t.dataset.name).join('\n');
 }
 
 function syncTcont() {
@@ -199,8 +248,10 @@ function syncTcont() {
             if (data.success) {
                 document.getElementById('tcontTags').innerHTML = '';
                 data.profiles.forEach(p => addTcontTag(p));
+                document.getElementById('trafficTags').innerHTML = '';
+                (data.traffic_profiles || []).forEach(p => addTrafficTag(p));
                 res.className = 'small text-success';
-                res.innerHTML = `<i class="bi bi-check-circle me-1"></i>${data.count} profile ditemukan`;
+                res.innerHTML = `<i class="bi bi-check-circle me-1"></i>TCONT: ${data.count} | Traffic: ${(data.traffic_profiles||[]).length} profile`;
             } else {
                 res.className = 'small text-danger';
                 res.innerHTML = `<i class="bi bi-x-circle me-1"></i>${data.message}`;
