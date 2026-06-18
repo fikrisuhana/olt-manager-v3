@@ -102,6 +102,7 @@ class OnuController extends Controller
         $trafficProfile = trim($this->request->getPost('traffic_profile') ?? '');
         $pppoeUser      = trim($this->request->getPost('pppoe_user') ?? '');
         $pppoePass      = trim($this->request->getPost('pppoe_pass') ?? '');
+        $pppoeVlanProfile = trim($this->request->getPost('pppoe_vlan_profile') ?? '');
         $acsEnable    = $this->request->getPost('acs_enable');
 
         // Auto-determine index dari cache jika tidak dikirim atau 0
@@ -144,8 +145,9 @@ class OnuController extends Controller
                 'tcont_profile'   => $tcontProfile,
                 'traffic_profile' => $trafficProfile,
                 'gpon_onu_script' => $ifExtra,
-                'pppoe_user'      => $pppoeUser,
-                'pppoe_pass'      => $pppoePass,
+                'pppoe_user'         => $pppoeUser,
+                'pppoe_pass'         => $pppoePass,
+                'pppoe_vlan_profile' => $pppoeVlanProfile,
             ]);
 
             $driver->disconnect();

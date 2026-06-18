@@ -458,6 +458,29 @@ class OltController extends Controller
         }
     }
 
+    /**
+     * AJAX: Ambil daftar onu vlan-profile dari OLT yang sudah tersimpan.
+     * GET /olts/{id}/vlan-profiles
+     */
+    public function fetchVlanProfiles(int $id)
+    {
+        $this->response->setContentType('application/json');
+        $oltModel = new OltModel();
+        $olt = $oltModel->getByUserAndId($this->userId, $id);
+        if (!$olt) {
+            return $this->response->setJSON(['success' => false, 'message' => 'OLT tidak ditemukan.']);
+        }
+        try {
+            $driver = OltDriverFactory::make($olt);
+            $driver->connect();
+            $profiles = $driver->getVlanProfiles();
+            $driver->disconnect();
+            return $this->response->setJSON(['success' => true, 'profiles' => $profiles]);
+        } catch (\Exception $e) {
+            return $this->response->setJSON(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
     private function getFormData(): array
     {
         return [

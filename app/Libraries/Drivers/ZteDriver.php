@@ -251,8 +251,10 @@ class ZteDriver implements OltDriverInterface
             if ($cmd && !str_starts_with($cmd, '#')) $ifCmds[] = $cmd;
         }
 
-        // Fetch vlan-profile dari OLT sebelum masuk config mode (butuh rootPrompt)
-        $pppoeProfile = $this->getVlanProfileForVlan($vlanInternet);
+        // Gunakan profile yang dipilih user dari UI (sudah diketahui saat fetch dropdown).
+        // Kalau tidak ada, baru lookup ke OLT — ini lebih lambat (extra telnet).
+        $pppoeProfile = trim($params['pppoe_vlan_profile'] ?? '')
+            ?: $this->getVlanProfileForVlan($vlanInternet);
 
         // --- Eksekusi CLI ke OLT ---
         $this->telnet->execute('conf t', $this->configPrompt, 5);
@@ -340,8 +342,27 @@ class ZteDriver implements OltDriverInterface
     }
 
     /**
-     * Cari nama onu vlan-profile di OLT yang cocok dengan vlan_id.
-     * Parse dari running-config: "onu profile vlan PPPOE tag-mode tag cvlan 155 pri 7"
+     * Ambil semua onu vlan-profile dari OLT running-config.
+     * Return: [['name' => 'PPPOE', 'vlan' => 155], ...]
+     */
+    public function getVlanProfiles(): array
+    {
+        $out = $this->telnet->execute(
+            'show running-config | include onu profile vlan',
+            $this->rootPrompt, 10
+        );
+        $profiles = [];
+        foreach (explode("\n", $out) as $line) {
+            // onu profile vlan PPPOE tag-mode tag cvlan 155 pri 7
+            if (preg_match('/onu profile vlan (\S+)\s+tag-mode\s+\S+\s+cvlan\s+(\d+)/i', $line, $m)) {
+                $profiles[] = ['name' => $m[1], 'vlan' => (int)$m[2]];
+            }
+        }
+        return $profiles;
+    }
+
+    /**
+     * Cari nama onu vlan-profile yang cocok dengan vlan_id.
      * Fallback ke pppoe_vlan_profile di config OLT jika tidak ketemu.
      */
     private function getVlanProfileForVlan(int $vlan): string
@@ -349,17 +370,8 @@ class ZteDriver implements OltDriverInterface
         $fallback = trim($this->config['pppoe_vlan_profile'] ?? 'PPPOE');
         if (!$vlan) return $fallback;
 
-        $out = $this->telnet->execute(
-            'show running-config | include onu profile vlan',
-            $this->rootPrompt, 10
-        );
-        foreach (explode("\n", $out) as $line) {
-            // onu profile vlan PPPOE tag-mode tag cvlan 155 pri 7
-            if (preg_match('/onu profile vlan (\S+)\s+tag-mode\s+\S+\s+cvlan\s+(\d+)/i', $line, $m)) {
-                if ((int)$m[2] === $vlan) {
-                    return $m[1];
-                }
-            }
+        foreach ($this->getVlanProfiles() as $p) {
+            if ($p['vlan'] === $vlan) return $p['name'];
         }
         return $fallback;
     }
@@ -382,7 +394,6 @@ class ZteDriver implements OltDriverInterface
             throw new \Exception("VLAN internet dan VLAN ACS keduanya kosong.");
         }
 
-        // Fetch vlan-profile dari OLT sebelum masuk config mode
         $pppoeProfile = $this->getVlanProfileForVlan($vlanInternet);
         $log          = [];
 

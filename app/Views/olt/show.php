@@ -226,9 +226,16 @@
                         </div>
                         <div class="row g-3">
                             <div class="col-4">
-                                <label class="form-label small fw-medium">VLAN Internet</label>
+                                <label class="form-label small fw-medium">VLAN Internet (PPPoE)</label>
+                                <?php if (strtoupper($olt['brand'] ?? '') === 'ZTE'): ?>
+                                <select name="vlan_internet" id="vlanInternetSelect" class="form-select form-select-sm">
+                                    <option value="">-- Memuat profile... --</option>
+                                </select>
+                                <input type="hidden" name="pppoe_vlan_profile" id="pppoeVlanProfile">
+                                <?php else: ?>
                                 <input type="number" name="vlan_internet" class="form-control form-control-sm"
                                        placeholder="100" min="1" max="4094">
+                                <?php endif; ?>
                                 <div class="form-text">service-port 1 vport 1</div>
                             </div>
                             <div class="col-4">
@@ -602,7 +609,8 @@ function openRegister(sn, board, slot, port, idx, force = false) {
     // Reset form
     document.querySelector('[name="name"]').value          = '';
     document.querySelector('[name="onu_type"]').value      = sn.startsWith('ZTEG') ? 'ZTE-F609' : 'ALL-ONT';
-    document.querySelector('[name="vlan_internet"]').value = '';
+    const vlanEl = document.querySelector('[name="vlan_internet"]');
+    if (vlanEl) vlanEl.value = '';
     document.querySelector('[name="vlan_acs"]').value      = '';
     const tcontEl = document.querySelector('[name="tcont_profile"]');
     if (tcontEl) tcontEl.value = '';
@@ -610,6 +618,7 @@ function openRegister(sn, board, slot, port, idx, force = false) {
     document.querySelector('[name="pppoe_pass"]').value    = '';
 
     new bootstrap.Modal(document.getElementById('registerModal')).show();
+    loadVlanProfiles();
 }
 
 function previewCli() {
@@ -801,6 +810,51 @@ function _setWatchMsg(msg, isSuccess) {
     const el = document.getElementById('acsWatchMsg');
     el.textContent = msg;
     el.className   = 'small mt-1 ' + (isSuccess ? 'text-success' : 'text-muted');
+}
+
+// ── VLAN Profile Dropdown (ZTE) ────────────────────────────────
+const OLT_ID = <?= $olt['id'] ?>;
+let _vlanProfiles = null; // cache per page load
+
+function loadVlanProfiles() {
+    const sel = document.getElementById('vlanInternetSelect');
+    if (!sel) return; // non-ZTE: pakai input biasa
+    if (_vlanProfiles) { _populateVlanSelect(_vlanProfiles); return; } // sudah dicache
+
+    sel.innerHTML = '<option value="">Memuat dari OLT...</option>';
+    fetch(`/olts/${OLT_ID}/vlan-profiles`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.success && data.profiles.length) {
+                _vlanProfiles = data.profiles;
+                _populateVlanSelect(data.profiles);
+            } else {
+                sel.innerHTML = '<option value="">-- Gagal fetch, isi manual --</option>';
+                // fallback ke input text
+                sel.outerHTML = '<input type="number" name="vlan_internet" id="vlanInternetFallback" class="form-control form-control-sm" placeholder="155" min="1" max="4094">';
+            }
+        })
+        .catch(() => {
+            sel.innerHTML = '<option value="">-- Error --</option>';
+        });
+}
+
+function _populateVlanSelect(profiles) {
+    const sel = document.getElementById('vlanInternetSelect');
+    const pfInput = document.getElementById('pppoeVlanProfile');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">-- Pilih VLAN PPPoE --</option>';
+    profiles.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.vlan;
+        opt.dataset.profile = p.name;
+        opt.textContent = `${p.name} — VLAN ${p.vlan}`;
+        sel.appendChild(opt);
+    });
+    sel.onchange = () => {
+        const selected = sel.options[sel.selectedIndex];
+        if (pfInput) pfInput.value = selected.dataset.profile || '';
+    };
 }
 
 function getSignal(onuId, btn) {
