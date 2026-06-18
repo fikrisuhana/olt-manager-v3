@@ -247,15 +247,9 @@
                                        placeholder="password">
                             </div>
                         </div>
-                        <div class="mt-2 d-flex align-items-center gap-3">
-                            <div class="form-text flex-grow-1">
-                                Disimpan ke DB. Push ke ONU via <strong>GenieACS/TR-069</strong> setelah ONU online.
-                            </div>
-                            <div class="form-check mb-0">
-                                <input type="checkbox" name="acs_enable" value="1" class="form-check-input" id="acsEnable">
-                                <label class="form-check-label small" for="acsEnable">
-                                    Push ke <strong>GenieACS</strong> sekarang
-                                </label>
+                        <div class="mt-2">
+                            <div class="form-text">
+                                <i class="bi bi-info-circle me-1"></i>Jika diisi, ONU akan dikonfigurasi otomatis via <strong>GenieACS/TR-069</strong> setelah muncul di ACS (~1–5 menit).
                             </div>
                         </div>
                     </div>
@@ -295,6 +289,26 @@
                     </button>
                 </div>
             </form>
+        </div>
+    </div>
+</div>
+
+<!-- Floating ACS Watcher -->
+<div id="acsWatcher" class="d-none position-fixed" style="bottom:1.5rem;right:1.5rem;z-index:1055;min-width:290px;max-width:350px">
+    <div class="card shadow-lg border-0">
+        <div class="card-header py-2 px-3 d-flex align-items-center gap-2" style="background:#1e293b;color:#e2e8f0">
+            <span class="spinner-border spinner-border-sm text-primary flex-shrink-0" id="acsWatchSpinner"></span>
+            <span class="small fw-semibold flex-grow-1">Konfigurasi ACS</span>
+            <button type="button" class="btn-close btn-close-white" style="font-size:.65rem" onclick="stopAcsWatch()"></button>
+        </div>
+        <div class="card-body py-2 px-3">
+            <div class="font-monospace small fw-semibold text-dark" id="acsWatchSn"></div>
+            <div class="small text-muted mt-1" id="acsWatchMsg">Memulai pemantauan...</div>
+            <div class="mt-2 d-none" id="acsWatchActions">
+                <button class="btn btn-sm btn-outline-primary" onclick="retryAcsPush()">
+                    <i class="bi bi-arrow-repeat me-1"></i>Push Ulang
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -535,6 +549,9 @@ document.getElementById('registerForm').addEventListener('submit', function(e) {
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Mendaftarkan...';
 
+    const pppoeUser = this.querySelector('[name="pppoe_user"]').value.trim();
+    const pppoePass = this.querySelector('[name="pppoe_pass"]').value.trim();
+
     const fd = new FormData(this);
     fetch(`/olts/${OLT_ID}/onu/register`, { method: 'POST', body: fd })
         .then(r => r.json())
@@ -551,7 +568,15 @@ document.getElementById('registerForm').addEventListener('submit', function(e) {
 
             if (data.success) {
                 logContent.style.color = '#86efac';
-                setTimeout(() => location.reload(), 1500);
+                if (data.watch_acs && data.onu_id && pppoePass) {
+                    // Tunggu sebentar, tutup modal, mulai polling ACS
+                    setTimeout(() => {
+                        bootstrap.Modal.getInstance(document.getElementById('registerModal'))?.hide();
+                        startAcsWatch(data.onu_id, data.sn, pppoeUser, pppoePass);
+                    }, 1500);
+                } else {
+                    setTimeout(() => location.reload(), 1500);
+                }
             } else {
                 logContent.style.color = '#fca5a5';
             }
@@ -562,6 +587,97 @@ document.getElementById('registerForm').addEventListener('submit', function(e) {
             alert('Error: ' + e.message);
         });
 });
+
+// ── ACS Watcher ─────────────────────────────────────────────────
+const _csrf = { name: '<?= csrf_token() ?>', hash: '<?= csrf_hash() ?>' };
+let _acsWatch = { interval: null, attempt: 0, onuId: 0, sn: '', user: '', pass: '' };
+const ACS_MAX_ATTEMPT = 20; // 5 menit × 15 detik
+
+function startAcsWatch(onuId, sn, user, pass) {
+    if (_acsWatch.interval) clearInterval(_acsWatch.interval);
+    Object.assign(_acsWatch, { interval: null, attempt: 0, onuId, sn, user, pass });
+
+    document.getElementById('acsWatchSn').textContent = sn;
+    _setWatchMsg('Menunggu ONU online di ACS...', false);
+    document.getElementById('acsWatchSpinner').classList.remove('d-none');
+    document.getElementById('acsWatchActions').classList.add('d-none');
+    document.getElementById('acsWatcher').classList.remove('d-none');
+
+    _pollAcs(); // cek langsung sekali
+    _acsWatch.interval = setInterval(_pollAcs, 15000);
+}
+
+function _pollAcs() {
+    _acsWatch.attempt++;
+    const elapsed = _acsWatch.attempt * 15;
+    const m = Math.floor(elapsed / 60), s = String(elapsed % 60).padStart(2, '0');
+    _setWatchMsg(`Menunggu di ACS... (${m}:${s})`, false);
+
+    if (_acsWatch.attempt > ACS_MAX_ATTEMPT) {
+        clearInterval(_acsWatch.interval);
+        _acsWatch.interval = null;
+        document.getElementById('acsWatchSpinner').classList.add('d-none');
+        _setWatchMsg('Timeout — ONU belum muncul di ACS (5 menit).', false);
+        document.getElementById('acsWatchActions').classList.remove('d-none');
+        return;
+    }
+
+    fetch(`/onus/${_acsWatch.onuId}/acs-info`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                clearInterval(_acsWatch.interval);
+                _acsWatch.interval = null;
+                _setWatchMsg('ONU ditemukan! Mendorong konfigurasi PPPoE...', false);
+                _pushAcs();
+            }
+        })
+        .catch(() => {});
+}
+
+function _pushAcs() {
+    const fd = new FormData();
+    fd.append('action',     'pppoe');
+    fd.append('pppoe_user', _acsWatch.user);
+    fd.append('pppoe_pass', _acsWatch.pass);
+    fd.append(_csrf.name,   _csrf.hash);
+
+    fetch(`/onus/${_acsWatch.onuId}/acs-set`, { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('acsWatchSpinner').classList.add('d-none');
+            if (data.success) {
+                _setWatchMsg('PPPoE berhasil dikonfigurasi!', true);
+                setTimeout(() => location.reload(), 3000);
+            } else {
+                _setWatchMsg('Push gagal: ' + (data.message || 'Error'), false);
+                document.getElementById('acsWatchActions').classList.remove('d-none');
+            }
+        })
+        .catch(() => {
+            _setWatchMsg('Error saat push ke ACS.', false);
+            document.getElementById('acsWatchActions').classList.remove('d-none');
+        });
+}
+
+function retryAcsPush() {
+    document.getElementById('acsWatchActions').classList.add('d-none');
+    document.getElementById('acsWatchSpinner').classList.remove('d-none');
+    _setWatchMsg('Mencoba push ulang...', false);
+    _pushAcs();
+}
+
+function stopAcsWatch() {
+    if (_acsWatch.interval) clearInterval(_acsWatch.interval);
+    _acsWatch.interval = null;
+    document.getElementById('acsWatcher').classList.add('d-none');
+}
+
+function _setWatchMsg(msg, isSuccess) {
+    const el = document.getElementById('acsWatchMsg');
+    el.textContent = msg;
+    el.className   = 'small mt-1 ' + (isSuccess ? 'text-success' : 'text-muted');
+}
 
 function getSignal(onuId, btn) {
     btn.disabled = true;

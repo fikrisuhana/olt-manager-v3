@@ -150,18 +150,14 @@ class OnuController extends Controller
             $logModel->log($this->userId, 'register', 'success',
                 implode(' | ', $result['log']), $onuId, $oltId);
 
-            // Auto-provision PPPoE via ACS jika user centang
-            $acsResult = null;
-            if ($acsEnable && !empty($pppoeUser)) {
-                $acsResult = $this->tryAcsProvision($sn, $pppoeUser, $pppoePass, $olt['brand'] ?? 'ZTE');
-            }
-
             return $this->response->setJSON([
-                'success'    => true,
-                'message'    => "ONU {$sn} berhasil didaftarkan (index {$onuIndex}).",
-                'log'        => $result['log'],
-                'onu_index'  => $onuIndex,
-                'acs_result' => $acsResult,
+                'success'   => true,
+                'message'   => "ONU {$sn} berhasil didaftarkan (index {$onuIndex}).",
+                'log'       => $result['log'],
+                'onu_id'    => $onuId,
+                'sn'        => $sn,
+                'onu_index' => $onuIndex,
+                'watch_acs' => !empty($pppoeUser),
             ]);
         } catch (\Exception $e) {
             $logModel->log($this->userId, 'register', 'failed', $e->getMessage(), null, $oltId);
