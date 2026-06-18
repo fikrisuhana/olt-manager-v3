@@ -163,21 +163,37 @@ class OltController extends Controller
 
         try {
             // Izinkan eksekusi lebih lama — 1 cmd per port aktif bisa banyak
-            set_time_limit(120);
+            set_time_limit(180);
 
             $driver = OltDriverFactory::make($olt);
             $driver->connect();
-            // show gpon onu state + show gpon onu baseinfo per port (bisa banyak command)
             $registeredOnus = $driver->getRegisteredOnus();
             $driver->disconnect();
 
             $cache->save($id, $registeredOnus);
 
+            // Sekaligus fetch ACS status untuk semua SN yang ada di OLT
+            $acsMessage = '';
+            $acsModel   = new AcsServerModel();
+            $acs        = $acsModel->getDefault($this->userId);
+            if ($acs) {
+                try {
+                    $sns = array_map(fn($o) => strtoupper($o['sn']), $registeredOnus);
+                    $acsService = new AcsService($acs);
+                    $acsData    = $acsService->getDevicesBySns($sns);
+                    $cache->saveAcs($id, $acsData);
+                    $onlineCount = count(array_filter($acsData, fn($d) => $d['online']));
+                    $acsMessage = " | ACS: {$onlineCount}/".count($acsData)." online";
+                } catch (\Exception $e) {
+                    $acsMessage = ' | ACS: gagal (' . $e->getMessage() . ')';
+                }
+            }
+
             return $this->response->setJSON([
                 'success'   => true,
                 'count'     => count($registeredOnus),
                 'updated_at'=> date('Y-m-d H:i:s'),
-                'message'   => 'Cache berhasil diperbarui dari OLT.',
+                'message'   => 'Cache berhasil diperbarui.' . $acsMessage,
             ]);
         } catch (\Exception $e) {
             return $this->response->setJSON(['success' => false, 'message' => $e->getMessage()]);
@@ -213,10 +229,14 @@ class OltController extends Controller
             }
         }
 
+        $acsCache = $cache->loadAcs($id);
+
         return $this->response->setJSON([
-            'success'    => true,
-            'updated_at' => $data['updated_at'],
-            'data'       => $bySnIdx,
+            'success'        => true,
+            'updated_at'     => $data['updated_at'],
+            'data'           => $bySnIdx,
+            'acs'            => $acsCache['devices'] ?? [],
+            'acs_updated_at' => $acsCache['updated_at'],
         ]);
     }
 

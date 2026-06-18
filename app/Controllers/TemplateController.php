@@ -3,6 +3,7 @@
 namespace App\Controllers;
 
 use App\Models\TemplateModel;
+use App\Models\OltModel;
 use CodeIgniter\Controller;
 
 class TemplateController extends Controller
@@ -25,7 +26,12 @@ class TemplateController extends Controller
 
     public function create()
     {
-        return view('template/form', ['title' => 'Tambah Template', 'template' => null]);
+        $oltModel = new OltModel();
+        return view('template/form', [
+            'title'    => 'Tambah Template',
+            'template' => null,
+            'olts'     => $oltModel->getByUser($this->userId),
+        ]);
     }
 
     public function store()
@@ -48,7 +54,12 @@ class TemplateController extends Controller
         $template = $model->getByUserAndId($this->userId, $id);
         if (!$template) return redirect()->to('/templates')->with('error', 'Template tidak ditemukan.');
 
-        return view('template/form', ['title' => 'Edit Template', 'template' => $template]);
+        $oltModel = new OltModel();
+        return view('template/form', [
+            'title'    => 'Edit Template',
+            'template' => $template,
+            'olts'     => $oltModel->getByUser($this->userId),
+        ]);
     }
 
     public function update(int $id)

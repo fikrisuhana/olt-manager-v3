@@ -173,4 +173,35 @@ class OnuCacheService
         $path = $this->cachePath($oltId);
         if (file_exists($path)) unlink($path);
     }
+
+    // ── ACS cache (terpisah dari OLT cache) ──────────────────────────
+
+    private function acsCachePath(int $oltId): string
+    {
+        return $this->cacheDir . DIRECTORY_SEPARATOR . "olt_{$oltId}_acs.json";
+    }
+
+    /**
+     * Simpan hasil ACS batch query ke cache.
+     * $devices = hasil AcsService::getDevicesBySns() — keyed by SN uppercase
+     */
+    public function saveAcs(int $oltId, array $devices): void
+    {
+        file_put_contents(
+            $this->acsCachePath($oltId),
+            json_encode(['updated_at' => date('Y-m-d H:i:s'), 'devices' => $devices], JSON_PRETTY_PRINT)
+        );
+    }
+
+    public function loadAcs(int $oltId): array
+    {
+        $path = $this->acsCachePath($oltId);
+        if (!file_exists($path)) return ['updated_at' => null, 'devices' => []];
+        return json_decode(file_get_contents($path), true) ?: ['updated_at' => null, 'devices' => []];
+    }
+
+    public function lastUpdatedAcs(int $oltId): ?string
+    {
+        return $this->loadAcs($oltId)['updated_at'];
+    }
 }

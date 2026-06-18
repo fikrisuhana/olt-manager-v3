@@ -359,24 +359,53 @@ function loadOltState() {
         .then(r => r.json())
         .then(data => {
             if (!data.success) return;
-            document.querySelectorAll('tr[data-sn]').forEach(row => {
-                const sn   = row.dataset.sn;
-                const cell = row.querySelector('.olt-state-cell');
-                const info = data.data[sn];
-                if (!cell) return;
+            const hasAcsCache = data.acs && Object.keys(data.acs).length > 0;
 
-                if (!info) {
-                    cell.innerHTML = '<span class="badge bg-warning text-dark small">Tidak di cache</span>';
-                    return;
+            document.querySelectorAll('tr[data-sn]').forEach(row => {
+                const sn      = row.dataset.sn;
+                const oltCell = row.querySelector('.olt-state-cell');
+                const acsCell = row.querySelector('.acs-cell');
+                const info    = data.data[sn];
+                const acsInfo = data.acs?.[sn];
+
+                // OLT state
+                if (oltCell) {
+                    if (!info) {
+                        oltCell.innerHTML = '<span class="badge bg-warning text-dark small">Tidak di cache</span>';
+                    } else {
+                        const st  = (info.status || '').toLowerCase();
+                        const cls = st === 'working' ? 'bg-success'
+                                  : st === 'los'     ? 'bg-danger'
+                                  : st === 'lofi'    ? 'bg-warning text-dark'
+                                  : 'bg-secondary';
+                        oltCell.innerHTML = `<span class="badge ${cls} small">${info.status || st}</span>`;
+                    }
                 }
 
-                const st  = (info.status || '').toLowerCase();
-                const cls = st === 'working'  ? 'bg-success'
-                          : st === 'los'      ? 'bg-danger'
-                          : st === 'lofi'     ? 'bg-warning text-dark'
-                          : 'bg-secondary';
-                cell.innerHTML = `<span class="badge ${cls} small">${info.status || st}</span>`;
+                // ACS status dari cache
+                if (acsCell) {
+                    if (acsInfo) {
+                        const online  = acsInfo.online;
+                        const lastInf = acsInfo.last_inform
+                            ? new Date(acsInfo.last_inform).toLocaleTimeString('id', {hour:'2-digit',minute:'2-digit'})
+                            : '?';
+                        const badge = online
+                            ? `<span class="badge bg-success"><i class="bi bi-wifi me-1"></i>Online</span>`
+                            : `<span class="badge bg-secondary"><i class="bi bi-wifi-off me-1"></i>Offline ${lastInf}</span>`;
+                        const model = acsInfo.model ? `<div class="small text-muted">${acsInfo.model}</div>` : '';
+                        acsCell.innerHTML = badge + model;
+                    } else if (hasAcsCache) {
+                        acsCell.innerHTML = '<span class="badge bg-light text-dark border small">Tidak di ACS</span>';
+                    }
+                }
             });
+
+            // Update info ACS di header jika ada
+            if (hasAcsCache && data.acs_updated_at) {
+                const ts = new Date(data.acs_updated_at.replace(' ', 'T'));
+                const ct = document.getElementById('cacheTime');
+                if (ct) ct.title = `OLT: ${data.updated_at} | ACS: ${data.acs_updated_at}`;
+            }
         })
         .catch(() => {});
 }
@@ -409,7 +438,7 @@ function refreshCache() {
             // Refresh tampilan state OLT
             loadOltState();
 
-            alert(`Cache berhasil diperbarui. ${data.count} ONU terdaftar disimpan.`);
+            alert(data.message || `Cache berhasil diperbarui. ${data.count} ONU.`);
         })
         .catch(e => {
             btn.disabled = false;
