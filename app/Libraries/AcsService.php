@@ -261,8 +261,9 @@ class AcsService
 
     /**
      * Daftar semua device yang online dalam 10 menit terakhir.
+     * Limit default 10000 — cukup untuk deployment besar.
      */
-    public function getOnlineDevices(int $limit = 100): array
+    public function getOnlineDevices(int $limit = 10000): array
     {
         $since    = date('c', strtotime('-10 minutes'));
         $query    = urlencode(json_encode(['_lastInform' => ['$gt' => $since]]));
@@ -274,7 +275,8 @@ class AcsService
         return [];
     }
 
-    private function request(string $method, string $path, ?array $body = null): array
+
+private function request(string $method, string $path, ?array $body = null): array
     {
         $ch = curl_init($this->baseUrl . $path);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
