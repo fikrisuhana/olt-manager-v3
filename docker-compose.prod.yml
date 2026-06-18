@@ -23,10 +23,10 @@ services:
     container_name: gpon-manager
     restart: unless-stopped
     ports:
-      - "80:80"    # Kalau pakai reverse proxy (Nginx/Caddy), ganti ke "127.0.0.1:8080:80"
+      - "8080:80"  # Akses via http://IP:8080 — ganti ke "127.0.0.1:8080:80" jika pakai reverse proxy
     environment:
       CI_ENVIRONMENT: production
-      APP_BASE_URL: "https://gpon.yourdomain.com/"   # <-- GANTI
+      APP_BASE_URL: "http://localhost:8080/"   # <-- GANTI ke IP/domain server
       DB_HOST: mysql                                   # atau IP eksternal
       DB_NAME: gpon_manager
       DB_USER: gpon
