@@ -347,6 +347,40 @@ class ZteDriver implements OltDriverInterface
         return $detail;
     }
 
+    /**
+     * Ambil nama TCONT profile yang terkonfigurasi di OLT.
+     * Command: show gpon profile tcont
+     * Output ZTE C320:
+     *   profile-name  type  assured-bw(kbps)  max-bw(kbps)
+     *   -------------------------------------------------------
+     *   250M          4     0                 256000
+     *   100M          4     0                 102400
+     */
+    public function getTcontProfiles(): array
+    {
+        $output = $this->telnet->execute('show gpon profile tcont', $this->rootPrompt, 10);
+        return $this->parseTcontOutput($output);
+    }
+
+    private function parseTcontOutput(string $output): array
+    {
+        $profiles = [];
+        foreach (explode("\n", $output) as $line) {
+            $line = trim($line);
+            if (empty($line)) continue;
+            // Skip separator lines and header lines
+            if (preg_match('/^[-=]+$/', $line)) continue;
+            if (preg_match('/^(profile.?name|type|assured|max.?bw|bandwidth|GPON)/i', $line)) continue;
+            // First token is profile name — must be alphanumeric (no pure numbers, no special chars)
+            $parts = preg_split('/\s+/', $line, 2);
+            $name  = $parts[0] ?? '';
+            if (preg_match('/^[a-zA-Z0-9][a-zA-Z0-9_\-\.]*$/', $name)) {
+                $profiles[] = $name;
+            }
+        }
+        return array_values(array_unique($profiles));
+    }
+
     public function getBrand(): string { return 'ZTE'; }
     public function getModel(): string { return $this->config['model'] ?? 'C320'; }
 }

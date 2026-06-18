@@ -97,10 +97,26 @@
                     </h6>
 
                     <div class="mb-4">
-                        <label class="form-label">TCONT Profiles</label>
-                        <textarea name="tcont_profiles" class="form-control font-monospace" rows="4"
-                                  placeholder="250M&#10;100M&#10;50M"><?= esc($olt['tcont_profiles'] ?? '') ?></textarea>
-                        <div class="form-text">Satu nama profile per baris — sesuai yang dikonfigurasi di OLT. Tampil sebagai dropdown saat register ONU.</div>
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <label class="form-label mb-0">TCONT Profiles</label>
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="btnSyncTcont" onclick="syncTcont()">
+                                <i class="bi bi-arrow-repeat me-1"></i>Sync dari OLT
+                            </button>
+                            <span id="syncTcontResult" class="small"></span>
+                        </div>
+                        <div class="border rounded p-2 bg-white" id="tcontContainer" style="min-height:56px">
+                            <div id="tcontTags" class="d-flex flex-wrap gap-1 mb-2"></div>
+                            <div class="d-flex gap-1">
+                                <input type="text" id="tcontNewInput" class="form-control form-control-sm"
+                                       placeholder="Tambah profile..." style="max-width:160px"
+                                       onkeydown="if(event.key==='Enter'){event.preventDefault();addTcontProfile();}">
+                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="addTcontProfile()">
+                                    <i class="bi bi-plus-lg"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <textarea name="tcont_profiles" id="tcontHidden" class="d-none"></textarea>
+                        <div class="form-text">Profile sesuai yang dikonfigurasi di OLT — tampil sebagai dropdown saat register ONU.</div>
                     </div>
 
                     <div class="d-flex gap-2 align-items-center flex-wrap">
@@ -122,6 +138,83 @@
 <?= $this->endSection() ?>
 <?= $this->section('scripts') ?>
 <script>
+// ── TCONT Profile tag-input ─────────────────────────────────────
+(function initTcont() {
+    const existing = `<?= esc($olt['tcont_profiles'] ?? '', 'js') ?>`.trim();
+    if (existing) existing.split('\n').forEach(p => addTcontTag(p.trim()));
+})();
+
+function addTcontTag(name) {
+    name = name.trim();
+    if (!name) return;
+    const existing = document.querySelectorAll('#tcontTags [data-name]');
+    for (const el of existing) {
+        if (el.dataset.name.toLowerCase() === name.toLowerCase()) return;
+    }
+    const tag = document.createElement('span');
+    tag.className = 'badge bg-light text-dark border d-inline-flex align-items-center gap-1 py-1 px-2';
+    tag.dataset.name = name;
+    tag.innerHTML = `<span class="font-monospace">${name}</span>`
+        + `<button type="button" class="btn-close ms-1" style="font-size:.55rem"
+            onclick="this.closest('[data-name]').remove();updateTcontHidden()"></button>`;
+    document.getElementById('tcontTags').appendChild(tag);
+    updateTcontHidden();
+}
+
+function addTcontProfile() {
+    const input = document.getElementById('tcontNewInput');
+    addTcontTag(input.value);
+    input.value = '';
+    input.focus();
+}
+
+function updateTcontHidden() {
+    const tags  = document.querySelectorAll('#tcontTags [data-name]');
+    const names = Array.from(tags).map(t => t.dataset.name);
+    document.getElementById('tcontHidden').value = names.join('\n');
+}
+
+function syncTcont() {
+    const btn = document.getElementById('btnSyncTcont');
+    const res = document.getElementById('syncTcontResult');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    res.textContent = '';
+
+    const fd = new FormData();
+    fd.append('ip',          document.querySelector('[name="ip"]').value.trim());
+    fd.append('telnet_port', document.querySelector('[name="telnet_port"]').value || '23');
+    fd.append('telnet_user', document.querySelector('[name="telnet_user"]').value.trim());
+    fd.append('telnet_pass', document.querySelector('[name="telnet_pass"]').value);
+    fd.append('brand',       document.querySelector('[name="brand"]').value);
+    fd.append('model',       document.querySelector('[name="model"]').value);
+    fd.append('olt_id',      '<?= $olt['id'] ?? 0 ?>');
+    fd.append('<?= csrf_token() ?>', '<?= csrf_hash() ?>');
+
+    fetch('/olts/fetch-tcont', { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(data => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i>Sync dari OLT';
+            if (data.success) {
+                document.getElementById('tcontTags').innerHTML = '';
+                data.profiles.forEach(p => addTcontTag(p));
+                res.className = 'small text-success';
+                res.innerHTML = `<i class="bi bi-check-circle me-1"></i>${data.count} profile ditemukan`;
+            } else {
+                res.className = 'small text-danger';
+                res.innerHTML = `<i class="bi bi-x-circle me-1"></i>${data.message}`;
+            }
+        })
+        .catch(e => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i>Sync dari OLT';
+            res.className = 'small text-danger';
+            res.textContent = 'Error: ' + e.message;
+        });
+}
+
+// ── Test Koneksi Telnet ─────────────────────────────────────────
 function testTelnet() {
     const btn = document.getElementById('btnTestTelnet');
     const res = document.getElementById('testResult');

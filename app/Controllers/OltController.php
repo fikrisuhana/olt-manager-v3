@@ -302,6 +302,59 @@ class OltController extends Controller
         }
     }
 
+    /**
+     * AJAX: Ambil daftar TCONT profile dari OLT via Telnet.
+     * POST — ip, telnet_port, telnet_user, telnet_pass, brand, olt_id (jika edit)
+     */
+    public function fetchTcont()
+    {
+        $this->response->setContentType('application/json');
+
+        $ip    = trim($this->request->getPost('ip') ?? '');
+        $port  = (int)($this->request->getPost('telnet_port') ?: 23);
+        $user  = trim($this->request->getPost('telnet_user') ?? '');
+        $pass  = trim($this->request->getPost('telnet_pass') ?? '');
+        $brand = trim($this->request->getPost('brand') ?? 'ZTE');
+        $oltId = (int)($this->request->getPost('olt_id') ?: 0);
+
+        if (empty($ip) || empty($user)) {
+            return $this->response->setJSON(['success' => false, 'message' => 'IP dan username wajib diisi.']);
+        }
+
+        if (empty($pass) && $oltId > 0) {
+            $oltModel = new OltModel();
+            $olt = $oltModel->getByUserAndId($this->userId, $oltId);
+            $pass = $olt['telnet_pass'] ?? '';
+        }
+
+        if (empty($pass)) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Password diperlukan untuk ambil data dari OLT.']);
+        }
+
+        try {
+            $oltConfig = [
+                'ip'          => $ip,
+                'telnet_port' => $port,
+                'telnet_user' => $user,
+                'telnet_pass' => $pass,
+                'brand'       => $brand,
+                'model'       => $this->request->getPost('model') ?? '',
+            ];
+            $driver   = OltDriverFactory::make($oltConfig);
+            $driver->connect();
+            $profiles = $driver->getTcontProfiles();
+            $driver->disconnect();
+
+            return $this->response->setJSON([
+                'success'  => true,
+                'profiles' => $profiles,
+                'count'    => count($profiles),
+            ]);
+        } catch (\Exception $e) {
+            return $this->response->setJSON(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
     private function getFormData(): array
     {
         return [

@@ -28,4 +28,7 @@ interface OltDriverInterface
 
     public function getBrand(): string;
     public function getModel(): string;
+
+    /** Ambil daftar nama TCONT profile dari OLT */
+    public function getTcontProfiles(): array;
 }
