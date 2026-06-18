@@ -18,11 +18,11 @@ class ZteDriver implements OltDriverInterface
     private TelnetService $telnet;
     private array $config;
 
-    private array $rootPrompt   = ['ZXAN#', 'ISCOM#'];
+    private array $rootPrompt   = ['#'];
     private array $configPrompt = ['config)#'];
     private array $ifPrompt     = ['config-if)#'];
     private array $mngPrompt    = ['config-pon-onu)#', 'config-if-pon)#'];
-    private array $anyPrompt    = ['ZXAN#', 'ISCOM#', 'config)#', 'config-if)#'];
+    private array $anyPrompt    = ['#', 'config)#', 'config-if)#'];
 
     public function __construct(array $config)
     {
@@ -38,6 +38,12 @@ class ZteDriver implements OltDriverInterface
             $this->config['telnet_user'],
             $this->config['telnet_pass']
         );
+        // Detect actual hostname prompt — tiap OLT bisa beda hostname (OLT2#, GPON#, dll)
+        $echo = $this->telnet->execute('', ['#'], 3);
+        if (preg_match('/(\S+#)\s*$/', trim($echo), $m)) {
+            $this->rootPrompt = [$m[1]];
+            $this->anyPrompt  = [$m[1], 'config)#', 'config-if)#'];
+        }
         // Disable pager agar output tidak terpotong "--More--"
         $this->telnet->execute('terminal length 0', array_merge($this->rootPrompt, ['#']), 5);
     }
