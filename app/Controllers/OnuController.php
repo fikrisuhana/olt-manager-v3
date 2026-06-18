@@ -114,11 +114,12 @@ class OnuController extends Controller
             return $this->response->setJSON(['success' => false, 'message' => 'SN, nama, tipe ONU wajib diisi.']);
         }
 
-        $force      = (bool)$this->request->getPost('force');
-        $existingOnu = $onuModel->getByOltAndSn($oltId, $sn);
+        $force       = (bool)$this->request->getPost('force');
+        // Cek termasuk soft-deleted agar tidak kena unique key constraint saat INSERT
+        $existingOnu = $onuModel->getAnyByOltAndSn($oltId, $sn);
 
-        // Cek duplikat SN — kecuali force re-register
-        if ($existingOnu && !$force) {
+        // Blok duplikat hanya jika aktif dan bukan force re-register
+        if ($existingOnu && $existingOnu['status'] !== 'deleted' && !$force) {
             return $this->response->setJSON(['success' => false, 'message' => "SN {$sn} sudah terdaftar di OLT ini."]);
         }
 

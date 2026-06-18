@@ -45,6 +45,11 @@ class OnuModel extends Model
         return $this->where('olt_id', $oltId)->where('sn', $sn)->where('status !=', 'deleted')->first();
     }
 
+    public function getAnyByOltAndSn(int $oltId, string $sn): ?array
+    {
+        return $this->where('olt_id', $oltId)->where('sn', $sn)->first();
+    }
+
     public function getWithOlt(int $id): ?array
     {
         return $this->select('onus.*, olts.name as olt_name, olts.ip as olt_ip, olts.brand, olts.model, olts.user_id')
