@@ -281,21 +281,28 @@ class ZteDriver implements OltDriverInterface
             }
         }
 
-        // pon-onu-mng: set ACS URL via OMCI agar ONU bisa konek ke GenieACS
-        $acsUrl = trim($this->config['acs_url'] ?? '');
+        // pon-onu-mng: set PPPoE WAN + DHCP management/ACS via OMCI
+        $acsUrl    = trim($this->config['acs_url'] ?? '');
+        $pppoeUser = trim($params['pppoe_user'] ?? '');
+        $pppoePass = trim($params['pppoe_pass'] ?? '');
+        $mngCmds   = [];
+
+        if ($vlanInternet && $pppoeUser && $pppoePass) {
+            $mngCmds[] = "pon-onu-mng wan-service 1 gemport 1 vlan {$vlanInternet} cos 0 user-vlan {$vlanInternet} user-cos 0";
+            $mngCmds[] = "pon-onu-mng iphost 1 pppoe username {$pppoeUser} password {$pppoePass}";
+            $log[]     = "pon-onu-mng PPPoE: {$pppoeUser} via VLAN {$vlanInternet}";
+        }
         if ($acsUrl && $vlanAcs) {
-            $mngCmds = [
-                "pon-onu-mng iphost 1 dhcp",
-                "pon-onu-mng wan-service 1 gemport 1 vlan {$vlanAcs} cos 0 user-vlan {$vlanAcs} user-cos 0",
-                "pon-onu-mng tr069 acs-url {$acsUrl}",
-            ];
-            foreach ($mngCmds as $cmd) {
-                $out = $this->telnet->execute($cmd, $this->ifPrompt, 5);
-                if (stripos($out, 'Error') !== false || stripos($out, 'Invalid') !== false) {
-                    $log[] = "WARN pon-onu-mng: '{$cmd}' → " . trim(substr($out, -120));
-                }
+            $mngCmds[] = "pon-onu-mng wan-service 2 gemport 1 vlan {$vlanAcs} cos 0 user-vlan {$vlanAcs} user-cos 0";
+            $mngCmds[] = "pon-onu-mng iphost 2 dhcp";
+            $mngCmds[] = "pon-onu-mng tr069 acs-url {$acsUrl}";
+            $log[]     = "pon-onu-mng ACS: {$acsUrl} via VLAN {$vlanAcs}";
+        }
+        foreach ($mngCmds as $cmd) {
+            $out = $this->telnet->execute($cmd, $this->ifPrompt, 5);
+            if (stripos($out, 'Error') !== false || stripos($out, 'Invalid') !== false) {
+                $log[] = "WARN pon-onu-mng: '{$cmd}' → " . trim(substr($out, -120));
             }
-            $log[] = "pon-onu-mng ACS: {$acsUrl} via VLAN {$vlanAcs}";
         }
 
         $this->telnet->execute('exit', $this->configPrompt, 3);

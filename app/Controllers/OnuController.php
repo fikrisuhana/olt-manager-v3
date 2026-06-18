@@ -144,6 +144,8 @@ class OnuController extends Controller
                 'tcont_profile'   => $tcontProfile,
                 'traffic_profile' => $trafficProfile,
                 'gpon_onu_script' => $ifExtra,
+                'pppoe_user'      => $pppoeUser,
+                'pppoe_pass'      => $pppoePass,
             ]);
 
             $driver->disconnect();
@@ -164,6 +166,7 @@ class OnuController extends Controller
                     'vlan_internet' => $vlanInternet ?: null,
                     'vlan_acs'      => $vlanAcs ?: null,
                     'tcont_profile' => $tcontProfile ?: null,
+                    'pppoe_user'    => $pppoeUser ?: null,
                     'status'        => 'registered',
                     'registered_at' => date('Y-m-d H:i:s'),
                 ]);
