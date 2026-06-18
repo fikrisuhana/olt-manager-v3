@@ -395,13 +395,59 @@ class OnuController extends Controller
             return $this->response->setJSON(['success' => false, 'message' => 'ONU tidak ditemukan.']);
         }
 
+        $oltModel = new OltModel();
+        $olt      = $oltModel->find($onu['olt_id']);
+        $oltBrand = strtoupper($olt['brand'] ?? '');
+
+        $action = $this->request->getPost('action'); // 'pppoe' | 'wifi' | 'reboot'
+
+        // ZTE OLT: push PPPoE via pon-onu-mng (OMCI) langsung dari OLT — bukan TR-069
+        // Ini sekaligus set VLAN + PPPoE dalam 1 blok, konsisten dengan register
+        if ($action === 'pppoe' && $oltBrand === 'ZTE') {
+            $pppoeUser    = trim($this->request->getPost('pppoe_user'));
+            $pppoePass    = trim($this->request->getPost('pppoe_pass'));
+            $vlanAcs      = (int)($onu['vlan_acs'] ?? 0);
+            $vlanInternet = (int)($onu['vlan_internet'] ?? 0);
+            $acsUrl       = trim($olt['acs_url'] ?? '');
+
+            if (!$vlanAcs && !$vlanInternet) {
+                return $this->response->setJSON(['success' => false, 'message' => 'VLAN belum diset di ONU ini. Edit Info ONU → isi VLAN Internet/ACS.']);
+            }
+
+            try {
+                $driver = OltDriverFactory::make($olt);
+                $driver->connect();
+                $result = $driver->applyPonMng(
+                    $onu['board'], $onu['slot'], $onu['port'], (string)$onu['onu_index'],
+                    $vlanAcs, $acsUrl, $vlanInternet, $pppoeUser, $pppoePass
+                );
+                $driver->disconnect();
+
+                if ($result['success']) {
+                    $onuModel->update($id, ['pppoe_user' => $pppoeUser]);
+                }
+
+                $logModel = new ProvisionLogModel();
+                $logModel->log($this->userId, 'olt_pppoe', 'success',
+                    "pon-onu-mng PPPoE user={$pppoeUser} vlan_internet={$vlanInternet} vlan_acs={$vlanAcs}", $id, $onu['olt_id']);
+
+                return $this->response->setJSON([
+                    'success'  => true,
+                    'message'  => 'PPPoE berhasil dipush ke ONU via OLT (pon-onu-mng).',
+                    'wan_path' => 'OLT pon-onu-mng',
+                    'log'      => $result['log'],
+                ]);
+            } catch (\Exception $e) {
+                return $this->response->setJSON(['success' => false, 'message' => $e->getMessage()]);
+            }
+        }
+
+        // Non-ZTE OLT atau action selain pppoe: gunakan ACS (TR-069)
         $acsModel = new AcsServerModel();
         $acs      = $acsModel->getDefault($this->userId);
         if (!$acs) {
             return $this->response->setJSON(['success' => false, 'message' => 'Tidak ada ACS server default.']);
         }
-
-        $action = $this->request->getPost('action'); // 'pppoe' | 'wifi' | 'reboot'
 
         try {
             $acsService = new AcsService($acs);

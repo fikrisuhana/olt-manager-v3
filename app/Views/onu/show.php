@@ -199,7 +199,14 @@
                         <input type="text" id="pppoe_pass" class="form-control" placeholder="password">
                     </div>
                 </div>
-                <div id="pppoeResult" class="mt-2 d-none"></div>
+                <div class="form-text">
+                    <?php if (strtoupper($onu['brand'] ?? '') === 'ZTE'): ?>
+                        <i class="bi bi-info-circle me-1"></i>ZTE OLT: PPPoE + VLAN dipush via <strong>OLT pon-onu-mng</strong> (OMCI).
+                    <?php else: ?>
+                        <i class="bi bi-info-circle me-1"></i>PPPoE dipush via <strong>TR-069/GenieACS</strong>.
+                    <?php endif; ?>
+                </div>
+                <div id="pppoeResult" class="mt-2 d-none small"></div>
                 <button class="btn btn-primary btn-sm mt-3" onclick="setPppoe()">
                     <i class="bi bi-cloud-upload me-1"></i>Push ke ONU
                 </button>
@@ -222,7 +229,7 @@
                     </div>
                 </div>
                 <div class="form-text">Perubahan akan langsung dipush ke ONU via TR-069/GenieACS.</div>
-                <div id="wifiResult" class="mt-2 d-none"></div>
+                <div id="wifiResult" class="mt-2 d-none small"></div>
                 <button class="btn btn-primary btn-sm mt-3" onclick="setWifi()">
                     <i class="bi bi-cloud-upload me-1"></i>Push ke ONU
                 </button>
@@ -495,7 +502,7 @@ function setPppoe() {
         .then(r => r.json())
         .then(data => {
             el.className = `mt-2 small alert alert-${data.success ? 'success' : 'danger'}`;
-            el.textContent = data.success ? 'PPPoE berhasil dipush ke ONU.' : (data.message || 'Gagal.');
+            el.textContent = data.message || (data.success ? 'PPPoE berhasil dipush ke ONU.' : 'Gagal.');
         });
 }
 
