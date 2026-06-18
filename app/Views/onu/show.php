@@ -107,6 +107,30 @@
                 <h6 class="mb-0 fw-semibold"><i class="bi bi-ethernet me-1"></i>Edit PPPoE (WAN)</h6>
             </div>
             <div class="card-body">
+                <?php if ($onu['vlan_internet'] || $onu['vlan_acs'] || $onu['tcont_profile']): ?>
+                <div class="d-flex flex-wrap gap-2 mb-3 p-2 rounded" style="background:#f8fafc;border:1px solid #e2e8f0">
+                    <?php if ($onu['vlan_internet']): ?>
+                    <span class="badge bg-primary py-1 px-2">
+                        <i class="bi bi-diagram-3 me-1"></i>VLAN Internet: <?= $onu['vlan_internet'] ?>
+                    </span>
+                    <?php endif; ?>
+                    <?php if ($onu['vlan_acs']): ?>
+                    <span class="badge bg-info text-dark py-1 px-2">
+                        <i class="bi bi-hdd-network me-1"></i>VLAN ACS: <?= $onu['vlan_acs'] ?>
+                    </span>
+                    <?php endif; ?>
+                    <?php if ($onu['tcont_profile']): ?>
+                    <span class="badge bg-secondary py-1 px-2">
+                        <i class="bi bi-speedometer2 me-1"></i>TCONT: <?= esc($onu['tcont_profile']) ?>
+                    </span>
+                    <?php endif; ?>
+                </div>
+                <?php else: ?>
+                <div class="alert alert-warning py-1 px-2 small mb-3">
+                    <i class="bi bi-exclamation-triangle me-1"></i>VLAN belum diset.
+                    <a href="#" onclick="toggleEdit();return false">Edit Info ONU</a> untuk mengisi VLAN/TCONT.
+                </div>
+                <?php endif; ?>
                 <div class="row g-3">
                     <div class="col-6">
                         <label class="form-label small fw-medium">PPPoE Username</label>

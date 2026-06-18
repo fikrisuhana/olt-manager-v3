@@ -74,60 +74,83 @@
         <?php if (empty($onus)): ?>
             <div class="text-center py-4 text-muted small">Belum ada ONU terdaftar.</div>
         <?php else: ?>
-            <div class="table-responsive">
-                <table class="table table-hover mb-0" id="onuTable">
-                    <thead class="table-light">
-                        <tr>
-                            <th>SN</th>
-                            <th>Nama</th>
-                            <th>Port</th>
-                            <th>Tipe</th>
-                            <th>State OLT</th>
-                            <th>ACS</th>
-                            <th>Sinyal</th>
-                            <th></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($onus as $onu): ?>
-                            <tr id="onu-row-<?= $onu['id'] ?>"
-                                data-sn="<?= esc($onu['sn']) ?>"
-                                data-name="<?= esc(strtolower($onu['name'] ?? '')) ?>"
-                                data-pppoe="<?= esc($onu['pppoe_user'] ?? '') ?>">
-                                <td class="font-monospace small">
-                                    <a href="/onus/<?= $onu['id'] ?>" class="text-decoration-none"><?= esc($onu['sn']) ?></a>
-                                </td>
-                                <td><?= esc($onu['name'] ?? '-') ?></td>
-                                <td class="small text-muted"><?= esc("{$onu['board']}/{$onu['slot']}/{$onu['port']}:{$onu['onu_index']}") ?></td>
-                                <td><span class="badge bg-light text-dark border"><?= esc($onu['onu_type'] ?? '-') ?></span></td>
-                                <td class="olt-state-cell">
-                                    <span class="text-muted small">—</span>
-                                </td>
-                                <td class="acs-cell">
-                                    <span class="text-muted small">—</span>
-                                </td>
-                                <td>
-                                    <button class="btn btn-sm btn-outline-secondary py-0"
-                                            onclick="getSignal(<?= $onu['id'] ?>, this)">
-                                        <i class="bi bi-reception-4"></i>
-                                    </button>
-                                </td>
-                                <td class="text-nowrap">
-                                    <button class="btn btn-sm btn-outline-success py-0 me-1"
-                                            title="Push PPPoE ke ACS"
-                                            onclick="openAcsPush(<?= $onu['id'] ?>, '<?= esc($onu['sn'], 'js') ?>', '<?= esc($onu['pppoe_user'] ?? '', 'js') ?>')">
-                                        <i class="bi bi-cloud-arrow-up"></i>
-                                    </button>
-                                    <button class="btn btn-sm btn-outline-danger py-0"
-                                            onclick="deleteOnu(<?= $onu['id'] ?>, '<?= esc($onu['sn'], 'js') ?>', this)">
-                                        <i class="bi bi-trash"></i>
-                                    </button>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
+        <?php
+            $onusByPort = [];
+            foreach ($onus as $onu) {
+                $portKey = "{$onu['board']}/{$onu['slot']}/{$onu['port']}";
+                $onusByPort[$portKey][] = $onu;
+            }
+            ksort($onusByPort);
+        ?>
+        <div class="accordion accordion-flush" id="accordionPon">
+            <?php foreach ($onusByPort as $portKey => $portOnus): ?>
+            <?php $portId = 'pon-' . str_replace('/', '-', $portKey); ?>
+            <div class="accordion-item border-0 border-bottom">
+                <h2 class="accordion-header">
+                    <button class="accordion-button collapsed py-2 px-3" type="button"
+                            data-bs-toggle="collapse" data-bs-target="#<?= $portId ?>">
+                        <span class="font-monospace fw-semibold me-2">PON <?= esc($portKey) ?></span>
+                        <span class="badge bg-secondary ms-1 pon-badge" data-port="<?= esc($portKey) ?>"><?= count($portOnus) ?></span>
+                    </button>
+                </h2>
+                <div id="<?= $portId ?>" class="accordion-collapse collapse">
+                    <div class="accordion-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover table-sm mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="ps-3">SN</th>
+                                        <th>Nama</th>
+                                        <th style="width:3rem">Idx</th>
+                                        <th>Tipe</th>
+                                        <th>State OLT</th>
+                                        <th>ACS</th>
+                                        <th>Sinyal</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($portOnus as $onu): ?>
+                                    <tr id="onu-row-<?= $onu['id'] ?>"
+                                        data-sn="<?= esc($onu['sn']) ?>"
+                                        data-name="<?= esc(strtolower($onu['name'] ?? '')) ?>"
+                                        data-pppoe="<?= esc($onu['pppoe_user'] ?? '') ?>"
+                                        data-port="<?= esc($portKey) ?>">
+                                        <td class="font-monospace small ps-3">
+                                            <a href="/onus/<?= $onu['id'] ?>" class="text-decoration-none"><?= esc($onu['sn']) ?></a>
+                                        </td>
+                                        <td><?= esc($onu['name'] ?? '-') ?></td>
+                                        <td class="small text-muted text-center"><?= $onu['onu_index'] ?></td>
+                                        <td><span class="badge bg-light text-dark border"><?= esc($onu['onu_type'] ?? '-') ?></span></td>
+                                        <td class="olt-state-cell"><span class="text-muted small">—</span></td>
+                                        <td class="acs-cell"><span class="text-muted small">—</span></td>
+                                        <td>
+                                            <button class="btn btn-sm btn-outline-secondary py-0"
+                                                    onclick="getSignal(<?= $onu['id'] ?>, this)">
+                                                <i class="bi bi-reception-4"></i>
+                                            </button>
+                                        </td>
+                                        <td class="text-nowrap">
+                                            <button class="btn btn-sm btn-outline-success py-0 me-1"
+                                                    title="Push PPPoE ke ACS"
+                                                    onclick="openAcsPush(<?= $onu['id'] ?>, '<?= esc($onu['sn'], 'js') ?>', '<?= esc($onu['pppoe_user'] ?? '', 'js') ?>')">
+                                                <i class="bi bi-cloud-arrow-up"></i>
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-danger py-0"
+                                                    onclick="deleteOnu(<?= $onu['id'] ?>, '<?= esc($onu['sn'], 'js') ?>', this)">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
             </div>
+            <?php endforeach; ?>
+        </div>
         <?php endif; ?>
     </div>
 </div>
@@ -525,7 +548,6 @@ function openRegister(sn, board, slot, port, idx) {
     if (tcontEl) tcontEl.value = '';
     document.querySelector('[name="pppoe_user"]').value    = '';
     document.querySelector('[name="pppoe_pass"]').value    = '';
-    document.getElementById('acsEnable').checked = false;
 
     new bootstrap.Modal(document.getElementById('registerModal')).show();
 }
@@ -781,10 +803,30 @@ function loadAcsStatus() {
 
 function filterOnu(q) {
     q = q.toLowerCase();
-    document.querySelectorAll('#onuTable tbody tr').forEach(row => {
+    document.querySelectorAll('tr[data-sn]').forEach(row => {
         const sn   = (row.dataset.sn   || '').toLowerCase();
         const name = (row.dataset.name || '').toLowerCase();
         row.style.display = (!q || sn.includes(q) || name.includes(q)) ? '' : 'none';
+    });
+
+    // Expand accordion panels yang ada hasil, collapse yang kosong
+    document.querySelectorAll('#accordionPon .accordion-item').forEach(item => {
+        const collapse = item.querySelector('.accordion-collapse');
+        const btn      = item.querySelector('.accordion-button');
+        if (!collapse) return;
+        if (!q) {
+            collapse.classList.remove('show');
+            btn?.classList.add('collapsed');
+            return;
+        }
+        const hasVisible = [...item.querySelectorAll('tr[data-sn]')].some(r => r.style.display !== 'none');
+        if (hasVisible) {
+            collapse.classList.add('show');
+            btn?.classList.remove('collapsed');
+        } else {
+            collapse.classList.remove('show');
+            btn?.classList.add('collapsed');
+        }
     });
 }
 
