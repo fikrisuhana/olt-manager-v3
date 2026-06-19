@@ -315,10 +315,7 @@ class ZteDriver implements OltDriverInterface
 
             $this->telnet->execute("pon-onu-mng gpon-onu_{$board}/{$slot}/{$port}:{$idx}", $this->mngPrompt, 5);
             if ($vlanInternet) {
-                $out = $this->telnet->execute("service hsi gemport 1 vlan {$vlanInternet}", $this->mngPrompt, 5);
-                if (stripos($out, 'Error') !== false || stripos($out, 'Invalid') !== false) {
-                    $log[] = "WARN pon-onu-mng: service hsi → " . trim(substr($out, -120));
-                }
+                $this->applyServiceInternet($vlanInternet, $log);
             }
             if ($vlanAcs) {
                 $out = $this->telnet->execute("service acs gemport 1 vlan {$vlanAcs}", $this->mngPrompt, 5);
@@ -436,13 +433,7 @@ class ZteDriver implements OltDriverInterface
         $this->telnet->execute("pon-onu-mng gpon-onu_{$board}/{$slot}/{$port}:{$onuIndex}", $this->mngPrompt, 5);
 
         if ($vlanInternet) {
-            $out   = $this->telnet->execute("service hsi gemport 1 vlan {$vlanInternet}", $this->mngPrompt, 5);
-            $log[] = "service hsi vlan {$vlanInternet} → " . trim(preg_replace('/\s+/', ' ', $out));
-            if (stripos($out, 'Error') !== false || stripos($out, 'Invalid') !== false) {
-                $this->telnet->execute('exit', $this->configPrompt, 3);
-                $this->telnet->execute('exit', $this->rootPrompt, 3);
-                throw new \Exception("Gagal service hsi: " . trim(preg_replace('/\s+/', ' ', $out)));
-            }
+            $this->applyServiceInternet($vlanInternet, $log);
         }
         if ($vlanAcs) {
             $out   = $this->telnet->execute("service acs gemport 1 vlan {$vlanAcs}", $this->mngPrompt, 5);
@@ -476,6 +467,23 @@ class ZteDriver implements OltDriverInterface
         $log[] = 'pon-onu-mng saved';
 
         return ['success' => true, 'log' => $log];
+    }
+
+    /**
+     * Kirim service internet ke pon-onu-mng dengan auto-detect keyword.
+     * ZTE firmware berbeda-beda: 'hsi', 'int', atau 'ppp'.
+     * Coba berurutan sampai berhasil.
+     */
+    private function applyServiceInternet(int $vlan, array &$log): void
+    {
+        foreach (['hsi', 'int', 'ppp'] as $kw) {
+            $out = $this->telnet->execute("service {$kw} gemport 1 vlan {$vlan}", $this->mngPrompt, 5);
+            if (stripos($out, 'Error') === false && stripos($out, 'Invalid') === false) {
+                $log[] = "service {$kw} vlan {$vlan} OK";
+                return;
+            }
+        }
+        $log[] = "WARN: service hsi/int/ppp semua gagal untuk vlan {$vlan}";
     }
 
     public function getSnAtIndex(string $board, string $slot, string $port, string $onuIndex): ?string
