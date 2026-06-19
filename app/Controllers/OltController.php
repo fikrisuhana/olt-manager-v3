@@ -622,6 +622,8 @@ class OltController extends Controller
             'enable_password' => $this->request->getPost('enable_password') ?: null,
             'snmp_community'  => $this->request->getPost('snmp_community') ?: 'public',
             'snmp_port'       => (int)($this->request->getPost('snmp_port') ?: 161),
+            'acs_url'          => $this->request->getPost('acs_url') ?: null,
+            'pppoe_vlan_profile' => $this->request->getPost('pppoe_vlan_profile') ?: null,
             'tcont_profiles'   => $this->request->getPost('tcont_profiles') ?: null,
             'traffic_profiles' => $this->request->getPost('traffic_profiles') ?: null,
             'description'      => $this->request->getPost('description'),
