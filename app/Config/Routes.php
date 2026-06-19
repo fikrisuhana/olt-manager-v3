@@ -22,7 +22,8 @@ $routes->get('logout',          'AuthController::logout');
 $routes->group('', ['filter' => 'auth'], static function ($routes) {
 
     // Dashboard
-    $routes->get('dashboard', 'DashboardController::index');
+    $routes->get('dashboard',              'DashboardController::index');
+    $routes->post('dashboard/sync-acs',    'DashboardController::syncAcs');    // AJAX — sync ACS cache semua OLT
 
     // OLT
     $routes->get('olts',                    'OltController::index');

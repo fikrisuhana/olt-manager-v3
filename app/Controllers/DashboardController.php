@@ -4,9 +4,11 @@ namespace App\Controllers;
 
 use App\Models\OltModel;
 use App\Models\OnuModel;
+use App\Models\AcsServerModel;
 use App\Models\TemplateModel;
 use App\Models\ProvisionLogModel;
 use App\Libraries\OnuCacheService;
+use App\Libraries\AcsService;
 use CodeIgniter\Controller;
 
 class DashboardController extends Controller
@@ -96,5 +98,56 @@ class DashboardController extends Controller
         ];
 
         return view('dashboard/index', $data);
+    }
+
+    /**
+     * AJAX: sync ACS cache untuk semua OLT milik user.
+     * Hanya query GenieACS (tidak konek OLT via Telnet) — cepat.
+     */
+    public function syncAcs()
+    {
+        $this->response->setContentType('application/json');
+        $userId = session()->get('user_id');
+
+        $acsModel = new AcsServerModel();
+        $acs      = $acsModel->getDefault($userId);
+        if (!$acs) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Tidak ada ACS server default.']);
+        }
+
+        $oltModel = new OltModel();
+        $onuModel = new OnuModel();
+        $cache    = new OnuCacheService();
+        $olts     = $oltModel->getByUser($userId);
+
+        $totalOnline = 0;
+        $totalSynced = 0;
+        $errors      = [];
+
+        try {
+            $acsService = new AcsService($acs);
+
+            foreach ($olts as $olt) {
+                $onus = $onuModel->getByOlt($olt['id']);
+                if (empty($onus)) continue;
+
+                $sns     = array_map(fn($o) => strtoupper($o['sn']), $onus);
+                $acsData = $acsService->getDevicesBySns($sns);
+                $cache->saveAcs($olt['id'], $acsData);
+
+                $online       = count(array_filter($acsData, fn($d) => $d['online']));
+                $totalOnline += $online;
+                $totalSynced += count($acsData);
+            }
+        } catch (\Exception $e) {
+            return $this->response->setJSON(['success' => false, 'message' => $e->getMessage()]);
+        }
+
+        return $this->response->setJSON([
+            'success' => true,
+            'online'  => $totalOnline,
+            'synced'  => $totalSynced,
+            'message' => "{$totalOnline} online dari {$totalSynced} device di ACS.",
+        ]);
     }
 }

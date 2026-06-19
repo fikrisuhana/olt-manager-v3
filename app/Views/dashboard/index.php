@@ -107,9 +107,14 @@ $rateClass  = $onlineRate >= 90 ? 'success' : ($onlineRate >= 70 ? 'warning' : '
     <!-- Per-OLT cards -->
     <div class="col-lg-8">
         <div class="card border-0 shadow-sm h-100">
-            <div class="card-header bg-white border-bottom py-3">
+            <div class="card-header bg-white border-bottom py-3 d-flex align-items-center justify-content-between">
                 <h6 class="mb-0 fw-semibold"><i class="bi bi-hdd-network me-1"></i>Status per OLT</h6>
+                <button id="btnSyncAcs" class="btn btn-sm btn-outline-primary py-0"
+                        title="Update status online/offline dari GenieACS (cepat, tanpa konek OLT)">
+                    <i class="bi bi-arrow-repeat me-1"></i>Sync ACS
+                </button>
             </div>
+            <div id="syncAcsResult" class="d-none px-3 pt-2 small"></div>
             <div class="card-body p-0">
                 <div class="table-responsive">
                     <table class="table table-hover mb-0">
@@ -120,9 +125,10 @@ $rateClass  = $onlineRate >= 90 ? 'success' : ($onlineRate >= 70 ? 'warning' : '
                                 <th class="text-center">ACS Online</th>
                                 <th class="text-center">ACS Offline</th>
                                 <th>Rate</th>
+                                <th></th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody id="oltStatsBody">
                             <?php foreach ($olt_stats as $s): ?>
                             <?php
                                 $r = $s['acs_total'] > 0 ? round($s['acs_online'] / $s['acs_total'] * 100) : null;
@@ -138,14 +144,14 @@ $rateClass  = $onlineRate >= 90 ? 'success' : ($onlineRate >= 70 ? 'warning' : '
                                 <td class="text-center">
                                     <span class="badge bg-light text-dark border"><?= $s['onu_count'] ?></span>
                                 </td>
-                                <td class="text-center">
+                                <td class="text-center acs-online-cell">
                                     <?php if ($s['acs_online'] > 0): ?>
                                     <span class="badge bg-success"><?= $s['acs_online'] ?></span>
                                     <?php else: ?>
                                     <span class="text-muted small">—</span>
                                     <?php endif; ?>
                                 </td>
-                                <td class="text-center">
+                                <td class="text-center acs-offline-cell">
                                     <?php if ($s['acs_offline'] > 0): ?>
                                     <span class="badge bg-secondary"><?= $s['acs_offline'] ?></span>
                                     <?php else: ?>
@@ -163,6 +169,13 @@ $rateClass  = $onlineRate >= 90 ? 'success' : ($onlineRate >= 70 ? 'warning' : '
                                     <?php else: ?>
                                     <span class="text-muted small">Belum ada ACS</span>
                                     <?php endif; ?>
+                                </td>
+                                <td class="text-end pe-3">
+                                    <button class="btn btn-sm btn-outline-secondary py-0 btn-refresh-olt"
+                                            data-olt-id="<?= $s['olt']['id'] ?>"
+                                            title="Full refresh: scan OLT via Telnet + update ACS (lambat)">
+                                        <i class="bi bi-arrow-clockwise"></i>
+                                    </button>
                                 </td>
                             </tr>
                             <?php endforeach; ?>
@@ -266,4 +279,77 @@ $rateClass  = $onlineRate >= 90 ? 'success' : ($onlineRate >= 70 ? 'warning' : '
     </div>
 </div>
 
+<?= $this->endSection() ?>
+<?= $this->section('scripts') ?>
+<script>
+const _csrf = { name: '<?= csrf_token() ?>', hash: '<?= csrf_hash() ?>' };
+
+// Sync ACS semua OLT (cepat)
+document.getElementById('btnSyncAcs')?.addEventListener('click', function() {
+    const btn = this;
+    const res = document.getElementById('syncAcsResult');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Syncing...';
+    res.className = 'px-3 pt-2 small text-muted';
+    res.textContent = 'Menghubungi GenieACS...';
+    res.classList.remove('d-none');
+
+    const fd = new FormData();
+    fd.append(_csrf.name, _csrf.hash);
+    fetch('/dashboard/sync-acs', { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(data => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i>Sync ACS';
+            if (data.success) {
+                res.className = 'px-3 pt-2 pb-2 small text-success';
+                res.innerHTML = `<i class="bi bi-check-circle me-1"></i>${data.message} — <a href="" class="text-success">Muat ulang halaman</a> untuk lihat perubahan.`;
+            } else {
+                res.className = 'px-3 pt-2 pb-2 small text-danger';
+                res.textContent = 'Gagal: ' + data.message;
+            }
+        })
+        .catch(e => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i>Sync ACS';
+            res.className = 'px-3 pt-2 pb-2 small text-danger';
+            res.textContent = 'Error: ' + e.message;
+        });
+});
+
+// Full refresh per OLT (berat — konek Telnet + ACS)
+document.querySelectorAll('.btn-refresh-olt').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const oltId = this.dataset.oltId;
+        const icon  = this.querySelector('i');
+        if (!confirm('Full refresh OLT ini?\nAkan konek ke OLT via Telnet dan update ACS cache.\nProses bisa memakan waktu 1-3 menit.')) return;
+        this.disabled = true;
+        icon.className = 'bi bi-arrow-repeat spin';
+
+        fetch(`/olts/${oltId}/refresh-cache`)
+            .then(r => r.json())
+            .then(data => {
+                this.disabled = false;
+                icon.className = 'bi bi-arrow-clockwise';
+                if (data.success) {
+                    const res = document.getElementById('syncAcsResult');
+                    res.className = 'px-3 pt-2 pb-2 small text-success';
+                    res.innerHTML = `<i class="bi bi-check-circle me-1"></i>${data.message} — <a href="" class="text-success">Muat ulang halaman</a>.`;
+                    res.classList.remove('d-none');
+                } else {
+                    alert('Gagal: ' + data.message);
+                }
+            })
+            .catch(e => {
+                this.disabled = false;
+                icon.className = 'bi bi-arrow-clockwise';
+                alert('Error: ' + e.message);
+            });
+    });
+});
+</script>
+<style>
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin { display:inline-block; animation: spin .7s linear infinite; }
+</style>
 <?= $this->endSection() ?>
