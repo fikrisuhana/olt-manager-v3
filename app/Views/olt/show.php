@@ -619,7 +619,7 @@ function openRegister(sn, board, slot, port, idx, force = false) {
 
     // Reset form
     document.querySelector('[name="name"]').value          = '';
-    document.querySelector('[name="onu_type"]').value      = sn.startsWith('ZTEG') ? 'ZTE-F609' : 'ALL-ONT';
+    document.querySelector('[name="onu_type"]').value      = 'ALL-ONT';
     const vlanEl = document.querySelector('[name="vlan_internet"]');
     if (vlanEl) vlanEl.value = '';
     document.querySelector('[name="vlan_acs"]').value      = '';
