@@ -22,7 +22,8 @@
                 <table class="table table-hover mb-0" id="onuTable">
                     <thead class="table-light">
                         <tr>
-                            <th class="ps-3">SN / Nama</th>
+                            <th class="ps-3">SN</th>
+                            <th>Nama <small class="text-muted fw-normal">(klik untuk edit)</small></th>
                             <th>OLT</th>
                             <th>Port</th>
                             <th>Tipe</th>
@@ -39,9 +40,11 @@
                             <tr data-search="<?= esc(strtolower("{$onu['sn']} {$onu['name']} {$onu['olt_name']}")) ?>">
                                 <td class="font-monospace small ps-3">
                                     <a href="/onus/<?= $onu['id'] ?>" class="text-decoration-none"><?= esc($onu['sn']) ?></a>
-                                    <?php if (!empty($onu['name']) && strcasecmp($onu['name'], $onu['sn']) !== 0): ?>
-                                    <div class="text-muted" style="font-size:.7rem;font-family:sans-serif"><?= esc($onu['name']) ?></div>
-                                    <?php endif; ?>
+                                </td>
+                                <td class="onu-name-cell" data-id="<?= $onu['id'] ?>" data-name="<?= esc($onu['name'] ?? '', 'attr') ?>">
+                                    <span class="onu-name-text text-muted fst-italic" style="cursor:pointer" title="Klik untuk edit nama">
+                                        <?= esc($onu['name'] ?? '—') ?>
+                                    </span>
                                 </td>
                                 <td>
                                     <a href="/olts/<?= $onu['olt_id'] ?>" class="text-decoration-none small">
@@ -101,6 +104,59 @@ document.getElementById('searchOnu')?.addEventListener('input', function() {
         row.style.display = (!q || (row.dataset.search || '').includes(q)) ? '' : 'none';
     });
 });
+
+document.querySelectorAll('.onu-name-cell').forEach(cell => {
+    cell.addEventListener('click', function() {
+        if (this.querySelector('input')) return;
+        const span = this.querySelector('.onu-name-text');
+        const current = this.dataset.name || '';
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = current;
+        input.className = 'form-control form-control-sm py-0';
+        input.style.minWidth = '140px';
+        span.replaceWith(input);
+        input.focus();
+        input.select();
+
+        const save = () => {
+            const newName = input.value.trim();
+            if (!newName || newName === current) {
+                input.replaceWith(createSpan(current));
+                return;
+            }
+            const fd = new FormData();
+            fd.append('name', newName);
+            fd.append(_csrf.name, _csrf.hash);
+            fetch(`/onus/${cell.dataset.id}/update-info`, { method: 'POST', body: fd })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        cell.dataset.name = newName;
+                        const tr = cell.closest('tr');
+                        tr.dataset.search = tr.dataset.search.replace(current.toLowerCase(), newName.toLowerCase());
+                    }
+                    input.replaceWith(createSpan(data.success ? newName : current));
+                })
+                .catch(() => input.replaceWith(createSpan(current)));
+        };
+
+        input.addEventListener('blur', save);
+        input.addEventListener('keydown', e => {
+            if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+            if (e.key === 'Escape') { input.removeEventListener('blur', save); input.replaceWith(createSpan(current)); }
+        });
+    });
+});
+
+function createSpan(name) {
+    const s = document.createElement('span');
+    s.className = 'onu-name-text text-muted fst-italic';
+    s.style.cursor = 'pointer';
+    s.title = 'Klik untuk edit nama';
+    s.textContent = name || '—';
+    return s;
+}
 
 function deleteOnu(onuId, sn, btn) {
     if (!confirm(`Hapus ONU ${sn} dari OLT?\nAksi ini akan menghapus konfigurasi ONU dari OLT.`)) return;
