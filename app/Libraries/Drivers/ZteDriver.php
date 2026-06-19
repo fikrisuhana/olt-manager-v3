@@ -361,15 +361,24 @@ class ZteDriver implements OltDriverInterface
      */
     public function getVlanProfiles(): array
     {
-        $out = $this->telnet->execute(
-            'show running-config | include onu profile vlan',
-            $this->rootPrompt, 10
-        );
+        // Coba command khusus dulu (tanpa pipe — lebih reliable di semua firmware)
+        $out = $this->telnet->execute('show gpon onu profile vlan', $this->rootPrompt, 8);
+
+        // Fallback: pipe di running-config (hanya OLT tertentu yang support)
+        if (empty(trim($out)) || stripos($out, 'invalid') !== false || stripos($out, 'error') !== false) {
+            $out = $this->telnet->execute('show running-config | include onu profile vlan', $this->rootPrompt, 8);
+        }
+
         $profiles = [];
+        $seen     = [];
         foreach (explode("\n", $out) as $line) {
-            // onu profile vlan PPPOE tag-mode tag cvlan 155 pri 7
+            // Format: onu profile vlan PPPOE tag-mode tag cvlan 155 pri 7
             if (preg_match('/onu profile vlan (\S+)\s+tag-mode\s+\S+\s+cvlan\s+(\d+)/i', $line, $m)) {
-                $profiles[] = ['name' => $m[1], 'vlan' => (int)$m[2]];
+                $key = $m[1] . ':' . $m[2];
+                if (!isset($seen[$key])) {
+                    $profiles[]  = ['name' => $m[1], 'vlan' => (int)$m[2]];
+                    $seen[$key]  = true;
+                }
             }
         }
         return $profiles;

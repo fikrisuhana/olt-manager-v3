@@ -834,7 +834,10 @@ function loadVlanProfiles() {
             }
         })
         .catch(() => {
-            sel.innerHTML = '<option value="">-- Error --</option>';
+            if (document.getElementById('vlanInternetSelect')) {
+                document.getElementById('vlanInternetSelect').outerHTML =
+                    '<input type="number" name="vlan_internet" id="vlanInternetFallback" class="form-control form-control-sm" placeholder="155" min="1" max="4094">';
+            }
         });
 }
 
