@@ -131,6 +131,12 @@
                                             </button>
                                         </td>
                                         <td class="text-nowrap">
+                                            <?php $pk = explode('/', $portKey); ?>
+                                            <button class="btn btn-sm btn-outline-warning py-0 me-1"
+                                                    title="Konfigurasi ulang interface OLT (tcont/gemport/vlan)"
+                                                    onclick="openRegister('<?= esc($onu['sn'], 'js') ?>','<?= $pk[0] ?>','<?= $pk[1] ?>','<?= $pk[2] ?>',<?= $onu['onu_index'] ?>,true)">
+                                                <i class="bi bi-arrow-repeat"></i>
+                                            </button>
                                             <button class="btn btn-sm btn-outline-success py-0 me-1"
                                                     title="Push PPPoE ke ACS"
                                                     onclick="openAcsPush(<?= $onu['id'] ?>, '<?= esc($onu['sn'], 'js') ?>', '<?= esc($onu['pppoe_user'] ?? '', 'js') ?>')">
