@@ -471,11 +471,29 @@ class OltController extends Controller
         foreach ($cacheData['ports'] as $portKey => $onus) {
             [$board, $slot, $port] = explode('/', $portKey);
             foreach ($onus as $onu) {
-                $sn = strtoupper($onu['sn']);
-                if ($onuModel->snExists($id, $sn)) {
-                    $skipped++;
+                $sn      = strtoupper($onu['sn']);
+                $existing = $onuModel->getAnyByOltAndSn($id, $sn);
+
+                if ($existing) {
+                    if ($existing['status'] !== 'deleted') {
+                        $skipped++;
+                        continue;
+                    }
+                    // Restore ONU yang sudah deleted
+                    $onuModel->update($existing['id'], [
+                        'board'         => $board,
+                        'slot'          => $slot,
+                        'port'          => $port,
+                        'onu_index'     => (int)$onu['index'],
+                        'onu_type'      => $onu['type'] ?? 'ALL-ONT',
+                        'status'        => 'registered',
+                        'registered_at' => date('Y-m-d H:i:s'),
+                    ]);
+                    $logModel->log($this->userId, 'import', 'success', "Restore dari cache: {$sn}", $existing['id'], $id);
+                    $imported++;
                     continue;
                 }
+
                 $onuId = $onuModel->insert([
                     'olt_id'        => $id,
                     'sn'            => $sn,
