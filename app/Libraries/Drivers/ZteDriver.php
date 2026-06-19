@@ -122,9 +122,51 @@ class ZteDriver implements OltDriverInterface
                 $this->rootPrompt, 20
             );
             $parsed = $this->parseBaseinfoOutput($baseinfoOutput, $portKey);
-            $onus   = array_merge($onus, $parsed);
+
+            // Ambil nama ONU dari running-config per port sekaligus
+            $names = $this->getOnuNamesForPort($portKey);
+            foreach ($parsed as &$onu) {
+                $onu['name'] = $names[(int)$onu['onu_index']] ?? '';
+            }
+            unset($onu);
+
+            $onus = array_merge($onus, $parsed);
         }
         return $onus;
+    }
+
+    /**
+     * Baca semua nama ONU pada satu port dari running-config.
+     * Jalankan "show running-config interface gpon-onu_B/S/P" (tanpa index)
+     * dan parse semua blok interface yang ada.
+     * Return: [onu_index => name]
+     */
+    private function getOnuNamesForPort(string $portKey): array
+    {
+        $output = $this->telnet->execute(
+            "show running-config interface gpon-onu_{$portKey}",
+            $this->rootPrompt, 30
+        );
+
+        $names      = [];
+        $currentIdx = null;
+
+        foreach (explode("\n", $output) as $line) {
+            $line = trim($line);
+            // interface gpon-onu_1/1/1:5
+            if (preg_match('/^interface\s+gpon-onu_\S+:(\d+)/i', $line, $m)) {
+                $currentIdx = (int)$m[1];
+            }
+            // name ADAM CBR
+            elseif ($currentIdx !== null && preg_match('/^name\s+(.+)/i', $line, $m)) {
+                $names[$currentIdx] = trim($m[1]);
+            }
+            elseif ($line === '!' || $line === 'exit') {
+                $currentIdx = null;
+            }
+        }
+
+        return $names;
     }
 
     /**
