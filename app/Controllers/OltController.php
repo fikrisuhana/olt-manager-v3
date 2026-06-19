@@ -58,10 +58,14 @@ class OltController extends Controller
 
         $cache = new OnuCacheService();
 
+        $onus     = $onuModel->getByOlt($id);
+        $onuTypes = array_values(array_unique(array_filter(array_column($onus, 'onu_type'))));
+
         return view('olt/show', [
             'title'            => $olt['name'],
             'olt'              => $olt,
-            'onus'             => $onuModel->getByOlt($id),
+            'onus'             => $onus,
+            'onu_types'        => $onuTypes,
             'cache_updated_at' => $cache->lastUpdated($id),
         ]);
     }

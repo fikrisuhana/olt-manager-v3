@@ -215,7 +215,12 @@
                         <div class="col-3">
                             <label class="form-label small fw-medium">Tipe ONU <span class="text-danger">*</span></label>
                             <input type="text" name="onu_type" id="r_onu_type" class="form-control"
-                                   placeholder="ALL-ONT" required>
+                                   placeholder="ALL-ONT" list="onuTypeList" required>
+                            <datalist id="onuTypeList">
+                                <?php foreach ($onu_types as $t): ?>
+                                <option value="<?= esc($t) ?>">
+                                <?php endforeach; ?>
+                            </datalist>
                         </div>
                     </div>
 

@@ -369,15 +369,37 @@ class ZteDriver implements OltDriverInterface
             $out = $this->telnet->execute('show running-config | include onu profile vlan', $this->rootPrompt, 8);
         }
 
-        $profiles = [];
-        $seen     = [];
+        $profiles    = [];
+        $seen        = [];
+        $currentName = null;
+
         foreach (explode("\n", $out) as $line) {
-            // Format: onu profile vlan PPPOE tag-mode tag cvlan 155 pri 7
+            $line = trim($line);
+
+            // Format multi-line (show gpon onu profile vlan):
+            // Profile name:  ppp-155
+            // CVLAN:         155
+            if (preg_match('/^Profile name:\s*(\S+)/i', $line, $m)) {
+                $currentName = $m[1];
+                continue;
+            }
+            if ($currentName && preg_match('/^CVLAN:\s*(\d+)/i', $line, $m)) {
+                $key = $currentName . ':' . $m[1];
+                if (!isset($seen[$key])) {
+                    $profiles[] = ['name' => $currentName, 'vlan' => (int)$m[1]];
+                    $seen[$key] = true;
+                }
+                $currentName = null;
+                continue;
+            }
+
+            // Format single-line (running-config):
+            // onu profile vlan PPPOE tag-mode tag cvlan 155 pri 7
             if (preg_match('/onu profile vlan (\S+)\s+tag-mode\s+\S+\s+cvlan\s+(\d+)/i', $line, $m)) {
                 $key = $m[1] . ':' . $m[2];
                 if (!isset($seen[$key])) {
-                    $profiles[]  = ['name' => $m[1], 'vlan' => (int)$m[2]];
-                    $seen[$key]  = true;
+                    $profiles[] = ['name' => $m[1], 'vlan' => (int)$m[2]];
+                    $seen[$key] = true;
                 }
             }
         }
