@@ -50,6 +50,7 @@ $routes->group('', ['filter' => 'auth'], static function ($routes) {
     $routes->get('onus/(:num)/signal',        'OnuController::signal/$1');    // AJAX
     $routes->get('onus/(:num)/acs-info',     'OnuController::acsInfo/$1');   // AJAX
     $routes->post('onus/(:num)/update-info', 'OnuController::updateInfo/$1'); // AJAX
+    $routes->post('onus/(:num)/sync-name',   'OnuController::syncName/$1');   // AJAX
     $routes->post('onus/(:num)/acs-set',      'OnuController::acsSet/$1');       // AJAX
     $routes->get('onus/(:num)/fetch-config',  'OnuController::fetchConfig/$1');  // AJAX
     $routes->post('onus/(:num)/set-acs',      'OnuController::setAcs/$1');        // AJAX

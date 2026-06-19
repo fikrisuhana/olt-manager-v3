@@ -670,6 +670,7 @@ class ZteDriver implements OltDriverInterface
         );
 
         $result = [
+            'name'            => null,
             'tcont_profile'   => '',
             'traffic_profile' => '',
             'vlan_internet'   => 0,
@@ -680,6 +681,10 @@ class ZteDriver implements OltDriverInterface
         foreach (explode("\n", $output) as $line) {
             $line = trim($line);
 
+            // name ADAM CBR
+            if (preg_match('/^name\s+(.+)/i', $line, $m)) {
+                $result['name'] = trim($m[1]);
+            }
             // tcont 1 name tcont profile 250M
             if (preg_match('/^tcont\s+\d+\s+name\s+\S+\s+profile\s+(\S+)/i', $line, $m)) {
                 $result['tcont_profile'] = $m[1];

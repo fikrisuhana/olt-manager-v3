@@ -580,6 +580,40 @@ class OnuController extends Controller
         }
     }
 
+    /**
+     * AJAX: Ambil nama ONU dari running-config OLT dan update DB
+     */
+    public function syncName(int $id)
+    {
+        $this->response->setContentType('application/json');
+
+        $onuModel = new OnuModel();
+        $onu = $onuModel->getWithOlt($id);
+        if (!$onu || $onu['user_id'] != $this->userId) {
+            return $this->response->setJSON(['success' => false, 'message' => 'ONU tidak ditemukan.']);
+        }
+
+        $oltModel = new OltModel();
+        $olt = $oltModel->find($onu['olt_id']);
+
+        try {
+            $driver = OltDriverFactory::make($olt);
+            $driver->connect();
+            $config = $driver->getOnuConfig($onu['board'], $onu['slot'], $onu['port'], $onu['onu_index']);
+            $driver->disconnect();
+
+            $name = $config['name'] ?? null;
+            if (!$name) {
+                return $this->response->setJSON(['success' => false, 'message' => 'Nama tidak ditemukan di running-config OLT.']);
+            }
+
+            $onuModel->update($id, ['name' => $name]);
+            return $this->response->setJSON(['success' => true, 'name' => $name]);
+        } catch (\Exception $e) {
+            return $this->response->setJSON(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
     public function setAcs(int $id)
     {
         $onuModel = new OnuModel();

@@ -42,9 +42,13 @@
                                     <a href="/onus/<?= $onu['id'] ?>" class="text-decoration-none"><?= esc($onu['sn']) ?></a>
                                 </td>
                                 <td class="onu-name-cell" data-id="<?= $onu['id'] ?>" data-name="<?= esc($onu['name'] ?? '', 'attr') ?>">
-                                    <span class="onu-name-text text-muted fst-italic" style="cursor:pointer" title="Klik untuk edit nama">
+                                    <span class="onu-name-text" style="cursor:pointer" title="Klik untuk edit nama">
                                         <?= esc($onu['name'] ?? '—') ?>
                                     </span>
+                                    <button class="btn btn-link btn-sm p-0 ms-1 text-muted sync-name-btn"
+                                            title="Ambil nama dari OLT" style="font-size:.7rem;vertical-align:middle">
+                                        <i class="bi bi-cloud-download"></i>
+                                    </button>
                                 </td>
                                 <td>
                                     <a href="/olts/<?= $onu['olt_id'] ?>" class="text-decoration-none small">
@@ -95,6 +99,10 @@
 
 <?= $this->endSection() ?>
 <?= $this->section('scripts') ?>
+<style>
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin { display:inline-block; animation: spin .7s linear infinite; }
+</style>
 <script>
 const _csrf = { name: '<?= csrf_token() ?>', hash: '<?= csrf_hash() ?>' };
 
@@ -102,6 +110,34 @@ document.getElementById('searchOnu')?.addEventListener('input', function() {
     const q = this.value.toLowerCase();
     document.querySelectorAll('#onuTable tbody tr').forEach(row => {
         row.style.display = (!q || (row.dataset.search || '').includes(q)) ? '' : 'none';
+    });
+});
+
+document.querySelectorAll('.sync-name-btn').forEach(btn => {
+    btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        const cell = this.closest('.onu-name-cell');
+        const icon = this.querySelector('i');
+        icon.className = 'bi bi-arrow-repeat spin';
+        this.disabled = true;
+
+        const fd = new FormData();
+        fd.append(_csrf.name, _csrf.hash);
+        fetch(`/onus/${cell.dataset.id}/sync-name`, { method: 'POST', body: fd })
+            .then(r => r.json())
+            .then(data => {
+                icon.className = 'bi bi-cloud-download';
+                this.disabled = false;
+                if (data.success) {
+                    cell.dataset.name = data.name;
+                    cell.querySelector('.onu-name-text').textContent = data.name;
+                    const tr = cell.closest('tr');
+                    tr.dataset.search = tr.dataset.search + ' ' + data.name.toLowerCase();
+                } else {
+                    alert('Sync gagal: ' + data.message);
+                }
+            })
+            .catch(() => { icon.className = 'bi bi-cloud-download'; this.disabled = false; });
     });
 });
 
