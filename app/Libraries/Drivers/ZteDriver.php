@@ -333,8 +333,9 @@ class ZteDriver implements OltDriverInterface
             }
             $this->telnet->execute("vlan port veip_1 mode hybrid", $this->mngPrompt, 5);
 
-            // PPPoE WAN via pon-onu-mng (ZTE ONU — diverifikasi dari running-config C320)
-            if ($pppoeUser && $pppoePass) {
+            // PPPoE WAN via pon-onu-mng — hanya ZTE ONU, Fiberhome pakai ACS/TR-069
+            $isFiberhome = strncasecmp($sn, 'FHTT', 4) === 0;
+            if ($pppoeUser && $pppoePass && !$isFiberhome) {
                 $out = $this->telnet->execute(
                     "wan-ip 1 mode pppoe username {$pppoeUser} password {$pppoePass} vlan-profile {$pppoeProfile} host 1",
                     $this->mngPrompt, 5
