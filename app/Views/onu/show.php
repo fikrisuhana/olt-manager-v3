@@ -220,7 +220,7 @@
             </div>
         </div>
 
-        <div class="card border-0 shadow-sm">
+        <div class="card border-0 shadow-sm" id="wifiCard">
             <div class="card-header bg-white border-bottom py-3">
                 <h6 class="mb-0 fw-semibold"><i class="bi bi-wifi me-1"></i>Edit WiFi</h6>
             </div>
@@ -255,7 +255,7 @@
             </div>
         </div>
         <!-- Connected Clients -->
-        <div class="card border-0 shadow-sm mt-4">
+        <div class="card border-0 shadow-sm mt-4" id="clientCard">
             <div class="card-header bg-white border-bottom py-2 d-flex align-items-center justify-content-between">
                 <h6 class="mb-0 fw-semibold small"><i class="bi bi-people me-1"></i>Client Terhubung</h6>
                 <small class="text-muted">via Refresh ACS</small>
@@ -507,6 +507,17 @@ function loadAcsInfo() {
             if (i.wifi?.password)  document.getElementById('wifi_key').value   = i.wifi.password;
             if (i.wan?.pppoe_user) document.getElementById('pppoe_user').value = i.wan.pppoe_user;
             if (i.wan?.pppoe_pass) document.getElementById('pppoe_pass').value = i.wan.pppoe_pass;
+
+            // Sembunyikan WiFi section jika ONU tidak punya WiFi (bridge-only, mis. F609)
+            const wifiCard = document.getElementById('wifiCard');
+            if (wifiCard) {
+                const hasWifi = i.wifi?.ssid !== null && i.wifi?.ssid !== undefined;
+                wifiCard.style.display = hasWifi ? '' : 'none';
+                if (!hasWifi) {
+                    const clientCard = document.getElementById('clientCard');
+                    if (clientCard) clientCard.style.display = 'none';
+                }
+            }
 
             // Tampilkan connected clients
             const clientBox = document.getElementById('clientsBox');

@@ -59,10 +59,11 @@ class DashboardController extends Controller
             elseif  (str_starts_with($sn, 'HWTC'))  $brand = 'Huawei';
             else                                     $brand = 'Lainnya';
             $brands[$brand] = ($brands[$brand] ?? 0) + 1;
-            arsort($brands);
 
             $onuByOlt[$onu['olt_id']] = ($onuByOlt[$onu['olt_id']] ?? 0) + 1;
         }
+
+        arsort($brands);
 
         // Per-OLT enriched data
         $oltStats = [];
