@@ -275,16 +275,22 @@ class ZteDriver implements OltDriverInterface
         $log[] = 'Entered configuration mode';
 
         // Daftarkan ONU di port PON
+        $force  = (bool)($params['force'] ?? false);
         $this->telnet->execute("interface gpon-olt_{$board}/{$slot}/{$port}", $this->ifPrompt, 5);
         $result = $this->telnet->execute("onu {$idx} type {$type} sn {$sn}", $this->ifPrompt, 8);
         $log[]  = "OLT response: " . trim(preg_replace('/\s+/', ' ', $result));
-        $errPatterns = ['error', 'invalid', 'failure', 'failed', 'already exist',
-                        'duplicated', 'occupied', 'exist', '% '];
-        foreach ($errPatterns as $pat) {
-            if (stripos($result, $pat) !== false) {
-                $this->telnet->execute('exit', $this->configPrompt, 3);
-                $this->telnet->execute('exit', $this->rootPrompt, 3);
-                throw new \Exception("Gagal mendaftarkan ONU di OLT: " . trim(preg_replace('/\s+/', ' ', $result)));
+        $alreadyExist = stripos($result, 'already exist') !== false || stripos($result, 'exist') !== false;
+        if ($alreadyExist && $force) {
+            $log[] = "ONU sudah ada di OLT (force re-configure interface)";
+        } else {
+            $errPatterns = ['error', 'invalid', 'failure', 'failed', 'already exist',
+                            'duplicated', 'occupied', 'exist', '% '];
+            foreach ($errPatterns as $pat) {
+                if (stripos($result, $pat) !== false) {
+                    $this->telnet->execute('exit', $this->configPrompt, 3);
+                    $this->telnet->execute('exit', $this->rootPrompt, 3);
+                    throw new \Exception("Gagal mendaftarkan ONU di OLT: " . trim(preg_replace('/\s+/', ' ', $result)));
+                }
             }
         }
         $this->telnet->execute('exit', $this->configPrompt, 3);

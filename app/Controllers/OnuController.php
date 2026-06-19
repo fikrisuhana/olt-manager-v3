@@ -148,6 +148,7 @@ class OnuController extends Controller
                 'pppoe_user'         => $pppoeUser,
                 'pppoe_pass'         => $pppoePass,
                 'pppoe_vlan_profile' => $pppoeVlanProfile,
+                'force'           => $force,
             ]);
 
             $driver->disconnect();
