@@ -708,6 +708,23 @@ class ZteDriver implements OltDriverInterface
         return $result;
     }
 
+    /**
+     * Baca PPPoE username dari konfigurasi pon-onu-mng OLT.
+     * Command: show running-config pon-onu-mng gpon-onu_B/S/P:I
+     * Parse baris: wan-ip 1 mode pppoe username USER ...
+     */
+    public function getPonMngPppoeUser(string $board, string $slot, string $port, string $onuIndex): ?string
+    {
+        $output = $this->telnet->execute(
+            "show running-config pon-onu-mng gpon-onu_{$board}/{$slot}/{$port}:{$onuIndex}",
+            $this->rootPrompt, 10
+        );
+        if (preg_match('/wan-ip\s+1\s+mode\s+pppoe\s+username\s+(\S+)/i', $output, $m)) {
+            return $m[1];
+        }
+        return null;
+    }
+
     public function getBrand(): string { return 'ZTE'; }
     public function getModel(): string { return $this->config['model'] ?? 'C320'; }
 }

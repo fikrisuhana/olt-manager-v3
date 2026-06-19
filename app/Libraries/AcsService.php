@@ -371,10 +371,14 @@ class AcsService
         $result    = [];
         $tenMinAgo = strtotime('-20 minutes');
 
+        // Ambil Username dari WCD.1 (ZTE/Huawei/Nokia) dan WCD.2 (Fiberhome)
+        $wanUser1 = 'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.Username';
+        $wanUser2 = 'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.2.WANPPPConnection.1.Username';
+
         // Chunk 100 SN per request — hindari URL terlalu panjang
         foreach (array_chunk(array_values($sns), 100) as $chunk) {
             $query    = urlencode(json_encode(['_deviceId._SerialNumber' => ['$in' => $chunk]]));
-            $proj     = '_id,_deviceId,_lastInform';
+            $proj     = "_id,_deviceId,_lastInform,{$wanUser1},{$wanUser2}";
             $response = $this->request('GET', "/devices?query={$query}&projection={$proj}&limit=" . count($chunk));
 
             if ($response['status'] !== 200) continue;
@@ -382,12 +386,17 @@ class AcsService
             foreach (json_decode($response['body'], true) ?? [] as $d) {
                 $sn      = $d['_deviceId']['_SerialNumber'] ?? '';
                 $lastInf = $d['_lastInform'] ?? null;
+                $wan1    = $d['InternetGatewayDevice']['WANDevice']['1']['WANConnectionDevice']['1']['WANPPPConnection']['1'] ?? [];
+                $wan2    = $d['InternetGatewayDevice']['WANDevice']['1']['WANConnectionDevice']['2']['WANPPPConnection']['1'] ?? [];
+                $pppoeUser = ($wan1['Username']['_value'] ?? null) ?: ($wan2['Username']['_value'] ?? null) ?: null;
+
                 $result[strtoupper($sn)] = [
                     'device_id'    => $d['_id'],
                     'last_inform'  => $lastInf,
                     'manufacturer' => $d['_deviceId']['_Manufacturer'] ?? '',
                     'model'        => $d['_deviceId']['_ProductClass'] ?? '',
                     'online'       => $lastInf && strtotime($lastInf) >= $tenMinAgo,
+                    'pppoe_user'   => $pppoeUser,
                 ];
             }
         }

@@ -7,7 +7,10 @@
         <div class="d-flex align-items-center gap-2">
             <span class="badge bg-primary" title="Total semua ONU"><?= $totalAll ?></span>
             <button class="btn btn-sm btn-outline-secondary" id="btnSyncAllNames" title="Sync semua nama dari OLT">
-                <i class="bi bi-cloud-download me-1"></i>Sync Semua Nama
+                <i class="bi bi-cloud-download me-1"></i>Sync Nama
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" id="btnSyncPppoe" title="Sync PPPoE username dari OLT/ACS ke database">
+                <i class="bi bi-person-check me-1"></i>Sync PPPoE
             </button>
         </div>
     </div>
@@ -52,7 +55,7 @@
                             <th class="ps-3"><?= sortLink('sn', 'SN', $sort, $dir, $q, $page) ?></th>
                             <th><?= sortLink('name', 'Nama', $sort, $dir, $q, $page) ?> <small class="text-muted fw-normal">(klik untuk edit)</small></th>
                             <th><?= sortLink('olt_name', 'OLT', $sort, $dir, $q, $page) ?></th>
-                            <th><?= sortLink('port', 'Port', $sort, $dir, $q, $page) ?></th>
+                            <th>PPPoE Username</th>
                             <th><?= sortLink('onu_type', 'Tipe', $sort, $dir, $q, $page) ?></th>
                             <th>ACS</th>
                             <th><?= sortLink('registered_at', 'Terdaftar', $sort, $dir, $q, $page) ?></th>
@@ -83,8 +86,15 @@
                                     </a>
                                     <div class="text-muted" style="font-size:.7rem"><?= esc($onu['olt_ip']) ?></div>
                                 </td>
-                                <td class="small text-muted font-monospace">
-                                    <?= esc("{$onu['board']}/{$onu['slot']}/{$onu['port']}:{$onu['onu_index']}") ?>
+                                <?php
+                                    $snUp = strtoupper($onu['sn']);
+                                    $isZte = strncmp($snUp, 'ZTEG', 4) === 0;
+                                    $pppUser = $isZte
+                                        ? ($onu['pppoe_user'] ?? null)
+                                        : ($acsData[$snUp]['pppoe_user'] ?? $onu['pppoe_user'] ?? null);
+                                ?>
+                                <td class="small">
+                                    <?= $pppUser ? esc($pppUser) : '<span class="text-muted">—</span>' ?>
                                 </td>
                                 <td><span class="badge bg-light text-dark"><?= esc($onu['onu_type'] ?? '-') ?></span></td>
                                 <td>
@@ -165,6 +175,32 @@
 <script>
 const _csrf = { name: '<?= csrf_token() ?>', hash: '<?= csrf_hash() ?>' };
 
+
+document.getElementById('btnSyncPppoe')?.addEventListener('click', function() {
+    if (!confirm('Sync PPPoE username dari OLT (ZTE) dan ACS (FH/lainnya) ke database?\nProses ini mungkin memakan waktu beberapa menit.')) return;
+    this.disabled = true;
+    this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Syncing...';
+    const fd = new FormData();
+    fd.append(_csrf.name, _csrf.hash);
+    fetch('/onus/sync-pppoe-all', { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(data => {
+            this.disabled = false;
+            this.innerHTML = '<i class="bi bi-person-check me-1"></i>Sync PPPoE';
+            if (data.success) {
+                let msg = data.message;
+                if (data.errors && data.errors.length) msg += '\n\nError:\n' + data.errors.join('\n');
+                alert(msg);
+                if (data.updated > 0) location.reload();
+            } else {
+                alert('Gagal: ' + data.message);
+            }
+        })
+        .catch(() => {
+            this.disabled = false;
+            this.innerHTML = '<i class="bi bi-person-check me-1"></i>Sync PPPoE';
+        });
+});
 
 document.getElementById('btnSyncAllNames')?.addEventListener('click', function() {
     this.disabled = true;
