@@ -24,12 +24,18 @@ class OnuController extends Controller
     }
 
     /**
-     * Daftar semua ONU milik user
+     * Daftar semua ONU milik user (paginated)
      */
     public function index()
     {
         $onuModel = new OnuModel();
-        $onus     = $onuModel->getByUser($this->userId);
+        $perPage  = 50;
+        $page     = max(1, (int)($this->request->getGet('page') ?? 1));
+        $q        = trim($this->request->getGet('q') ?? '');
+
+        $onus  = $onuModel->getByUserPaginated($this->userId, $perPage, $page, $q);
+        $total = $onuModel->countByUser($this->userId, $q);
+        $totalAll = $q ? $onuModel->countByUser($this->userId) : $total;
 
         $cache   = new OnuCacheService();
         $acsData = [];
@@ -40,9 +46,14 @@ class OnuController extends Controller
         }
 
         return view('onu/index', [
-            'title'   => 'Semua ONU',
-            'onus'    => $onus,
-            'acsData' => $acsData,
+            'title'    => 'Semua ONU',
+            'onus'     => $onus,
+            'acsData'  => $acsData,
+            'total'    => $total,
+            'totalAll' => $totalAll,
+            'perPage'  => $perPage,
+            'page'     => $page,
+            'q'        => $q,
         ]);
     }
 

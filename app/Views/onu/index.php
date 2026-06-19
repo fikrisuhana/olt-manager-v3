@@ -5,8 +5,8 @@
     <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
         <h6 class="mb-0 fw-semibold"><i class="bi bi-router me-1"></i>Semua ONU Terdaftar</h6>
         <div class="d-flex align-items-center gap-2">
-            <span class="badge bg-primary"><?= count($onus) ?></span>
-            <button class="btn btn-sm btn-outline-secondary" id="btnSyncAllNames" title="Sync semua nama dari cache OLT">
+            <span class="badge bg-primary" title="Total semua ONU"><?= $totalAll ?></span>
+            <button class="btn btn-sm btn-outline-secondary" id="btnSyncAllNames" title="Sync semua nama dari OLT">
                 <i class="bi bi-cloud-download me-1"></i>Sync Semua Nama
             </button>
         </div>
@@ -20,8 +20,20 @@
             </div>
         <?php else: ?>
             <div class="p-3 pb-0">
-                <input type="text" class="form-control form-control-sm mb-3"
-                       id="searchOnu" placeholder="Cari SN, nama, OLT ...">
+                <form method="get" action="/onus" class="d-flex gap-2 mb-3">
+                    <input type="text" name="q" class="form-control form-control-sm"
+                           placeholder="Cari SN, nama, OLT ..."
+                           value="<?= esc($q) ?>">
+                    <button class="btn btn-sm btn-outline-primary px-3">Cari</button>
+                    <?php if ($q): ?>
+                    <a href="/onus" class="btn btn-sm btn-outline-secondary">Reset</a>
+                    <?php endif; ?>
+                </form>
+                <?php if ($q): ?>
+                <div class="small text-muted mb-2">
+                    Hasil pencarian "<strong><?= esc($q) ?></strong>": <?= $total ?> ONU
+                </div>
+                <?php endif; ?>
             </div>
             <div class="table-responsive">
                 <table class="table table-hover mb-0" id="onuTable">
@@ -98,6 +110,37 @@
                     </tbody>
                 </table>
             </div>
+            <?php
+            $totalPages = (int)ceil($total / $perPage);
+            if ($totalPages > 1):
+                $qStr = $q ? '&q=' . urlencode($q) : '';
+            ?>
+            <div class="d-flex justify-content-between align-items-center px-3 py-2 border-top">
+                <small class="text-muted">
+                    Menampilkan <?= (($page-1)*$perPage)+1 ?>–<?= min($page*$perPage, $total) ?> dari <?= $total ?> ONU
+                </small>
+                <nav>
+                    <ul class="pagination pagination-sm mb-0">
+                        <li class="page-item <?= $page<=1 ? 'disabled' : '' ?>">
+                            <a class="page-link" href="/onus?page=<?= $page-1 ?><?= $qStr ?>">‹</a>
+                        </li>
+                        <?php
+                        $start = max(1, $page - 2);
+                        $end   = min($totalPages, $page + 2);
+                        if ($start > 1): ?><li class="page-item disabled"><span class="page-link">…</span></li><?php endif;
+                        for ($i = $start; $i <= $end; $i++): ?>
+                        <li class="page-item <?= $i==$page ? 'active' : '' ?>">
+                            <a class="page-link" href="/onus?page=<?= $i ?><?= $qStr ?>"><?= $i ?></a>
+                        </li>
+                        <?php endfor;
+                        if ($end < $totalPages): ?><li class="page-item disabled"><span class="page-link">…</span></li><?php endif; ?>
+                        <li class="page-item <?= $page>=$totalPages ? 'disabled' : '' ?>">
+                            <a class="page-link" href="/onus?page=<?= $page+1 ?><?= $qStr ?>">›</a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+            <?php endif; ?>
         <?php endif; ?>
     </div>
 </div>
@@ -111,12 +154,6 @@
 <script>
 const _csrf = { name: '<?= csrf_token() ?>', hash: '<?= csrf_hash() ?>' };
 
-document.getElementById('searchOnu')?.addEventListener('input', function() {
-    const q = this.value.toLowerCase();
-    document.querySelectorAll('#onuTable tbody tr').forEach(row => {
-        row.style.display = (!q || (row.dataset.search || '').includes(q)) ? '' : 'none';
-    });
-});
 
 document.getElementById('btnSyncAllNames')?.addEventListener('click', function() {
     this.disabled = true;

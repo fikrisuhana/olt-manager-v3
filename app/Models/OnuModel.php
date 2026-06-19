@@ -35,6 +35,44 @@ class OnuModel extends Model
                     ->findAll();
     }
 
+    public function getByUserPaginated(int $userId, int $perPage = 50, int $page = 1, string $q = ''): array
+    {
+        $builder = $this->select('onus.*, olts.name as olt_name, olts.brand, olts.ip as olt_ip')
+                        ->join('olts', 'olts.id = onus.olt_id')
+                        ->where('olts.user_id', $userId)
+                        ->where('onus.status !=', 'deleted');
+
+        if ($q !== '') {
+            $builder->groupStart()
+                        ->like('onus.sn', $q)
+                        ->orLike('onus.name', $q)
+                        ->orLike('olts.name', $q)
+                    ->groupEnd();
+        }
+
+        return $builder->orderBy('onus.registered_at', 'DESC')
+                       ->limit($perPage, ($page - 1) * $perPage)
+                       ->findAll();
+    }
+
+    public function countByUser(int $userId, string $q = ''): int
+    {
+        $builder = $this->select('onus.id')
+                        ->join('olts', 'olts.id = onus.olt_id')
+                        ->where('olts.user_id', $userId)
+                        ->where('onus.status !=', 'deleted');
+
+        if ($q !== '') {
+            $builder->groupStart()
+                        ->like('onus.sn', $q)
+                        ->orLike('onus.name', $q)
+                        ->orLike('olts.name', $q)
+                    ->groupEnd();
+        }
+
+        return $builder->countAllResults();
+    }
+
     public function snExists(int $oltId, string $sn): bool
     {
         return $this->where('olt_id', $oltId)->where('sn', $sn)->where('status !=', 'deleted')->countAllResults() > 0;
