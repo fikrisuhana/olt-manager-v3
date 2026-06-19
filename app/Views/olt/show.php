@@ -698,15 +698,16 @@ document.getElementById('registerForm').addEventListener('submit', function(e) {
 
             if (data.success) {
                 logContent.style.color = '#86efac';
+                const hasWarn = (data.log || []).some(l => l.includes('WARN') || l.includes('Error'));
+                const delay = hasWarn ? 5000 : 2500;
+                if (hasWarn) logContent.textContent += '\n\n⚠ Ada peringatan — cek log di atas.';
                 if (data.watch_acs && data.onu_id && pppoePass) {
-                    // Tunggu sebentar, tutup modal, mulai polling ACS
-                    // push_via_acs=false (ZTE): hanya tunggu ONU online, jangan auto-push ke ACS
                     setTimeout(() => {
                         bootstrap.Modal.getInstance(document.getElementById('registerModal'))?.hide();
                         startAcsWatch(data.onu_id, data.sn, pppoeUser, pppoePass, data.push_via_acs !== false);
-                    }, 1500);
+                    }, delay);
                 } else {
-                    setTimeout(() => location.reload(), 1500);
+                    setTimeout(() => location.reload(), delay);
                 }
             } else {
                 logContent.style.color = '#fca5a5';
