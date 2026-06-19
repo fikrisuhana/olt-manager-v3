@@ -106,7 +106,7 @@ class AcsService
             }
 
             $task     = ['name' => 'setParameterValues', 'parameterValues' => $paramValues];
-            $response = $this->request('POST', "/devices/{$encodedId}/tasks?timeout=10000", $task);
+            $response = $this->request('POST', "/devices/{$encodedId}/tasks?connection_request&timeout=10000", $task);
 
             return [
                 'success'  => in_array($response['status'], [200, 201, 202]),
@@ -126,7 +126,7 @@ class AcsService
             ],
         ];
 
-        $response = $this->request('POST', "/devices/{$encodedId}/tasks?timeout=3000", $task);
+        $response = $this->request('POST', "/devices/{$encodedId}/tasks?connection_request&timeout=8000", $task);
 
         return [
             'success'  => in_array($response['status'], [200, 201, 202]),
@@ -159,7 +159,7 @@ class AcsService
 
         // Buat WANPPPConnection baru via addObject
         $task = ['name' => 'addObject', 'objectName' => "{$wcdPath}.WANPPPConnection."];
-        $this->request('POST', "/devices/{$encodedId}/tasks?timeout=10000", $task);
+        $this->request('POST', "/devices/{$encodedId}/tasks?connection_request&timeout=10000", $task);
         // Beri jeda agar device sempat buat object sebelum setParameterValues dikirim
         sleep(3);
     }
@@ -266,7 +266,7 @@ class AcsService
         ];
 
         $encodedId = rawurlencode($deviceId);
-        $response  = $this->request('POST', "/devices/{$encodedId}/tasks?timeout=3000", $task);
+        $response  = $this->request('POST', "/devices/{$encodedId}/tasks?connection_request&timeout=8000", $task);
 
         return [
             'success' => in_array($response['status'], [200, 201, 202]),
@@ -280,7 +280,7 @@ class AcsService
     public function rebootDevice(string $deviceId): bool
     {
         $encodedId = rawurlencode($deviceId);
-        $response  = $this->request('POST', "/devices/{$encodedId}/tasks", ['name' => 'reboot']);
+        $response  = $this->request('POST', "/devices/{$encodedId}/tasks?connection_request", ['name' => 'reboot']);
         return in_array($response['status'], [200, 201, 202]);
     }
 
