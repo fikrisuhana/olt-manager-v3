@@ -393,6 +393,12 @@ function fetchConfigFromOlt() {
             if (c.tcont_profile)   document.getElementById('edit_tcont').value          = c.tcont_profile;
             if (c.vlan_internet)   document.getElementById('edit_vlan_internet').value  = c.vlan_internet;
             if (c.vlan_acs)        document.getElementById('edit_vlan_acs').value        = c.vlan_acs;
+            if (data.pppoe_user) {
+                document.getElementById('edit_pppoe_user').value = data.pppoe_user;
+                // Isi juga form PPPoE di section WAN
+                const pppoeField = document.getElementById('pppoe_user');
+                if (pppoeField && !pppoeField.value) pppoeField.value = data.pppoe_user;
+            }
 
             const spList = Object.entries(c.service_ports || {});
             const spInfo = spList.map(([sp, vlan]) => `SP${sp}=VLAN${vlan}`).join(', ');
@@ -400,9 +406,10 @@ function fetchConfigFromOlt() {
             res.className = 'mb-2 small alert alert-success py-1';
             res.innerHTML = `<i class="bi bi-check-circle me-1"></i>Data dari ${data.source === 'olt' ? 'OLT' : 'DB'}: `
                 + `TCONT <strong>${c.tcont_profile || '—'}</strong>`
-                + (c.vlan_internet ? `, VLAN Internet <strong>${c.vlan_internet}</strong>` : '')
-                + (c.vlan_acs      ? `, VLAN ACS <strong>${c.vlan_acs}</strong>`           : '')
-                + (data.note       ? `<br><span class="text-muted">${data.note}</span>`    : '');
+                + (c.vlan_internet  ? `, VLAN Internet <strong>${c.vlan_internet}</strong>` : '')
+                + (c.vlan_acs       ? `, VLAN ACS <strong>${c.vlan_acs}</strong>`           : '')
+                + (data.pppoe_user  ? `, PPPoE <strong>${data.pppoe_user}</strong>`         : '')
+                + (data.note        ? `<br><span class="text-muted">${data.note}</span>`    : '');
         })
         .catch(e => {
             btn.disabled = false;

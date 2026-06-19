@@ -596,12 +596,26 @@ class OnuController extends Controller
             $config = $driver->getOnuConfig(
                 $onu['board'], $onu['slot'], $onu['port'], $onu['onu_index']
             );
+
+            // Baca PPPoE username dari pon-onu-mng jika belum ada di DB
+            $pppoeUser = null;
+            if (method_exists($driver, 'getPonMngPppoeUser')) {
+                $pppoeUser = $driver->getPonMngPppoeUser(
+                    $onu['board'], $onu['slot'], $onu['port'], $onu['onu_index']
+                );
+                // Simpan ke DB jika ditemukan
+                if ($pppoeUser && empty($onu['pppoe_user'])) {
+                    $onuModel->update($id, ['pppoe_user' => $pppoeUser]);
+                }
+            }
+
             $driver->disconnect();
 
             return $this->response->setJSON([
-                'success' => true,
-                'source'  => 'olt',
-                'config'  => $config,
+                'success'    => true,
+                'source'     => 'olt',
+                'config'     => $config,
+                'pppoe_user' => $pppoeUser,
             ]);
         } catch (\Exception $e) {
             return $this->response->setJSON(['success' => false, 'message' => $e->getMessage()]);
