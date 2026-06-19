@@ -115,9 +115,6 @@ class ZteDriver implements OltDriverInterface
 
         if (empty($ports)) return [];
 
-        // Ambil semua nama ONU sekaligus dari running-config (terminal length 0 sudah di-set saat connect)
-        $allNames = $this->getAllOnuNamesFromRunningConfig();
-
         $onus = [];
         foreach ($ports as $portKey) {
             $baseinfoOutput = $this->telnet->execute(
@@ -125,54 +122,9 @@ class ZteDriver implements OltDriverInterface
                 $this->rootPrompt, 20
             );
             $parsed = $this->parseBaseinfoOutput($baseinfoOutput, $portKey);
-
-            foreach ($parsed as &$onu) {
-                $key = "{$onu['board']}/{$onu['slot']}/{$onu['port']}";
-                $onu['name'] = $allNames[$key][(int)$onu['onu_index']] ?? '';
-            }
-            unset($onu);
-
-            $onus = array_merge($onus, $parsed);
+            $onus   = array_merge($onus, $parsed);
         }
         return $onus;
-    }
-
-    /**
-     * Baca semua nama ONU dari "show running-config" sekaligus (satu command).
-     * terminal length 0 sudah di-set di connect(), jadi output tidak terpotong.
-     * Return: ["board/slot/port" => [onu_index => name]]
-     */
-    private function getAllOnuNamesFromRunningConfig(): array
-    {
-        $output = $this->telnet->execute('show running-config', $this->rootPrompt, 60);
-
-        $names      = [];
-        $currentKey = null;
-        $currentIdx = null;
-
-        foreach (explode("\n", $output) as $line) {
-            $line = trim($line);
-            // interface gpon-onu_1/1/1:5
-            if (preg_match('/^interface\s+gpon-onu_(\d+)\/(\d+)\/(\d+):(\d+)/i', $line, $m)) {
-                $currentKey = "{$m[1]}/{$m[2]}/{$m[3]}";
-                $currentIdx = (int)$m[4];
-            }
-            // name ADAM CBR
-            elseif ($currentIdx !== null && preg_match('/^name\s+(.+)/i', $line, $m)) {
-                $name = trim($m[1]);
-                if ($name !== '') {
-                    $names[$currentKey][$currentIdx] = $name;
-                }
-                $currentIdx = null; // sudah dapat nama, reset
-            }
-            // blok interface lain atau akhir blok
-            elseif ($line === '!' || preg_match('/^interface\s+(?!gpon-onu)/i', $line)) {
-                $currentKey = null;
-                $currentIdx = null;
-            }
-        }
-
-        return $names;
     }
 
     /**
