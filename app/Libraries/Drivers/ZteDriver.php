@@ -335,6 +335,16 @@ class ZteDriver implements OltDriverInterface
             }
             $this->telnet->execute("vlan port veip_1 mode hybrid", $this->mngPrompt, 5);
 
+            // DHCP management IP agar ZTE ONU bisa konek ke ACS (iphost 2 = management channel)
+            if ($vlanAcs && !$isFiberhome) {
+                $out = $this->telnet->execute("wan-ip 2 mode dhcp iphost 2", $this->mngPrompt, 5);
+                if (stripos($out, 'Error') !== false || stripos($out, 'Invalid') !== false) {
+                    $log[] = "WARN pon-onu-mng: wan-ip 2 dhcp → " . trim(substr($out, -120));
+                } else {
+                    $log[] = "wan-ip 2 dhcp (ACS management) OK";
+                }
+            }
+
             // PPPoE WAN via pon-onu-mng — hanya ZTE ONU, Fiberhome pakai ACS/TR-069
             if ($pppoeUser && $pppoePass && !$isFiberhome) {
                 $out = $this->telnet->execute(
@@ -455,6 +465,12 @@ class ZteDriver implements OltDriverInterface
             }
         }
         $this->telnet->execute("vlan port veip_1 mode hybrid", $this->mngPrompt, 5);
+
+        // DHCP management IP agar ONU bisa konek ke ACS (iphost 2 = management channel)
+        if ($vlanAcs) {
+            $out   = $this->telnet->execute("wan-ip 2 mode dhcp iphost 2", $this->mngPrompt, 5);
+            $log[] = "wan-ip 2 dhcp → " . trim(preg_replace('/\s+/', ' ', $out));
+        }
 
         if ($pppoeUser && $pppoePass) {
             $out   = $this->telnet->execute(
