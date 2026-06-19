@@ -197,7 +197,7 @@ class AcsService
     }
 
     /**
-     * Ambil info WiFi + WAN + status dari GenieACS untuk satu device.
+     * Ambil info WiFi + WAN + status + clients dari GenieACS untuk satu device.
      */
     public function getDeviceInfo(string $deviceId, string $brand = 'default'): ?array
     {
@@ -212,15 +212,21 @@ class AcsService
         $proj = implode(',', [
             '_id', '_deviceId', '_lastInform',
             $wanBase . '.Username',
+            $wanBase . '.Password',
             $wanBase . '.ConnectionStatus',
             $wanBase . '.ExternalIPAddress',
             $wanBase . '.Uptime',
             $wifiBase . '.SSID',
             $wifiBase . '.Enable',
+            $wifiBase . '.KeyPassphrase',
             $wifiBase . '.PreSharedKey.1.PreSharedKey',
+            $wifiBase . '.PreSharedKey.1.KeyPassphrase',
             $wifi5Base . '.SSID',
             $wifi5Base . '.Enable',
+            $wifi5Base . '.KeyPassphrase',
             $wifi5Base . '.PreSharedKey.1.PreSharedKey',
+            $wifi5Base . '.PreSharedKey.1.KeyPassphrase',
+            'InternetGatewayDevice.LANDevice.1.Hosts.Host',
         ]);
 
         $query    = urlencode(json_encode(['_id' => $deviceId]));
@@ -234,6 +240,7 @@ class AcsService
         $wanData = $d['InternetGatewayDevice']['WANDevice']['1']['WANConnectionDevice'][$wcd]['WANPPPConnection'][$ppp] ?? [];
         $wifi    = $d['InternetGatewayDevice']['LANDevice']['1']['WLANConfiguration']['1'] ?? [];
         $wifi5   = $d['InternetGatewayDevice']['LANDevice']['1']['WLANConfiguration']['5'] ?? [];
+        $hosts   = $d['InternetGatewayDevice']['LANDevice']['1']['Hosts']['Host'] ?? [];
         $tenMinAgo = strtotime('-10 minutes');
         $lastInf   = $d['_lastInform'] ?? null;
 
@@ -245,6 +252,7 @@ class AcsService
             'model'       => $d['_deviceId']['_ProductClass'] ?? '',
             'wan' => [
                 'pppoe_user' => $wanData['Username']['_value'] ?? null,
+                'pppoe_pass' => $wanData['Password']['_value'] ?? null,
                 'status'     => $wanData['ConnectionStatus']['_value'] ?? null,
                 'ip'         => $wanData['ExternalIPAddress']['_value'] ?? null,
                 'uptime'     => $wanData['Uptime']['_value'] ?? null,
@@ -252,27 +260,79 @@ class AcsService
             'wifi' => [
                 'ssid'     => $wifi['SSID']['_value'] ?? null,
                 'enabled'  => $wifi['Enable']['_value'] ?? null,
-                'password' => $wifi['PreSharedKey']['1']['PreSharedKey']['_value'] ?? null,
+                'password' => $this->readWifiPassword($wifi),
             ],
             'wifi5' => [
                 'ssid'     => $wifi5['SSID']['_value'] ?? null,
                 'enabled'  => $wifi5['Enable']['_value'] ?? null,
-                'password' => $wifi5['PreSharedKey']['1']['PreSharedKey']['_value'] ?? null,
+                'password' => $this->readWifiPassword($wifi5),
             ],
+            'clients' => $this->parseHosts($hosts),
         ];
     }
 
-    /**
-     * Set WiFi SSID dan password (PreSharedKey) via GenieACS.
-     */
-    public function setWifi(string $deviceId, string $ssid, string $password, bool $dualBand = false): array
+    /** Baca password WiFi dengan fallback antar format brand */
+    private function readWifiPassword(array $wlan): ?string
     {
+        return $wlan['PreSharedKey']['1']['PreSharedKey']['_value']
+            ?? $wlan['PreSharedKey']['1']['KeyPassphrase']['_value']
+            ?? ($wlan['KeyPassphrase']['_value'] ?: null)
+            ?? null;
+    }
+
+    /** Parse LANDevice.Hosts.Host menjadi array client sederhana */
+    private function parseHosts(array $hostEntries): array
+    {
+        $clients = [];
+        foreach ($hostEntries as $entry) {
+            if (!is_array($entry) || !isset($entry['IPAddress'])) continue;
+            $layer2 = $entry['Layer2Interface']['_value'] ?? '';
+            $band   = '';
+            if (str_contains($layer2, 'WLANConfiguration.5'))      $band = '5GHz';
+            elseif (str_contains($layer2, 'WLANConfiguration.1'))  $band = '2.4GHz';
+            $clients[] = [
+                'hostname' => $entry['HostName']['_value'] ?? '',
+                'ip'       => $entry['IPAddress']['_value'] ?? '',
+                'mac'      => $entry['MACAddress']['_value'] ?? '',
+                'type'     => $entry['InterfaceType']['_value'] ?? '',
+                'band'     => $band,
+                'active'   => (bool)($entry['Active']['_value'] ?? false),
+            ];
+        }
+        usort($clients, fn($a, $b) => $b['active'] <=> $a['active']);
+        return $clients;
+    }
+
+    /**
+     * Set WiFi SSID dan password via GenieACS.
+     * Parameter password berbeda per brand:
+     *   Fiberhome: PreSharedKey.1.PreSharedKey + PreSharedKey.1.KeyPassphrase
+     *   ZTE:       KeyPassphrase (direct) + PreSharedKey.1.KeyPassphrase
+     *              (ZTE tidak punya PreSharedKey.1.PreSharedKey — device akan fault)
+     *   Huawei/Nokia/default: PreSharedKey.1.KeyPassphrase + KeyPassphrase (direct)
+     */
+    public function setWifi(string $deviceId, string $ssid, string $password, bool $dualBand = false, string $brand = 'default'): array
+    {
+        $brand  = strtolower($brand);
         $params = [];
+
         foreach ($dualBand ? [1, 5] : [1] as $idx) {
             $base = "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{$idx}";
-            $params[] = ["{$base}.SSID",                         $ssid,     'xsd:string'];
-            $params[] = ["{$base}.PreSharedKey.1.PreSharedKey",  $password, 'xsd:string'];
-            $params[] = ["{$base}.PreSharedKey.1.KeyPassphrase", $password, 'xsd:string'];
+            $params[] = ["{$base}.SSID", $ssid, 'xsd:string'];
+
+            if ($brand === 'fiberhome') {
+                $params[] = ["{$base}.PreSharedKey.1.PreSharedKey",  $password, 'xsd:string'];
+                $params[] = ["{$base}.PreSharedKey.1.KeyPassphrase", $password, 'xsd:string'];
+            } elseif ($brand === 'zte') {
+                // ZTE: tidak ada PreSharedKey.1.PreSharedKey — hanya KeyPassphrase direct dan sub-KeyPassphrase
+                $params[] = ["{$base}.KeyPassphrase",                $password, 'xsd:string'];
+                $params[] = ["{$base}.PreSharedKey.1.KeyPassphrase", $password, 'xsd:string'];
+            } else {
+                // Huawei, Nokia, default
+                $params[] = ["{$base}.KeyPassphrase",                $password, 'xsd:string'];
+                $params[] = ["{$base}.PreSharedKey.1.KeyPassphrase", $password, 'xsd:string'];
+                $params[] = ["{$base}.PreSharedKey.1.PreSharedKey",  $password, 'xsd:string'];
+            }
         }
 
         $task      = ['name' => 'setParameterValues', 'parameterValues' => $params];

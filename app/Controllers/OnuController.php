@@ -477,6 +477,7 @@ class OnuController extends Controller
         try {
             $acsService = new AcsService($acs);
             $deviceId   = $onu['acs_device_id'];
+            $device     = null;
 
             if (!$deviceId) {
                 $device   = $acsService->findDeviceBySn($onu['sn']);
@@ -511,7 +512,9 @@ class OnuController extends Controller
                 $ssid      = trim($this->request->getPost('ssid'));
                 $wifiKey   = trim($this->request->getPost('wifi_key'));
                 $dualBand  = (bool)$this->request->getPost('dual_band');
-                $result    = $acsService->setWifi($deviceId, $ssid, $wifiKey, $dualBand);
+                $device    = $device ?? $acsService->findDeviceBySn($onu['sn']);
+                $brand     = $device ? $acsService->getDeviceBrand($device) : 'default';
+                $result    = $acsService->setWifi($deviceId, $ssid, $wifiKey, $dualBand, $brand);
 
                 $logModel->log($this->userId, 'acs_wifi', $result['success'] ? 'success' : 'failed',
                     "WiFi SSID={$ssid}", $id, $onu['olt_id']);

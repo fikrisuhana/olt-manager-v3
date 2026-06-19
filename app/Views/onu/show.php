@@ -254,6 +254,16 @@
                 </button>
             </div>
         </div>
+        <!-- Connected Clients -->
+        <div class="card border-0 shadow-sm mt-4">
+            <div class="card-header bg-white border-bottom py-2 d-flex align-items-center justify-content-between">
+                <h6 class="mb-0 fw-semibold small"><i class="bi bi-people me-1"></i>Client Terhubung</h6>
+                <small class="text-muted">via Refresh ACS</small>
+            </div>
+            <div class="card-body p-0" id="clientsBox">
+                <div class="p-3 text-muted small">Klik <strong>Refresh ACS</strong> untuk muat data client.</div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -493,9 +503,29 @@ function loadAcsInfo() {
                     <tr><th class="text-muted">WiFi SSID</th><td>${i.wifi?.ssid || '-'}</td></tr>
                 </table>`;
 
-            if (i.wifi?.ssid)     document.getElementById('wifi_ssid').value = i.wifi.ssid;
-            if (i.wifi?.password) document.getElementById('wifi_key').value  = i.wifi.password;
+            if (i.wifi?.ssid)      document.getElementById('wifi_ssid').value  = i.wifi.ssid;
+            if (i.wifi?.password)  document.getElementById('wifi_key').value   = i.wifi.password;
             if (i.wan?.pppoe_user) document.getElementById('pppoe_user').value = i.wan.pppoe_user;
+            if (i.wan?.pppoe_pass) document.getElementById('pppoe_pass').value = i.wan.pppoe_pass;
+
+            // Tampilkan connected clients
+            const clientBox = document.getElementById('clientsBox');
+            if (clientBox && i.clients) {
+                if (!i.clients.length) {
+                    clientBox.innerHTML = '<span class="text-muted small">Tidak ada client terhubung.</span>';
+                } else {
+                    const rows = i.clients.map(c => `
+                        <tr>
+                            <td class="small">${c.hostname || '<span class="text-muted">—</span>'}</td>
+                            <td class="font-monospace small">${c.ip}</td>
+                            <td class="font-monospace small" style="font-size:.7rem">${c.mac}</td>
+                            <td class="small">${c.band ? `<span class="badge bg-light text-dark">${c.band}</span>` : '<span class="text-muted">LAN</span>'}</td>
+                        </tr>`).join('');
+                    clientBox.innerHTML = `<table class="table table-sm mb-0">
+                        <thead class="table-light"><tr><th>Hostname</th><th>IP</th><th>MAC</th><th>Band</th></tr></thead>
+                        <tbody>${rows}</tbody></table>`;
+                }
+            }
         })
         .catch(e => {
             if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Refresh ACS'; }
