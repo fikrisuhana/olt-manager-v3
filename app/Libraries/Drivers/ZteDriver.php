@@ -250,15 +250,16 @@ class ZteDriver implements OltDriverInterface
             }
             $log[] = "TCONT profile: {$tcont}";
         }
+        // ACS dulu (sp1), internet kedua (sp2) — sesuai konvensi OLT tgp
         $spIdx = 1;
-        if ($vlanInternet) {
-            $ifCmds[] = "service-port {$spIdx} vport 1 user-vlan {$vlanInternet} vlan {$vlanInternet}";
-            $spIdx++;
-            $log[] = "VLAN internet: {$vlanInternet}";
-        }
         if ($vlanAcs) {
             $ifCmds[] = "service-port {$spIdx} vport 1 user-vlan {$vlanAcs} vlan {$vlanAcs}";
+            $spIdx++;
             $log[] = "VLAN ACS: {$vlanAcs}";
+        }
+        if ($vlanInternet) {
+            $ifCmds[] = "service-port {$spIdx} vport 1 user-vlan {$vlanInternet} vlan {$vlanInternet}";
+            $log[] = "VLAN internet: {$vlanInternet}";
         }
         foreach (explode("\n", $ifExtra) as $cmd) {
             $cmd = trim($cmd);
@@ -320,14 +321,15 @@ class ZteDriver implements OltDriverInterface
             $pppoePass = trim($params['pppoe_pass'] ?? '');
 
             $this->telnet->execute("pon-onu-mng gpon-onu_{$board}/{$slot}/{$port}:{$idx}", $this->mngPrompt, 5);
-            if ($vlanInternet) {
-                $this->applyServiceInternet($vlanInternet, $log);
-            }
+            // ACS dulu baru internet — sesuai urutan service-port di gpon-onu interface
             if ($vlanAcs) {
                 $out = $this->telnet->execute("service acs gemport 1 vlan {$vlanAcs}", $this->mngPrompt, 5);
                 if (stripos($out, 'Error') !== false || stripos($out, 'Invalid') !== false) {
                     $log[] = "WARN pon-onu-mng: service acs → " . trim(substr($out, -120));
                 }
+            }
+            if ($vlanInternet) {
+                $this->applyServiceInternet($vlanInternet, $log);
             }
             $this->telnet->execute("vlan port veip_1 mode hybrid", $this->mngPrompt, 5);
 
@@ -655,11 +657,11 @@ class ZteDriver implements OltDriverInterface
             }
         }
 
-        // Konvensi registerOnu: sp1 = internet, sp2 = ACS
+        // Konvensi registerOnu: sp1 = ACS, sp2 = internet
         ksort($result['service_ports']);
         $spList = array_values($result['service_ports']);
-        $result['vlan_internet'] = $spList[0] ?? 0;
-        $result['vlan_acs']      = $spList[1] ?? 0;
+        $result['vlan_acs']      = $spList[0] ?? 0;
+        $result['vlan_internet'] = $spList[1] ?? 0;
 
         return $result;
     }
