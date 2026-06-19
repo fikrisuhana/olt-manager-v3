@@ -581,7 +581,7 @@ class OnuController extends Controller
     }
 
     /**
-     * AJAX: Ambil nama ONU dari cache OLT dan update DB (tanpa Telnet)
+     * AJAX: Ambil nama satu ONU langsung dari OLT via running-config
      */
     public function syncName(int $id)
     {
@@ -593,57 +593,86 @@ class OnuController extends Controller
             return $this->response->setJSON(['success' => false, 'message' => 'ONU tidak ditemukan.']);
         }
 
-        $cache   = new OnuCacheService();
-        $data    = $cache->load((int)$onu['olt_id']);
-        $portKey = "{$onu['board']}/{$onu['slot']}/{$onu['port']}";
-        $name    = null;
+        $oltModel = new OltModel();
+        $olt = $oltModel->find($onu['olt_id']);
 
-        foreach ($data['ports'][$portKey] ?? [] as $entry) {
-            if ((int)$entry['index'] === (int)$onu['onu_index']) {
-                $name = $entry['name'] ?? null;
-                break;
+        try {
+            $driver = OltDriverFactory::make($olt);
+            $driver->connect();
+            $config = $driver->getOnuConfig($onu['board'], $onu['slot'], $onu['port'], $onu['onu_index']);
+            $driver->disconnect();
+
+            $name = $config['name'] ?? null;
+            if (!$name) {
+                return $this->response->setJSON(['success' => false, 'message' => 'Nama tidak ditemukan di running-config OLT.']);
             }
-        }
 
-        if (!$name) {
-            return $this->response->setJSON(['success' => false, 'message' => 'Nama tidak ditemukan di cache OLT. Coba scan OLT dulu.']);
+            $onuModel->update($id, ['name' => $name]);
+            return $this->response->setJSON(['success' => true, 'name' => $name]);
+        } catch (\Exception $e) {
+            return $this->response->setJSON(['success' => false, 'message' => $e->getMessage()]);
         }
-
-        $onuModel->update($id, ['name' => $name]);
-        return $this->response->setJSON(['success' => true, 'name' => $name]);
     }
 
     /**
-     * AJAX: Sync nama semua ONU dari cache OLT (bulk, tanpa Telnet)
+     * AJAX: Sync nama semua ONU dari OLT langsung (bulk).
+     * Konek 1x per OLT, baca running-config per ONU, update DB.
+     * Hanya update ONU yang namanya masih sama dengan SN.
      */
     public function syncAllNames()
     {
         $this->response->setContentType('application/json');
+        set_time_limit(600);
 
         $onuModel = new OnuModel();
+        $oltModel = new OltModel();
         $onus     = $onuModel->getByUser($this->userId);
-        $cache    = new OnuCacheService();
 
-        $cacheByOlt = [];
-        $updated    = 0;
+        // Hanya ONU yang namanya masih SN (perlu sync)
+        $toSync = array_filter($onus, fn($o) => strcasecmp($o['name'] ?? '', $o['sn']) === 0);
 
-        foreach ($onus as $onu) {
-            $oltId = (int)$onu['olt_id'];
-            if (!isset($cacheByOlt[$oltId])) {
-                $cacheByOlt[$oltId] = $cache->load($oltId);
-            }
+        if (empty($toSync)) {
+            return $this->response->setJSON(['success' => true, 'updated' => 0, 'message' => 'Semua nama sudah benar.']);
+        }
 
-            $portKey = "{$onu['board']}/{$onu['slot']}/{$onu['port']}";
-            foreach ($cacheByOlt[$oltId]['ports'][$portKey] ?? [] as $entry) {
-                if ((int)$entry['index'] === (int)$onu['onu_index'] && !empty($entry['name'])) {
-                    $onuModel->update($onu['id'], ['name' => $entry['name']]);
-                    $updated++;
-                    break;
+        // Group by OLT agar 1 koneksi per OLT
+        $byOlt = [];
+        foreach ($toSync as $onu) {
+            $byOlt[$onu['olt_id']][] = $onu;
+        }
+
+        $updated = 0;
+        $errors  = [];
+
+        foreach ($byOlt as $oltId => $oltOnus) {
+            $olt = $oltModel->find($oltId);
+            if (!$olt) continue;
+
+            try {
+                $driver = OltDriverFactory::make($olt);
+                $driver->connect();
+
+                foreach ($oltOnus as $onu) {
+                    $config = $driver->getOnuConfig(
+                        $onu['board'], $onu['slot'], $onu['port'], $onu['onu_index']
+                    );
+                    if (!empty($config['name'])) {
+                        $onuModel->update($onu['id'], ['name' => $config['name']]);
+                        $updated++;
+                    }
                 }
+
+                $driver->disconnect();
+            } catch (\Exception $e) {
+                $errors[] = "OLT {$oltId}: " . $e->getMessage();
             }
         }
 
-        return $this->response->setJSON(['success' => true, 'updated' => $updated]);
+        return $this->response->setJSON([
+            'success' => true,
+            'updated' => $updated,
+            'errors'  => $errors,
+        ]);
     }
 
     public function setAcs(int $id)

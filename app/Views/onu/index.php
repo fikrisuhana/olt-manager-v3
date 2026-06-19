@@ -120,7 +120,7 @@ document.getElementById('searchOnu')?.addEventListener('input', function() {
 
 document.getElementById('btnSyncAllNames')?.addEventListener('click', function() {
     this.disabled = true;
-    this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Syncing...';
+    this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Syncing... (bisa beberapa menit)';
     const fd = new FormData();
     fd.append(_csrf.name, _csrf.hash);
     fetch('/onus/sync-all-names', { method: 'POST', body: fd })
@@ -129,7 +129,9 @@ document.getElementById('btnSyncAllNames')?.addEventListener('click', function()
             this.disabled = false;
             this.innerHTML = '<i class="bi bi-cloud-download me-1"></i>Sync Semua Nama';
             if (data.success) {
-                alert(`${data.updated} nama berhasil diupdate dari cache OLT.`);
+                let msg = `${data.updated} nama berhasil diupdate dari OLT.`;
+                if (data.errors && data.errors.length) msg += '\n\nError:\n' + data.errors.join('\n');
+                alert(msg);
                 location.reload();
             } else {
                 alert('Gagal: ' + data.message);
