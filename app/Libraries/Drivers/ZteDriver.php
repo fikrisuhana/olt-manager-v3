@@ -38,8 +38,22 @@ class ZteDriver implements OltDriverInterface
             $this->config['telnet_user'],
             $this->config['telnet_pass']
         );
+
+        // Cek apakah masuk user mode (>) atau langsung privileged mode (#)
+        $echo = $this->telnet->execute('', ['#', '>'], 3);
+
+        if (strpos($echo, '#') === false) {
+            // User mode — kirim enable, handle password jika ada
+            $enableResp = $this->telnet->execute('enable', ['Password:', 'password:', '#'], 5);
+            if (stripos($enableResp, 'password:') !== false) {
+                $enablePass = trim($this->config['enable_password'] ?? '');
+                $this->telnet->send($enablePass);
+                $this->telnet->waitFor(['#'], 5);
+            }
+            $echo = $this->telnet->execute('', ['#'], 3);
+        }
+
         // Detect actual hostname prompt — tiap OLT bisa beda hostname (OLT2#, GPON#, dll)
-        $echo = $this->telnet->execute('', ['#'], 3);
         if (preg_match('/(\S+#)\s*$/', trim($echo), $m)) {
             $this->rootPrompt = [$m[1]];
             $this->anyPrompt  = [$m[1], 'config)#', 'config-if)#'];

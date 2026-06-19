@@ -73,6 +73,12 @@
                                    placeholder="<?= $olt ? 'Kosongkan jika tidak ganti' : 'Password' ?>"
                                    <?= $olt ? '' : 'required' ?>>
                         </div>
+                        <div class="col-12">
+                            <label class="form-label">Enable Password <span class="text-muted small">(opsional — isi jika OLT minta password saat <code>enable</code>)</span></label>
+                            <input type="password" name="enable_password" class="form-control"
+                                   placeholder="Kosongkan jika tidak ada"
+                                   value="">
+                        </div>
                     </div>
 
                     <h6 class="fw-semibold mb-3 text-muted text-uppercase" style="font-size:.75rem;letter-spacing:.05em">

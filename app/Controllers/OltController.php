@@ -491,6 +491,7 @@ class OltController extends Controller
             'telnet_port'     => (int)($this->request->getPost('telnet_port') ?: 23),
             'telnet_user'     => $this->request->getPost('telnet_user'),
             'telnet_pass'     => $this->request->getPost('telnet_pass'),
+            'enable_password' => $this->request->getPost('enable_password') ?: null,
             'snmp_community'  => $this->request->getPost('snmp_community') ?: 'public',
             'snmp_port'       => (int)($this->request->getPost('snmp_port') ?: 161),
             'tcont_profiles'   => $this->request->getPost('tcont_profiles') ?: null,
