@@ -206,7 +206,8 @@ class AcsService
         $wcd    = $paths['wcd_index'];
         $ppp    = $paths['ppp_index'];
         $wanBase = "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.{$wcd}.WANPPPConnection.{$ppp}";
-        $wifiBase = 'InternetGatewayDevice.LANDevice.1.WLANConfiguration.1';
+        $wifiBase  = 'InternetGatewayDevice.LANDevice.1.WLANConfiguration.1';
+        $wifi5Base = 'InternetGatewayDevice.LANDevice.1.WLANConfiguration.5';
 
         $proj = implode(',', [
             '_id', '_deviceId', '_lastInform',
@@ -216,6 +217,10 @@ class AcsService
             $wanBase . '.Uptime',
             $wifiBase . '.SSID',
             $wifiBase . '.Enable',
+            $wifiBase . '.PreSharedKey.1.PreSharedKey',
+            $wifi5Base . '.SSID',
+            $wifi5Base . '.Enable',
+            $wifi5Base . '.PreSharedKey.1.PreSharedKey',
         ]);
 
         $query    = urlencode(json_encode(['_id' => $deviceId]));
@@ -228,6 +233,7 @@ class AcsService
         $d       = $devices[0];
         $wanData = $d['InternetGatewayDevice']['WANDevice']['1']['WANConnectionDevice'][$wcd]['WANPPPConnection'][$ppp] ?? [];
         $wifi    = $d['InternetGatewayDevice']['LANDevice']['1']['WLANConfiguration']['1'] ?? [];
+        $wifi5   = $d['InternetGatewayDevice']['LANDevice']['1']['WLANConfiguration']['5'] ?? [];
         $tenMinAgo = strtotime('-10 minutes');
         $lastInf   = $d['_lastInform'] ?? null;
 
@@ -244,8 +250,14 @@ class AcsService
                 'uptime'     => $wanData['Uptime']['_value'] ?? null,
             ],
             'wifi' => [
-                'ssid'    => $wifi['SSID']['_value'] ?? null,
-                'enabled' => $wifi['Enable']['_value'] ?? null,
+                'ssid'     => $wifi['SSID']['_value'] ?? null,
+                'enabled'  => $wifi['Enable']['_value'] ?? null,
+                'password' => $wifi['PreSharedKey']['1']['PreSharedKey']['_value'] ?? null,
+            ],
+            'wifi5' => [
+                'ssid'     => $wifi5['SSID']['_value'] ?? null,
+                'enabled'  => $wifi5['Enable']['_value'] ?? null,
+                'password' => $wifi5['PreSharedKey']['1']['PreSharedKey']['_value'] ?? null,
             ],
         ];
     }
@@ -253,24 +265,24 @@ class AcsService
     /**
      * Set WiFi SSID dan password (PreSharedKey) via GenieACS.
      */
-    public function setWifi(string $deviceId, string $ssid, string $password): array
+    public function setWifi(string $deviceId, string $ssid, string $password, bool $dualBand = false): array
     {
-        $wifiBase = 'InternetGatewayDevice.LANDevice.1.WLANConfiguration.1';
-        $task = [
-            'name'            => 'setParameterValues',
-            'parameterValues' => [
-                ["{$wifiBase}.SSID",                                 $ssid,     'xsd:string'],
-                ["{$wifiBase}.PreSharedKey.1.PreSharedKey",          $password, 'xsd:string'],
-                ["{$wifiBase}.PreSharedKey.1.KeyPassphrase",         $password, 'xsd:string'],
-            ],
-        ];
+        $params = [];
+        foreach ($dualBand ? [1, 5] : [1] as $idx) {
+            $base = "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{$idx}";
+            $params[] = ["{$base}.SSID",                         $ssid,     'xsd:string'];
+            $params[] = ["{$base}.PreSharedKey.1.PreSharedKey",  $password, 'xsd:string'];
+            $params[] = ["{$base}.PreSharedKey.1.KeyPassphrase", $password, 'xsd:string'];
+        }
 
+        $task      = ['name' => 'setParameterValues', 'parameterValues' => $params];
         $encodedId = rawurlencode($deviceId);
         $response  = $this->request('POST', "/devices/{$encodedId}/tasks?connection_request&timeout=8000", $task);
 
         return [
-            'success' => in_array($response['status'], [200, 201, 202]),
-            'status'  => $response['status'],
+            'success'   => in_array($response['status'], [200, 201, 202]),
+            'status'    => $response['status'],
+            'dual_band' => $dualBand,
         ];
     }
 

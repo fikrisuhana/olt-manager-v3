@@ -196,7 +196,13 @@
                     </div>
                     <div class="col-6">
                         <label class="form-label small fw-medium">PPPoE Password</label>
-                        <input type="text" id="pppoe_pass" class="form-control" placeholder="password">
+                        <div class="input-group">
+                            <input type="password" id="pppoe_pass" class="form-control" placeholder="password">
+                            <button class="btn btn-outline-secondary" type="button"
+                                    onclick="togglePass('pppoe_pass',this)" tabindex="-1">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
                 <div class="form-text">
@@ -224,9 +230,21 @@
                         <input type="text" id="wifi_ssid" class="form-control" placeholder="Nama-WiFi-Saya">
                     </div>
                     <div class="col-6">
-                        <label class="form-label small fw-medium">Password WiFi</label>
-                        <input type="text" id="wifi_key" class="form-control" placeholder="min 8 karakter">
+                        <label class="form-label small fw-medium">Password WiFi (WPA/WPA2 PSK)</label>
+                        <div class="input-group">
+                            <input type="password" id="wifi_key" class="form-control" placeholder="min 8 karakter">
+                            <button class="btn btn-outline-secondary" type="button"
+                                    onclick="togglePass('wifi_key',this)" tabindex="-1">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </div>
                     </div>
+                </div>
+                <div class="form-check mt-2">
+                    <input class="form-check-input" type="checkbox" id="wifi_dual_band" checked>
+                    <label class="form-check-label small" for="wifi_dual_band">
+                        Terapkan ke <strong>2.4GHz &amp; 5GHz</strong> sekaligus
+                    </label>
                 </div>
                 <div class="form-text">Perubahan akan langsung dipush ke ONU via TR-069/GenieACS.</div>
                 <div id="wifiResult" class="mt-2 d-none small"></div>
@@ -474,7 +492,8 @@ function loadAcsInfo() {
                     <tr><th class="text-muted">WiFi SSID</th><td>${i.wifi?.ssid || '-'}</td></tr>
                 </table>`;
 
-            if (i.wifi?.ssid) document.getElementById('wifi_ssid').value = i.wifi.ssid;
+            if (i.wifi?.ssid)     document.getElementById('wifi_ssid').value = i.wifi.ssid;
+            if (i.wifi?.password) document.getElementById('wifi_key').value  = i.wifi.password;
             if (i.wan?.pppoe_user) document.getElementById('pppoe_user').value = i.wan.pppoe_user;
         })
         .catch(e => {
@@ -487,14 +506,30 @@ function loadAcsInfo() {
         });
 }
 
+function togglePass(id, btn) {
+    const inp = document.getElementById(id);
+    const show = inp.type === 'password';
+    inp.type = show ? 'text' : 'password';
+    btn.querySelector('i').className = show ? 'bi bi-eye-slash' : 'bi bi-eye';
+}
+
 function setPppoe() {
+    const user = document.getElementById('pppoe_user').value.trim();
+    const pass = document.getElementById('pppoe_pass').value.trim();
+    const el   = document.getElementById('pppoeResult');
+
+    if (!user || !pass) {
+        el.className = 'mt-2 small alert alert-warning';
+        el.textContent = 'Username dan password wajib diisi sebelum push.';
+        return;
+    }
+
     const fd = new FormData();
     fd.append('action', 'pppoe');
-    fd.append('pppoe_user', document.getElementById('pppoe_user').value.trim());
-    fd.append('pppoe_pass', document.getElementById('pppoe_pass').value.trim());
+    fd.append('pppoe_user', user);
+    fd.append('pppoe_pass', pass);
     fd.append('<?= csrf_token() ?>', '<?= csrf_hash() ?>');
 
-    const el = document.getElementById('pppoeResult');
     el.className = 'mt-2';
     el.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Memproses...';
 
@@ -507,21 +542,37 @@ function setPppoe() {
 }
 
 function setWifi() {
+    const ssid = document.getElementById('wifi_ssid').value.trim();
+    const key  = document.getElementById('wifi_key').value.trim();
+    const el   = document.getElementById('wifiResult');
+
+    if (!ssid || !key) {
+        el.className = 'mt-2 small alert alert-warning';
+        el.textContent = 'SSID dan password wajib diisi.';
+        return;
+    }
+    if (key.length < 8) {
+        el.className = 'mt-2 small alert alert-warning';
+        el.textContent = 'Password WiFi minimal 8 karakter.';
+        return;
+    }
+
     const fd = new FormData();
-    fd.append('action', 'wifi');
-    fd.append('ssid',     document.getElementById('wifi_ssid').value.trim());
-    fd.append('wifi_key', document.getElementById('wifi_key').value.trim());
+    fd.append('action',     'wifi');
+    fd.append('ssid',       ssid);
+    fd.append('wifi_key',   key);
+    fd.append('dual_band',  document.getElementById('wifi_dual_band').checked ? '1' : '0');
     fd.append('<?= csrf_token() ?>', '<?= csrf_hash() ?>');
 
-    const el = document.getElementById('wifiResult');
     el.className = 'mt-2';
     el.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Memproses...';
 
     fetch(`/onus/${ONU_ID}/acs-set`, { method: 'POST', body: fd })
         .then(r => r.json())
         .then(data => {
+            const band = data.dual_band ? '2.4GHz + 5GHz' : '2.4GHz';
             el.className = `mt-2 small alert alert-${data.success ? 'success' : 'danger'}`;
-            el.textContent = data.success ? 'WiFi berhasil diubah.' : (data.message || 'Gagal.');
+            el.textContent = data.success ? `WiFi (${band}) berhasil diubah.` : (data.message || 'Gagal.');
         });
 }
 
