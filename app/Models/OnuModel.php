@@ -44,7 +44,22 @@ class OnuModel extends Model
         'registered_at' => 'onus.registered_at',
     ];
 
-    public function getByUserPaginated(int $userId, int $perPage = 50, int $page = 1, string $q = '', string $sort = 'registered_at', string $dir = 'DESC'): array
+    private function applyFilter($builder, string $filter): void
+    {
+        match ($filter) {
+            'no_pppoe' => $builder->groupStart()
+                                      ->where('onus.pppoe_user IS NULL')
+                                      ->orWhere('onus.pppoe_user', '')
+                                  ->groupEnd(),
+            'no_acs'   => $builder->groupStart()
+                                      ->where('onus.acs_device_id IS NULL')
+                                      ->orWhere('onus.acs_device_id', '')
+                                  ->groupEnd(),
+            default    => null,
+        };
+    }
+
+    public function getByUserPaginated(int $userId, int $perPage = 50, int $page = 1, string $q = '', string $sort = 'registered_at', string $dir = 'DESC', string $filter = ''): array
     {
         $sortCol = self::$sortableColumns[$sort] ?? 'onus.registered_at';
         $sortDir = strtoupper($dir) === 'ASC' ? 'ASC' : 'DESC';
@@ -62,12 +77,14 @@ class OnuModel extends Model
                     ->groupEnd();
         }
 
+        $this->applyFilter($builder, $filter);
+
         return $builder->orderBy($sortCol, $sortDir)
                        ->limit($perPage, ($page - 1) * $perPage)
                        ->findAll();
     }
 
-    public function countByUser(int $userId, string $q = ''): int
+    public function countByUser(int $userId, string $q = '', string $filter = ''): int
     {
         $builder = $this->select('onus.id')
                         ->join('olts', 'olts.id = onus.olt_id')
@@ -81,6 +98,8 @@ class OnuModel extends Model
                         ->orLike('olts.name', $q)
                     ->groupEnd();
         }
+
+        $this->applyFilter($builder, $filter);
 
         return $builder->countAllResults();
     }

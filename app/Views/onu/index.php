@@ -15,7 +15,7 @@
         </div>
     </div>
     <div class="card-body p-0">
-        <?php if (empty($onus)): ?>
+        <?php if (empty($onus) && !$filter && !$q): ?>
             <div class="text-center py-5 text-muted">
                 <i class="bi bi-router fs-1 d-block mb-2"></i>
                 Belum ada ONU. Scan ONU dari halaman OLT.
@@ -23,27 +23,47 @@
             </div>
         <?php else: ?>
             <div class="p-3 pb-0">
+                <!-- Filter tabs -->
+                <div class="d-flex gap-2 mb-3 flex-wrap">
+                    <a href="/onus" class="btn btn-sm <?= !$filter ? 'btn-primary' : 'btn-outline-secondary' ?>">
+                        Semua <span class="badge bg-white text-dark ms-1"><?= $counts['all'] ?></span>
+                    </a>
+                    <a href="/onus?filter=no_pppoe" class="btn btn-sm <?= $filter === 'no_pppoe' ? 'btn-warning' : 'btn-outline-warning' ?>">
+                        Belum PPPoE <span class="badge bg-white text-dark ms-1"><?= $counts['no_pppoe'] ?></span>
+                    </a>
+                    <a href="/onus?filter=no_acs" class="btn btn-sm <?= $filter === 'no_acs' ? 'btn-danger' : 'btn-outline-danger' ?>">
+                        Belum di ACS <span class="badge bg-white text-dark ms-1"><?= $counts['no_acs'] ?></span>
+                    </a>
+                </div>
                 <form method="get" action="/onus" class="d-flex gap-2 mb-3">
+                    <?php if ($filter): ?><input type="hidden" name="filter" value="<?= esc($filter) ?>"><?php endif; ?>
                     <input type="text" name="q" class="form-control form-control-sm"
                            placeholder="Cari SN, nama, OLT ..."
                            value="<?= esc($q) ?>">
                     <button class="btn btn-sm btn-outline-primary px-3">Cari</button>
-                    <?php if ($q): ?>
+                    <?php if ($q || $filter): ?>
                     <a href="/onus" class="btn btn-sm btn-outline-secondary">Reset</a>
                     <?php endif; ?>
                 </form>
-                <?php if ($q): ?>
+                <?php if ($q || $filter): ?>
                 <div class="small text-muted mb-2">
-                    Hasil pencarian "<strong><?= esc($q) ?></strong>": <?= $total ?> ONU
+                    <?php if ($filter === 'no_pppoe'): ?>
+                        ONU belum dikonfigurasi PPPoE:
+                    <?php elseif ($filter === 'no_acs'): ?>
+                        ONU belum terdaftar di ACS:
+                    <?php elseif ($q): ?>
+                        Hasil pencarian "<strong><?= esc($q) ?></strong>":
+                    <?php endif; ?>
+                    <strong><?= $total ?></strong> ONU
                 </div>
                 <?php endif; ?>
             </div>
             <?php
-            function sortLink(string $col, string $label, string $currentSort, string $currentDir, string $q, int $page): string {
+            function sortLink(string $col, string $label, string $currentSort, string $currentDir, string $q, int $page, string $filter = ''): string {
                 $active  = $currentSort === $col;
                 $newDir  = ($active && $currentDir === 'ASC') ? 'DESC' : 'ASC';
                 $icon    = $active ? ($currentDir === 'ASC' ? '↑' : '↓') : '<span style="opacity:.3">↕</span>';
-                $qs      = http_build_query(array_filter(['sort' => $col, 'dir' => $newDir, 'q' => $q]));
+                $qs      = http_build_query(array_filter(['sort' => $col, 'dir' => $newDir, 'q' => $q, 'filter' => $filter]));
                 $cls     = $active ? 'fw-semibold text-primary' : 'text-dark';
                 return "<a href=\"/onus?{$qs}\" class=\"text-decoration-none {$cls}\">{$label} {$icon}</a>";
             }
@@ -52,13 +72,13 @@
                 <table class="table table-hover mb-0" id="onuTable">
                     <thead class="table-light">
                         <tr>
-                            <th class="ps-3"><?= sortLink('sn', 'SN', $sort, $dir, $q, $page) ?></th>
-                            <th><?= sortLink('name', 'Nama', $sort, $dir, $q, $page) ?> <small class="text-muted fw-normal">(klik untuk edit)</small></th>
-                            <th><?= sortLink('olt_name', 'OLT', $sort, $dir, $q, $page) ?></th>
+                            <th class="ps-3"><?= sortLink('sn', 'SN', $sort, $dir, $q, $page, $filter) ?></th>
+                            <th><?= sortLink('name', 'Nama', $sort, $dir, $q, $page, $filter) ?> <small class="text-muted fw-normal">(klik untuk edit)</small></th>
+                            <th><?= sortLink('olt_name', 'OLT', $sort, $dir, $q, $page, $filter) ?></th>
                             <th>PPPoE Username</th>
-                            <th><?= sortLink('onu_type', 'Tipe', $sort, $dir, $q, $page) ?></th>
+                            <th><?= sortLink('onu_type', 'Tipe', $sort, $dir, $q, $page, $filter) ?></th>
                             <th>ACS</th>
-                            <th><?= sortLink('registered_at', 'Terdaftar', $sort, $dir, $q, $page) ?></th>
+                            <th><?= sortLink('registered_at', 'Terdaftar', $sort, $dir, $q, $page, $filter) ?></th>
                             <th></th>
                         </tr>
                     </thead>
@@ -130,7 +150,7 @@
             <?php
             $totalPages = (int)ceil($total / $perPage);
             if ($totalPages > 1):
-                $extraParams = array_filter(['q' => $q, 'sort' => ($sort !== 'registered_at' ? $sort : null), 'dir' => ($dir !== 'DESC' ? $dir : null)]);
+                $extraParams = array_filter(['q' => $q, 'filter' => $filter, 'sort' => ($sort !== 'registered_at' ? $sort : null), 'dir' => ($dir !== 'DESC' ? $dir : null)]);
                 $qStr = $extraParams ? '&' . http_build_query($extraParams) : '';
             ?>
             <div class="d-flex justify-content-between align-items-center px-3 py-2 border-top">

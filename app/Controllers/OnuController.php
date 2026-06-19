@@ -34,10 +34,11 @@ class OnuController extends Controller
         $q        = trim($this->request->getGet('q') ?? '');
         $sort     = $this->request->getGet('sort') ?? 'registered_at';
         $dir      = $this->request->getGet('dir') ?? 'DESC';
+        $filter   = in_array($this->request->getGet('filter'), ['no_pppoe', 'no_acs']) ? $this->request->getGet('filter') : '';
 
-        $onus  = $onuModel->getByUserPaginated($this->userId, $perPage, $page, $q, $sort, $dir);
-        $total = $onuModel->countByUser($this->userId, $q);
-        $totalAll = $q ? $onuModel->countByUser($this->userId) : $total;
+        $onus     = $onuModel->getByUserPaginated($this->userId, $perPage, $page, $q, $sort, $dir, $filter);
+        $total    = $onuModel->countByUser($this->userId, $q, $filter);
+        $totalAll = $onuModel->countByUser($this->userId);
 
         $cache   = new OnuCacheService();
         $acsData = [];
@@ -58,6 +59,12 @@ class OnuController extends Controller
             'q'        => $q,
             'sort'     => $sort,
             'dir'      => $dir,
+            'filter'   => $filter,
+            'counts'   => [
+                'all'      => $totalAll,
+                'no_pppoe' => $onuModel->countByUser($this->userId, '', 'no_pppoe'),
+                'no_acs'   => $onuModel->countByUser($this->userId, '', 'no_acs'),
+            ],
         ]);
     }
 

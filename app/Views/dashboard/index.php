@@ -83,7 +83,7 @@ $rateClass  = $onlineRate >= 90 ? 'success' : ($onlineRate >= 70 ? 'warning' : '
                 <div class="fw-semibold"><?= $no_pppoe ?> ONU belum ada PPPoE</div>
                 <div class="small">Username PPPoE belum diisi di database.</div>
             </div>
-            <a href="/onus" class="btn btn-sm btn-warning ms-auto text-nowrap">Lihat</a>
+            <a href="/onus?filter=no_pppoe" class="btn btn-sm btn-warning ms-auto text-nowrap">Lihat</a>
         </div>
     </div>
     <?php endif; ?>
@@ -95,7 +95,7 @@ $rateClass  = $onlineRate >= 90 ? 'success' : ($onlineRate >= 70 ? 'warning' : '
                 <div class="fw-semibold"><?= $no_acs ?> ONU belum di ACS</div>
                 <div class="small">Belum pernah connect ke GenieACS.</div>
             </div>
-            <a href="/onus" class="btn btn-sm btn-outline-secondary ms-auto text-nowrap">Lihat</a>
+            <a href="/onus?filter=no_acs" class="btn btn-sm btn-outline-secondary ms-auto text-nowrap">Lihat</a>
         </div>
     </div>
     <?php endif; ?>
