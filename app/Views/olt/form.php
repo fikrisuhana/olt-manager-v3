@@ -173,10 +173,31 @@
                         <button type="button" class="btn btn-outline-secondary" id="btnTestTelnet" onclick="testTelnet()">
                             <i class="bi bi-plug me-1"></i>Test Koneksi
                         </button>
+                        <button type="button" class="btn btn-outline-info" id="btnDebugConnect" onclick="debugConnect()">
+                            <i class="bi bi-terminal me-1"></i>Debug Login
+                        </button>
                         <a href="/olts" class="btn btn-light">Batal</a>
                         <span id="testResult" class="small ms-1"></span>
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Debug Login -->
+<div class="modal fade" id="debugModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="debugModalTitle">Debug Login</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <pre id="debugLogBody" class="bg-dark text-light p-3 rounded" style="font-size:.85rem;max-height:400px;overflow-y:auto;white-space:pre-wrap;"></pre>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
             </div>
         </div>
     </div>
@@ -289,6 +310,47 @@ function syncTcont() {
             btn.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i>Sync dari OLT';
             res.className = 'small text-danger';
             res.textContent = 'Error: ' + e.message;
+        });
+}
+
+// ── Debug Login Step-by-Step ────────────────────────────────────
+function debugConnect() {
+    const btn = document.getElementById('btnDebugConnect');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Connecting...';
+
+    const fd = new FormData();
+    fd.append('ip',              document.querySelector('[name="ip"]').value.trim());
+    fd.append('telnet_port',     document.querySelector('[name="telnet_port"]').value || '23');
+    fd.append('telnet_user',     document.querySelector('[name="telnet_user"]').value.trim());
+    fd.append('telnet_pass',     document.querySelector('[name="telnet_pass"]').value);
+    fd.append('enable_password', document.querySelector('[name="enable_password"]').value);
+    fd.append('olt_id',          '<?= $olt['id'] ?? 0 ?>');
+    fd.append('<?= csrf_token() ?>', '<?= csrf_hash() ?>');
+
+    fetch('/olts/debug-connect', { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(data => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-terminal me-1"></i>Debug Login';
+
+            const logHtml = (data.log || []).map(line => {
+                let cls = 'text-secondary';
+                if (line.startsWith('[OK]'))    cls = 'text-success';
+                if (line.startsWith('[ERROR]')) cls = 'text-danger fw-bold';
+                if (line.startsWith('[WARN]'))  cls = 'text-warning';
+                if (line.startsWith('[INFO]'))  cls = 'text-info';
+                return `<div class="${cls}">${line}</div>`;
+            }).join('');
+
+            document.getElementById('debugLogBody').innerHTML = logHtml || '<div class="text-muted">Tidak ada log.</div>';
+            document.getElementById('debugModalTitle').textContent = data.success ? '✓ Debug Login — Berhasil' : '✗ Debug Login — Gagal';
+            new bootstrap.Modal(document.getElementById('debugModal')).show();
+        })
+        .catch(e => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-terminal me-1"></i>Debug Login';
+            alert('Error: ' + e.message);
         });
 }
 

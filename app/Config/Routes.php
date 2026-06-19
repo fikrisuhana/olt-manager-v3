@@ -32,7 +32,8 @@ $routes->group('', ['filter' => 'auth'], static function ($routes) {
     $routes->get('olts/(:num)/edit',        'OltController::edit/$1');
     $routes->post('olts/(:num)/update',     'OltController::update/$1');
     $routes->get('olts/(:num)/delete',      'OltController::delete/$1');
-    $routes->post('olts/test-telnet',           'OltController::testTelnet');       // AJAX — test koneksi
+    $routes->post('olts/test-telnet',            'OltController::testTelnet');      // AJAX — test koneksi
+    $routes->post('olts/debug-connect',         'OltController::debugConnect');     // AJAX — debug login step-by-step
     $routes->post('olts/fetch-tcont',           'OltController::fetchTcont');       // AJAX — ambil TCONT profiles
     $routes->get('olts/(:num)/vlan-profiles',  'OltController::fetchVlanProfiles/$1'); // AJAX — ambil ONU vlan-profile
     $routes->get('olts/(:num)/scan',           'OltController::scan/$1');          // AJAX — 1 cmd OLT

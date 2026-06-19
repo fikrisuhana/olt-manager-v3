@@ -336,6 +336,113 @@ class OltController extends Controller
     }
 
     /**
+     * AJAX: Debug login step-by-step ke OLT (untuk diagnosa masalah koneksi).
+     * POST — ip, telnet_port, telnet_user, telnet_pass, enable_password, brand, olt_id
+     */
+    public function debugConnect()
+    {
+        $this->response->setContentType('application/json');
+
+        $ip          = trim($this->request->getPost('ip') ?? '');
+        $port        = (int)($this->request->getPost('telnet_port') ?: 23);
+        $user        = trim($this->request->getPost('telnet_user') ?? '');
+        $pass        = trim($this->request->getPost('telnet_pass') ?? '');
+        $enablePass  = trim($this->request->getPost('enable_password') ?? '');
+        $oltId       = (int)($this->request->getPost('olt_id') ?: 0);
+
+        if (empty($ip) || empty($user)) {
+            return $this->response->setJSON(['success' => false, 'log' => ['[ERROR] IP dan username wajib diisi.']]);
+        }
+
+        // Ambil password dari DB jika kosong (mode edit)
+        if (($empty = empty($pass) || empty($enablePass)) && $oltId > 0) {
+            $oltModel = new OltModel();
+            $olt = $oltModel->getByUserAndId($this->userId, $oltId);
+            if (empty($pass))       $pass       = $olt['telnet_pass']     ?? '';
+            if (empty($enablePass)) $enablePass = $olt['enable_password'] ?? '';
+        }
+
+        $log = [];
+
+        try {
+            // Step 1: TCP connect + login
+            $t0     = microtime(true);
+            $telnet = new \App\Libraries\TelnetService();
+            $log[]  = "[INFO] Menghubungi {$ip}:{$port} ...";
+            $telnet->connect($ip, $port, $user, $pass);
+            $ms     = round((microtime(true) - $t0) * 1000);
+            $log[]  = "[OK] Login sebagai '{$user}' berhasil ({$ms}ms)";
+
+            // Step 2: Deteksi mode setelah login
+            $echo = $telnet->execute('', ['#', '>'], 3);
+            $prompt = trim(substr($echo, strrpos($echo, "\n") + 1));
+
+            if (strpos($echo, '#') !== false) {
+                $log[] = "[OK] Langsung privileged mode (#) — enable password tidak diperlukan";
+                $log[] = "[INFO] Prompt: " . esc(substr($prompt, -30));
+            } else {
+                $log[] = "[INFO] User mode (>) terdeteksi — mengirim 'enable'";
+
+                // Step 3: Enable
+                $enableResp = $telnet->execute('enable', ['Password:', 'password:', '#'], 5);
+
+                if (stripos($enableResp, 'password:') !== false) {
+                    $log[] = "[INFO] Enable password diminta oleh OLT";
+
+                    if (empty($enablePass)) {
+                        $log[] = "[WARN] Enable password tidak dikonfigurasi — mencoba tanpa password";
+                        $telnet->send('');
+                    } else {
+                        $log[] = "[INFO] Mengirim enable password (" . strlen($enablePass) . " karakter)";
+                        $telnet->send($enablePass);
+                    }
+
+                    $afterEnable = $telnet->waitFor(['#', '>', 'fail', 'incorrect', 'bad', 'denied'], 5);
+
+                    if (strpos($afterEnable, '#') !== false) {
+                        $log[] = "[OK] Enable berhasil — masuk privileged mode (#)";
+                    } else {
+                        $snippet = esc(trim(substr($afterEnable, -80)));
+                        $log[] = "[ERROR] Enable gagal. OLT response: {$snippet}";
+                        $telnet->disconnect();
+                        return $this->response->setJSON(['success' => false, 'log' => $log]);
+                    }
+
+                } elseif (strpos($enableResp, '#') !== false) {
+                    $log[] = "[OK] Enable tanpa password — privileged mode (#)";
+                } else {
+                    $snippet = esc(trim(substr($enableResp, -80)));
+                    $log[] = "[ERROR] Tidak ada respons yang diharapkan setelah 'enable': {$snippet}";
+                    $telnet->disconnect();
+                    return $this->response->setJSON(['success' => false, 'log' => $log]);
+                }
+            }
+
+            // Step 4: terminal length 0
+            $telnet->execute('terminal length 0', ['#'], 5);
+            $log[] = "[OK] terminal length 0 — pager dinonaktifkan";
+
+            // Step 5: Test command show version
+            $ver = $telnet->execute('show version', ['#'], 8);
+            $firstLine = trim(explode("\n", $ver)[0] ?? '');
+            if (!empty($firstLine)) {
+                $log[] = "[OK] 'show version' → " . esc(substr($firstLine, 0, 80));
+            } else {
+                $log[] = "[WARN] 'show version' tidak ada output";
+            }
+
+            $telnet->disconnect();
+            $log[] = "[OK] Koneksi ditutup — semua langkah berhasil";
+
+            return $this->response->setJSON(['success' => true, 'log' => $log]);
+
+        } catch (\Exception $e) {
+            $log[] = "[ERROR] Exception: " . $e->getMessage();
+            return $this->response->setJSON(['success' => false, 'log' => $log]);
+        }
+    }
+
+    /**
      * AJAX: Import ONU dari cache lokal ke database.
      * ONU yang sudah ada di DB (SN sama) di-skip.
      */
