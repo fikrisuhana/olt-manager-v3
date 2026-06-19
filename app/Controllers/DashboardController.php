@@ -125,11 +125,18 @@ class DashboardController extends Controller
         $errors      = [];
 
         try {
-            $acsService = new AcsService($acs);
+            $acsService  = new AcsService($acs);
+            $pppoeUpdated = 0;
 
             foreach ($olts as $olt) {
                 $onus = $onuModel->getByOlt($olt['id']);
                 if (empty($onus)) continue;
+
+                // Index ONU by SN untuk update pppoe_user
+                $onuBySn = [];
+                foreach ($onus as $o) {
+                    $onuBySn[strtoupper($o['sn'])] = $o;
+                }
 
                 $sns     = array_map(fn($o) => strtoupper($o['sn']), $onus);
                 $acsData = $acsService->getDevicesBySns($sns);
@@ -138,16 +145,28 @@ class DashboardController extends Controller
                 $online       = count(array_filter($acsData, fn($d) => $d['online']));
                 $totalOnline += $online;
                 $totalSynced += count($acsData);
+
+                // Update pppoe_user di DB jika ACS punya data tapi DB belum
+                foreach ($acsData as $sn => $info) {
+                    $pppoeUser = $info['pppoe_user'] ?? null;
+                    if (!$pppoeUser) continue;
+                    $onu = $onuBySn[strtoupper($sn)] ?? null;
+                    if ($onu && empty($onu['pppoe_user'])) {
+                        $onuModel->update($onu['id'], ['pppoe_user' => $pppoeUser]);
+                        $pppoeUpdated++;
+                    }
+                }
             }
         } catch (\Exception $e) {
             return $this->response->setJSON(['success' => false, 'message' => $e->getMessage()]);
         }
 
         return $this->response->setJSON([
-            'success' => true,
-            'online'  => $totalOnline,
-            'synced'  => $totalSynced,
-            'message' => "{$totalOnline} online dari {$totalSynced} device di ACS.",
+            'success'       => true,
+            'online'        => $totalOnline,
+            'synced'        => $totalSynced,
+            'pppoe_updated' => $pppoeUpdated,
+            'message'       => "{$totalOnline} online dari {$totalSynced} device di ACS." . ($pppoeUpdated ? " {$pppoeUpdated} PPPoE username disimpan ke DB." : ''),
         ]);
     }
 }
