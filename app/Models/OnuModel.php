@@ -35,8 +35,20 @@ class OnuModel extends Model
                     ->findAll();
     }
 
-    public function getByUserPaginated(int $userId, int $perPage = 50, int $page = 1, string $q = ''): array
+    private static array $sortableColumns = [
+        'sn'            => 'onus.sn',
+        'name'          => 'onus.name',
+        'olt_name'      => 'olts.name',
+        'port'          => 'onus.board, onus.slot, onus.port, onus.onu_index',
+        'onu_type'      => 'onus.onu_type',
+        'registered_at' => 'onus.registered_at',
+    ];
+
+    public function getByUserPaginated(int $userId, int $perPage = 50, int $page = 1, string $q = '', string $sort = 'registered_at', string $dir = 'DESC'): array
     {
+        $sortCol = self::$sortableColumns[$sort] ?? 'onus.registered_at';
+        $sortDir = strtoupper($dir) === 'ASC' ? 'ASC' : 'DESC';
+
         $builder = $this->select('onus.*, olts.name as olt_name, olts.brand, olts.ip as olt_ip')
                         ->join('olts', 'olts.id = onus.olt_id')
                         ->where('olts.user_id', $userId)
@@ -50,7 +62,7 @@ class OnuModel extends Model
                     ->groupEnd();
         }
 
-        return $builder->orderBy('onus.registered_at', 'DESC')
+        return $builder->orderBy($sortCol, $sortDir)
                        ->limit($perPage, ($page - 1) * $perPage)
                        ->findAll();
     }

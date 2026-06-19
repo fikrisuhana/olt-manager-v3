@@ -35,17 +35,27 @@
                 </div>
                 <?php endif; ?>
             </div>
+            <?php
+            function sortLink(string $col, string $label, string $currentSort, string $currentDir, string $q, int $page): string {
+                $active  = $currentSort === $col;
+                $newDir  = ($active && $currentDir === 'ASC') ? 'DESC' : 'ASC';
+                $icon    = $active ? ($currentDir === 'ASC' ? '↑' : '↓') : '<span style="opacity:.3">↕</span>';
+                $qs      = http_build_query(array_filter(['sort' => $col, 'dir' => $newDir, 'q' => $q]));
+                $cls     = $active ? 'fw-semibold text-primary' : 'text-dark';
+                return "<a href=\"/onus?{$qs}\" class=\"text-decoration-none {$cls}\">{$label} {$icon}</a>";
+            }
+            ?>
             <div class="table-responsive">
                 <table class="table table-hover mb-0" id="onuTable">
                     <thead class="table-light">
                         <tr>
-                            <th class="ps-3">SN</th>
-                            <th>Nama <small class="text-muted fw-normal">(klik untuk edit)</small></th>
-                            <th>OLT</th>
-                            <th>Port</th>
-                            <th>Tipe</th>
+                            <th class="ps-3"><?= sortLink('sn', 'SN', $sort, $dir, $q, $page) ?></th>
+                            <th><?= sortLink('name', 'Nama', $sort, $dir, $q, $page) ?> <small class="text-muted fw-normal">(klik untuk edit)</small></th>
+                            <th><?= sortLink('olt_name', 'OLT', $sort, $dir, $q, $page) ?></th>
+                            <th><?= sortLink('port', 'Port', $sort, $dir, $q, $page) ?></th>
+                            <th><?= sortLink('onu_type', 'Tipe', $sort, $dir, $q, $page) ?></th>
                             <th>ACS</th>
-                            <th>Terdaftar</th>
+                            <th><?= sortLink('registered_at', 'Terdaftar', $sort, $dir, $q, $page) ?></th>
                             <th></th>
                         </tr>
                     </thead>
@@ -113,7 +123,8 @@
             <?php
             $totalPages = (int)ceil($total / $perPage);
             if ($totalPages > 1):
-                $qStr = $q ? '&q=' . urlencode($q) : '';
+                $extraParams = array_filter(['q' => $q, 'sort' => ($sort !== 'registered_at' ? $sort : null), 'dir' => ($dir !== 'DESC' ? $dir : null)]);
+                $qStr = $extraParams ? '&' . http_build_query($extraParams) : '';
             ?>
             <div class="d-flex justify-content-between align-items-center px-3 py-2 border-top">
                 <small class="text-muted">

@@ -32,8 +32,10 @@ class OnuController extends Controller
         $perPage  = 50;
         $page     = max(1, (int)($this->request->getGet('page') ?? 1));
         $q        = trim($this->request->getGet('q') ?? '');
+        $sort     = $this->request->getGet('sort') ?? 'registered_at';
+        $dir      = $this->request->getGet('dir') ?? 'DESC';
 
-        $onus  = $onuModel->getByUserPaginated($this->userId, $perPage, $page, $q);
+        $onus  = $onuModel->getByUserPaginated($this->userId, $perPage, $page, $q, $sort, $dir);
         $total = $onuModel->countByUser($this->userId, $q);
         $totalAll = $q ? $onuModel->countByUser($this->userId) : $total;
 
@@ -54,6 +56,8 @@ class OnuController extends Controller
             'perPage'  => $perPage,
             'page'     => $page,
             'q'        => $q,
+            'sort'     => $sort,
+            'dir'      => $dir,
         ]);
     }
 
