@@ -22,8 +22,7 @@
                 <table class="table table-hover mb-0" id="onuTable">
                     <thead class="table-light">
                         <tr>
-                            <th class="ps-3">SN</th>
-                            <th>Nama</th>
+                            <th class="ps-3">SN / Nama</th>
                             <th>OLT</th>
                             <th>Port</th>
                             <th>Tipe</th>
@@ -40,8 +39,10 @@
                             <tr data-search="<?= esc(strtolower("{$onu['sn']} {$onu['name']} {$onu['olt_name']}")) ?>">
                                 <td class="font-monospace small ps-3">
                                     <a href="/onus/<?= $onu['id'] ?>" class="text-decoration-none"><?= esc($onu['sn']) ?></a>
+                                    <?php if (!empty($onu['name']) && strcasecmp($onu['name'], $onu['sn']) !== 0): ?>
+                                    <div class="text-muted" style="font-size:.7rem;font-family:sans-serif"><?= esc($onu['name']) ?></div>
+                                    <?php endif; ?>
                                 </td>
-                                <td><?= esc($onu['name'] ?? '-') ?></td>
                                 <td>
                                     <a href="/olts/<?= $onu['olt_id'] ?>" class="text-decoration-none small">
                                         <?= esc($onu['olt_name']) ?>
