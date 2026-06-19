@@ -4,7 +4,12 @@
 <div class="card border-0 shadow-sm">
     <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
         <h6 class="mb-0 fw-semibold"><i class="bi bi-router me-1"></i>Semua ONU Terdaftar</h6>
-        <span class="badge bg-primary"><?= count($onus) ?></span>
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-primary"><?= count($onus) ?></span>
+            <button class="btn btn-sm btn-outline-secondary" id="btnSyncAllNames" title="Sync semua nama dari cache OLT">
+                <i class="bi bi-cloud-download me-1"></i>Sync Semua Nama
+            </button>
+        </div>
     </div>
     <div class="card-body p-0">
         <?php if (empty($onus)): ?>
@@ -111,6 +116,29 @@ document.getElementById('searchOnu')?.addEventListener('input', function() {
     document.querySelectorAll('#onuTable tbody tr').forEach(row => {
         row.style.display = (!q || (row.dataset.search || '').includes(q)) ? '' : 'none';
     });
+});
+
+document.getElementById('btnSyncAllNames')?.addEventListener('click', function() {
+    this.disabled = true;
+    this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Syncing...';
+    const fd = new FormData();
+    fd.append(_csrf.name, _csrf.hash);
+    fetch('/onus/sync-all-names', { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(data => {
+            this.disabled = false;
+            this.innerHTML = '<i class="bi bi-cloud-download me-1"></i>Sync Semua Nama';
+            if (data.success) {
+                alert(`${data.updated} nama berhasil diupdate dari cache OLT.`);
+                location.reload();
+            } else {
+                alert('Gagal: ' + data.message);
+            }
+        })
+        .catch(() => {
+            this.disabled = false;
+            this.innerHTML = '<i class="bi bi-cloud-download me-1"></i>Sync Semua Nama';
+        });
 });
 
 document.querySelectorAll('.sync-name-btn').forEach(btn => {
