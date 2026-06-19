@@ -197,7 +197,18 @@ class OnuCacheService
     {
         $path = $this->acsCachePath($oltId);
         if (!file_exists($path)) return ['updated_at' => null, 'devices' => []];
-        return json_decode(file_get_contents($path), true) ?: ['updated_at' => null, 'devices' => []];
+        $data = json_decode(file_get_contents($path), true) ?: ['updated_at' => null, 'devices' => []];
+
+        // Hitung ulang 'online' dari last_inform vs waktu sekarang.
+        // Threshold 20 menit — lebih toleran untuk TR-069 inform period yang bervariasi.
+        $threshold = strtotime('-20 minutes');
+        foreach ($data['devices'] as &$dev) {
+            $lastInf = $dev['last_inform'] ?? null;
+            $dev['online'] = $lastInf && strtotime($lastInf) >= $threshold;
+        }
+        unset($dev);
+
+        return $data;
     }
 
     public function lastUpdatedAcs(int $oltId): ?string

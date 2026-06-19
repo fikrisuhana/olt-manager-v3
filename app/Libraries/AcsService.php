@@ -241,7 +241,7 @@ class AcsService
         $wifi    = $d['InternetGatewayDevice']['LANDevice']['1']['WLANConfiguration']['1'] ?? [];
         $wifi5   = $d['InternetGatewayDevice']['LANDevice']['1']['WLANConfiguration']['5'] ?? [];
         $hosts   = $d['InternetGatewayDevice']['LANDevice']['1']['Hosts']['Host'] ?? [];
-        $tenMinAgo = strtotime('-10 minutes');
+        $tenMinAgo = strtotime('-20 minutes');
         $lastInf   = $d['_lastInform'] ?? null;
 
         return [
@@ -369,7 +369,7 @@ class AcsService
         if (empty($sns)) return [];
 
         $result    = [];
-        $tenMinAgo = strtotime('-10 minutes');
+        $tenMinAgo = strtotime('-20 minutes');
 
         // Chunk 100 SN per request — hindari URL terlalu panjang
         foreach (array_chunk(array_values($sns), 100) as $chunk) {
@@ -401,7 +401,7 @@ class AcsService
      */
     public function getOnlineDevices(int $limit = 10000): array
     {
-        $since    = date('c', strtotime('-10 minutes'));
+        $since    = date('c', strtotime('-20 minutes'));
         $query    = urlencode(json_encode(['_lastInform' => ['$gt' => $since]]));
         $response = $this->request('GET', "/devices?query={$query}&limit={$limit}&projection=_id,_deviceId,_lastInform");
 
