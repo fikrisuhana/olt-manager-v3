@@ -201,21 +201,15 @@ class AcsService
      */
     public function getDeviceInfo(string $deviceId, string $brand = 'default'): ?array
     {
-        $brand  = strtolower($brand);
-        $paths  = self::WAN_PATHS[$brand] ?? self::WAN_PATHS['default'];
-        $wcd    = $paths['wcd_index'];
-        $ppp    = $paths['ppp_index'];
-        $wanBase = "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.{$wcd}.WANPPPConnection.{$ppp}";
+        $brand     = strtolower($brand);
         $wifiBase  = 'InternetGatewayDevice.LANDevice.1.WLANConfiguration.1';
         $wifi5Base = 'InternetGatewayDevice.LANDevice.1.WLANConfiguration.5';
 
+        // Project seluruh WANConnectionDevice agar bisa iterasi semua PPP index
+        // (ZTE F609 pakai WANPPPConnection.2, F670L pakai .1, FH pakai WCD.2.PPP.1)
         $proj = implode(',', [
             '_id', '_deviceId', '_lastInform',
-            $wanBase . '.Username',
-            $wanBase . '.Password',
-            $wanBase . '.ConnectionStatus',
-            $wanBase . '.ExternalIPAddress',
-            $wanBase . '.Uptime',
+            'InternetGatewayDevice.WANDevice.1.WANConnectionDevice',
             $wifiBase . '.SSID',
             $wifiBase . '.Enable',
             $wifiBase . '.KeyPassphrase',
@@ -236,13 +230,24 @@ class AcsService
         $devices = json_decode($response['body'], true);
         if (empty($devices)) return null;
 
-        $d       = $devices[0];
-        $wanData = $d['InternetGatewayDevice']['WANDevice']['1']['WANConnectionDevice'][$wcd]['WANPPPConnection'][$ppp] ?? [];
-        $wifi    = $d['InternetGatewayDevice']['LANDevice']['1']['WLANConfiguration']['1'] ?? [];
-        $wifi5   = $d['InternetGatewayDevice']['LANDevice']['1']['WLANConfiguration']['5'] ?? [];
-        $hosts   = $d['InternetGatewayDevice']['LANDevice']['1']['Hosts']['Host'] ?? [];
+        $d     = $devices[0];
+        $wcd   = $d['InternetGatewayDevice']['WANDevice']['1']['WANConnectionDevice'] ?? [];
+        $wifi  = $d['InternetGatewayDevice']['LANDevice']['1']['WLANConfiguration']['1'] ?? [];
+        $wifi5 = $d['InternetGatewayDevice']['LANDevice']['1']['WLANConfiguration']['5'] ?? [];
+        $hosts = $d['InternetGatewayDevice']['LANDevice']['1']['Hosts']['Host'] ?? [];
         $tenMinAgo = strtotime('-20 minutes');
         $lastInf   = $d['_lastInform'] ?? null;
+
+        // Cari WANPPPConnection aktif: iterasi WCD index (1,2) dan PPP index (1,2,...)
+        $wanData = [];
+        foreach (['1', '2'] as $wcdIdx) {
+            $pppConns = $wcd[$wcdIdx]['WANPPPConnection'] ?? [];
+            foreach ($pppConns as $pppIdx => $ppp) {
+                if (!is_array($ppp) || empty($ppp['Username']['_value'] ?? '')) continue;
+                $wanData = $ppp;
+                break 2;
+            }
+        }
 
         return [
             'device_id'   => $d['_id'],
@@ -364,6 +369,23 @@ class AcsService
      * Dibatasi 200 SN per request untuk hindari query terlalu besar.
      * Projection minimal: hanya _id, _deviceId, _lastInform.
      */
+    /**
+     * Cari username dari WANPPPConnection — iterasi semua index (1, 2, dst).
+     * ZTE F609 pakai index 2, F670L pakai index 1. Ambil yang pertama ada username-nya.
+     */
+    private function extractPppoeUser(array $wanConnectionDevice): ?string
+    {
+        foreach (['1', '2'] as $wcdIdx) {
+            $pppConns = $wanConnectionDevice[$wcdIdx]['WANPPPConnection'] ?? [];
+            foreach ($pppConns as $pppIdx => $ppp) {
+                if (!is_array($ppp)) continue;
+                $user = $ppp['Username']['_value'] ?? null;
+                if ($user && $user !== '') return $user;
+            }
+        }
+        return null;
+    }
+
     public function getDevicesBySns(array $sns): array
     {
         if (empty($sns)) return [];
@@ -371,14 +393,13 @@ class AcsService
         $result    = [];
         $tenMinAgo = strtotime('-20 minutes');
 
-        // Ambil Username dari WCD.1 (ZTE/Huawei/Nokia) dan WCD.2 (Fiberhome)
-        $wanUser1 = 'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.Username';
-        $wanUser2 = 'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.2.WANPPPConnection.1.Username';
+        // Project seluruh WANConnectionDevice (WCD.1 dan WCD.2) agar bisa iterasi semua PPP index
+        $wanProj = 'InternetGatewayDevice.WANDevice.1.WANConnectionDevice';
 
         // Chunk 100 SN per request — hindari URL terlalu panjang
         foreach (array_chunk(array_values($sns), 100) as $chunk) {
             $query    = urlencode(json_encode(['_deviceId._SerialNumber' => ['$in' => $chunk]]));
-            $proj     = "_id,_deviceId,_lastInform,{$wanUser1},{$wanUser2}";
+            $proj     = "_id,_deviceId,_lastInform,{$wanProj}";
             $response = $this->request('GET', "/devices?query={$query}&projection={$proj}&limit=" . count($chunk));
 
             if ($response['status'] !== 200) continue;
@@ -386,9 +407,8 @@ class AcsService
             foreach (json_decode($response['body'], true) ?? [] as $d) {
                 $sn      = $d['_deviceId']['_SerialNumber'] ?? '';
                 $lastInf = $d['_lastInform'] ?? null;
-                $wan1    = $d['InternetGatewayDevice']['WANDevice']['1']['WANConnectionDevice']['1']['WANPPPConnection']['1'] ?? [];
-                $wan2    = $d['InternetGatewayDevice']['WANDevice']['1']['WANConnectionDevice']['2']['WANPPPConnection']['1'] ?? [];
-                $pppoeUser = ($wan1['Username']['_value'] ?? null) ?: ($wan2['Username']['_value'] ?? null) ?: null;
+                $wcd     = $d['InternetGatewayDevice']['WANDevice']['1']['WANConnectionDevice'] ?? [];
+                $pppoeUser = $this->extractPppoeUser($wcd);
 
                 $result[strtoupper($sn)] = [
                     'device_id'    => $d['_id'],
