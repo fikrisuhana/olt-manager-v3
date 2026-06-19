@@ -197,7 +197,8 @@
                     <div class="col-6">
                         <label class="form-label small fw-medium">PPPoE Password</label>
                         <div class="input-group">
-                            <input type="password" id="pppoe_pass" class="form-control" placeholder="password">
+                            <input type="password" id="pppoe_pass" class="form-control"
+                                   value="<?= esc($onu['pppoe_pass'] ?? '') ?>" placeholder="password">
                             <button class="btn btn-outline-secondary" type="button"
                                     onclick="togglePass('pppoe_pass',this)" tabindex="-1">
                                 <i class="bi bi-eye"></i>
@@ -518,9 +519,16 @@ function setPppoe() {
     const pass = document.getElementById('pppoe_pass').value.trim();
     const el   = document.getElementById('pppoeResult');
 
-    if (!user || !pass) {
+    if (!user) {
         el.className = 'mt-2 small alert alert-warning';
-        el.textContent = 'Username dan password wajib diisi sebelum push.';
+        el.textContent = 'Username PPPoE wajib diisi sebelum push.';
+        el.classList.remove('d-none');
+        return;
+    }
+    if (!pass) {
+        el.className = 'mt-2 small alert alert-warning';
+        el.textContent = 'Password PPPoE wajib diisi sebelum push.';
+        el.classList.remove('d-none');
         return;
     }
 
@@ -532,6 +540,7 @@ function setPppoe() {
 
     el.className = 'mt-2';
     el.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Memproses...';
+    el.classList.remove('d-none');
 
     fetch(`/onus/${ONU_ID}/acs-set`, { method: 'POST', body: fd })
         .then(r => r.json())

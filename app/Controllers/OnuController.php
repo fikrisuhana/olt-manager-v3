@@ -181,6 +181,7 @@ class OnuController extends Controller
                     'vlan_acs'      => $vlanAcs ?: null,
                     'tcont_profile' => $tcontProfile ?: null,
                     'pppoe_user'    => $pppoeUser ?: null,
+                    'pppoe_pass'    => $pppoePass ?: null,
                     'status'        => 'registered',
                     'registered_at' => date('Y-m-d H:i:s'),
                 ]);
@@ -198,6 +199,7 @@ class OnuController extends Controller
                     'vlan_acs'      => $vlanAcs ?: null,
                     'tcont_profile' => $tcontProfile ?: null,
                     'pppoe_user'    => $pppoeUser ?: null,
+                    'pppoe_pass'    => $pppoePass ?: null,
                     'status'        => 'registered',
                     'template_id'   => $templateId ?: null,
                     'registered_at' => date('Y-m-d H:i:s'),
@@ -443,7 +445,7 @@ class OnuController extends Controller
                 $driver->disconnect();
 
                 if ($result['success']) {
-                    $onuModel->update($id, ['pppoe_user' => $pppoeUser]);
+                    $onuModel->update($id, ['pppoe_user' => $pppoeUser, 'pppoe_pass' => $pppoePass ?: null]);
                 }
 
                 $logModel = new ProvisionLogModel();
@@ -493,7 +495,7 @@ class OnuController extends Controller
                 ]);
 
                 if ($result['success']) {
-                    $onuModel->update($id, ['pppoe_user' => $pppoeUser]);
+                    $onuModel->update($id, ['pppoe_user' => $pppoeUser, 'pppoe_pass' => $pppoePass ?: null]);
                 }
 
                 $logModel->log($this->userId, 'acs_pppoe', $result['success'] ? 'success' : 'failed',

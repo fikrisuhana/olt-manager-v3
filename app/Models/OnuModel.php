@@ -12,7 +12,7 @@ class OnuModel extends Model
         'olt_id', 'sn', 'name', 'description',
         'board', 'slot', 'port', 'onu_index',
         'onu_type', 'vlan_internet', 'vlan_acs', 'tcont_profile',
-        'pppoe_user', 'acs_device_id',
+        'pppoe_user', 'pppoe_pass', 'acs_device_id',
         'status', 'template_id', 'registered_at',
     ];
     protected $useTimestamps = true;
