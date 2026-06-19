@@ -274,10 +274,11 @@ class AcsService
     /** Baca password WiFi dengan fallback antar format brand */
     private function readWifiPassword(array $wlan): ?string
     {
-        return $wlan['PreSharedKey']['1']['PreSharedKey']['_value']
-            ?? $wlan['PreSharedKey']['1']['KeyPassphrase']['_value']
-            ?? ($wlan['KeyPassphrase']['_value'] ?: null)
-            ?? null;
+        $pw = $wlan['PreSharedKey']['1']['PreSharedKey']['_value']
+           ?? $wlan['PreSharedKey']['1']['KeyPassphrase']['_value']
+           ?? $wlan['KeyPassphrase']['_value']
+           ?? null;
+        return ($pw !== null && $pw !== '') ? $pw : null;
     }
 
     /** Parse LANDevice.Hosts.Host menjadi array client sederhana */
