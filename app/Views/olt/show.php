@@ -936,6 +936,27 @@ function loadAcsStatus() {
         });
 }
 
+// Auto-refresh ACS status setiap 60 detik, hanya saat tab aktif
+(function startAcsAutoRefresh() {
+    let timer = null;
+    function schedule() {
+        timer = setTimeout(() => {
+            if (!document.hidden) loadAcsStatus();
+            schedule();
+        }, 60000);
+    }
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+            clearTimeout(timer);
+            loadAcsStatus();
+            schedule();
+        }
+    });
+    // Pertama kali load: langsung cek ACS
+    loadAcsStatus();
+    schedule();
+})();
+
 function filterOnu(q) {
     q = q.toLowerCase();
     document.querySelectorAll('tr[data-sn]').forEach(row => {
