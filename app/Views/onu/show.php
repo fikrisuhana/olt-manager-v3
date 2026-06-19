@@ -267,6 +267,76 @@
     </div>
 </div>
 
+<?php if (strncasecmp($onu['sn'], 'ZTEG', 4) === 0): ?>
+<!-- Konfigurasi OLT (ZTE) — dari Database, tidak perlu Telnet -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white border-bottom py-3 d-flex align-items-center justify-content-between">
+                <h6 class="mb-0 fw-semibold"><i class="bi bi-terminal me-1"></i>Konfigurasi OLT</h6>
+                <div class="d-flex gap-2 align-items-center">
+                    <span class="badge bg-light text-muted small fw-normal">dari database</span>
+                    <button class="btn btn-sm btn-outline-secondary py-0" onclick="toggleOltConfig()" id="btnToggleOltConfig">
+                        <i class="bi bi-pencil me-1"></i>Edit
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <pre id="oltConfigPre"
+                     class="mb-0 px-3 py-3 font-monospace"
+                     style="background:#1a1b26;color:#a9b1d6;font-size:0.73rem;border-radius:0 0 8px 8px;line-height:1.75;min-height:80px;white-space:pre-wrap"></pre>
+            </div>
+            <div id="oltConfigEdit" class="d-none border-top">
+                <div class="p-3">
+                    <div class="row g-2">
+                        <div class="col-sm-3 col-6">
+                            <label class="form-label small fw-medium">VLAN Internet</label>
+                            <input type="number" id="cfg_vlan_internet" class="form-control form-control-sm"
+                                   value="<?= esc($onu['vlan_internet'] ?? '') ?>"
+                                   oninput="renderOltConfig()">
+                        </div>
+                        <div class="col-sm-3 col-6">
+                            <label class="form-label small fw-medium">VLAN ACS</label>
+                            <input type="number" id="cfg_vlan_acs" class="form-control form-control-sm"
+                                   value="<?= esc($onu['vlan_acs'] ?? '') ?>"
+                                   oninput="renderOltConfig()">
+                        </div>
+                        <div class="col-sm-3 col-6">
+                            <label class="form-label small fw-medium">TCONT Profile</label>
+                            <input type="text" id="cfg_tcont" class="form-control form-control-sm"
+                                   value="<?= esc($onu['tcont_profile'] ?? '') ?>"
+                                   oninput="renderOltConfig()">
+                        </div>
+                        <div class="col-sm-3 col-6">
+                            <label class="form-label small fw-medium">PPPoE Username</label>
+                            <input type="text" id="cfg_pppoe_user" class="form-control form-control-sm"
+                                   value="<?= esc($onu['pppoe_user'] ?? '') ?>"
+                                   oninput="renderOltConfig()">
+                        </div>
+                        <div class="col-sm-4 col-6">
+                            <label class="form-label small fw-medium">PPPoE Password</label>
+                            <input type="text" id="cfg_pppoe_pass" class="form-control form-control-sm"
+                                   value="<?= esc($onu['pppoe_pass'] ?? '') ?>"
+                                   oninput="renderOltConfig()">
+                        </div>
+                    </div>
+                    <div id="oltCfgResult" class="mt-2 d-none small"></div>
+                    <div class="mt-3 d-flex gap-2 flex-wrap">
+                        <button class="btn btn-sm btn-warning" onclick="saveAndPushOlt()">
+                            <i class="bi bi-cloud-upload me-1"></i>Simpan &amp; Push ke OLT
+                        </button>
+                        <button class="btn btn-sm btn-outline-primary" onclick="saveOltConfigOnly()">
+                            <i class="bi bi-floppy me-1"></i>Simpan ke DB saja
+                        </button>
+                        <button class="btn btn-sm btn-light" onclick="toggleOltConfig()">Batal</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
 <!-- Modal Set ACS -->
 <div id="setAcsModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1055;align-items:center;justify-content:center">
     <div class="card border-0 shadow-lg" style="width:360px;max-width:95vw">
@@ -307,31 +377,159 @@ const ONU_ID = <?= $onu['id'] ?>;
 document.addEventListener('DOMContentLoaded', () => {
     loadSignal();
     loadAcsInfo();
-    <?php if (!$onu['vlan_internet'] && !$onu['vlan_acs'] && !$onu['tcont_profile']): ?>
-    autoSyncConfig();
-    <?php endif; ?>
+    renderOltConfig();
 });
 
-function autoSyncConfig() {
-    fetch(`/onus/${ONU_ID}/fetch-config`)
-        .then(r => r.json())
-        .then(data => {
-            if (!data.success) return;
-            const c = data.config;
-            if (!c.vlan_internet && !c.tcont_profile) return; // OLT juga kosong, skip
+// === Konfigurasi OLT — dari Database (tidak perlu Telnet) ===
+const OLT_CFG = {
+    b: '<?= $onu['board'] ?>', s: '<?= $onu['slot'] ?>',
+    p: '<?= $onu['port'] ?>', i: '<?= $onu['onu_index'] ?>',
+    vlanInt:  <?= (int)($onu['vlan_internet'] ?? 0) ?>,
+    vlanAcs:  <?= (int)($onu['vlan_acs'] ?? 0) ?>,
+    tcont:    '<?= esc(addslashes($onu['tcont_profile'] ?? '')) ?>',
+    pppoeUser:'<?= esc(addslashes($onu['pppoe_user'] ?? '')) ?>',
+    pppoePass:'<?= esc(addslashes($onu['pppoe_pass'] ?? '')) ?>',
+};
 
-            // Isi form dan simpan otomatis
-            document.getElementById('edit_vlan_internet').value = c.vlan_internet || '';
-            document.getElementById('edit_vlan_acs').value      = c.vlan_acs      || '';
-            document.getElementById('edit_tcont').value         = c.tcont_profile  || '';
-            // Nama tidak diubah — pertahankan nama yang ada
-            document.getElementById('edit_name').value =
-                document.getElementById('disp_name').textContent.trim() || '';
-
-            saveInfo(true); // true = reload setelah simpan
-        })
-        .catch(() => {});
+function buildOltConfigText(vlanInt, vlanAcs, tcont, pppoeUser, pppoePass) {
+    const ifName = `gpon-onu_${OLT_CFG.b}/${OLT_CFG.s}/${OLT_CFG.p}:${OLT_CFG.i}`;
+    let L = [];
+    L.push(`interface ${ifName}`);
+    if (tcont)   L.push(` tcont 1 profile ${tcont}`);
+    L.push(` gemport 1 tcont 1`);
+    if (vlanInt) L.push(` service hsi gemport 1 vlan ${vlanInt}`);
+    if (vlanAcs) L.push(` service acs gemport 1 vlan ${vlanAcs}`);
+    L.push(`!`);
+    L.push(``);
+    L.push(`pon-onu-mng ${ifName}`);
+    if (vlanInt) {
+        L.push(` service hsi gemport 1 vlan ${vlanInt}`);
+        L.push(` vlan port veip_1 mode hybrid vlan ${vlanInt}`);
+    }
+    if (vlanAcs) L.push(` service acs gemport 1 vlan ${vlanAcs}`);
+    if (pppoeUser) {
+        const pw = pppoePass || '(belum diisi)';
+        L.push(` wan-ip 1 mode pppoe username ${pppoeUser} password ${pw}`);
+        L.push(` wan-ip 1 dns mode static primary-dns 8.8.8.8`);
+    }
+    if (vlanAcs) L.push(` wan-ip 2 mode dhcp`);
+    L.push(`!`);
+    return L.join('\n');
 }
+
+function cfgHL(txt) {
+    // Escape HTML dulu
+    txt = txt.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    // Syntax highlight sederhana
+    txt = txt.replace(/^(interface|pon-onu-mng)(\s)/gm,
+        '<span style="color:#7dcfff;font-weight:600">$1</span>$2');
+    txt = txt.replace(/\b(tcont|gemport|service|vlan|wan-ip|mode|username|password|dns|primary-dns|port|hybrid)\b/g,
+        '<span style="color:#bb9af7">$1</span>');
+    txt = txt.replace(/\b(pppoe|dhcp|static|hsi|acs|veip_1)\b/g,
+        '<span style="color:#e0af68">$1</span>');
+    txt = txt.replace(/\b(\d+)\b/g,
+        '<span style="color:#9ece6a">$1</span>');
+    txt = txt.replace(/^(!)/gm,
+        '<span style="color:#565f89">!</span>');
+    return txt;
+}
+
+function renderOltConfig() {
+    const pre = document.getElementById('oltConfigPre');
+    if (!pre) return;
+    const editOpen = !document.getElementById('oltConfigEdit')?.classList.contains('d-none');
+    const vlanInt   = editOpen ? (document.getElementById('cfg_vlan_internet')?.value || '') : (OLT_CFG.vlanInt || '');
+    const vlanAcs   = editOpen ? (document.getElementById('cfg_vlan_acs')?.value      || '') : (OLT_CFG.vlanAcs || '');
+    const tcont     = editOpen ? (document.getElementById('cfg_tcont')?.value          || '') : OLT_CFG.tcont;
+    const pppoeUser = editOpen ? (document.getElementById('cfg_pppoe_user')?.value    || '') : OLT_CFG.pppoeUser;
+    const pppoePass = editOpen ? (document.getElementById('cfg_pppoe_pass')?.value    || '') : OLT_CFG.pppoePass;
+    pre.innerHTML = cfgHL(buildOltConfigText(vlanInt, vlanAcs, tcont, pppoeUser, pppoePass));
+}
+
+function toggleOltConfig() {
+    const edit = document.getElementById('oltConfigEdit');
+    const btn  = document.getElementById('btnToggleOltConfig');
+    if (!edit) return;
+    const show = edit.classList.contains('d-none');
+    edit.classList.toggle('d-none', !show);
+    btn.innerHTML = show
+        ? '<i class="bi bi-x-circle me-1"></i>Tutup'
+        : '<i class="bi bi-pencil me-1"></i>Edit';
+    if (show) document.getElementById('oltCfgResult')?.classList.add('d-none');
+    renderOltConfig();
+}
+
+async function doSaveOltConfig() {
+    const fd = new FormData();
+    fd.append('vlan_internet', document.getElementById('cfg_vlan_internet').value.trim());
+    fd.append('vlan_acs',      document.getElementById('cfg_vlan_acs').value.trim());
+    fd.append('tcont_profile', document.getElementById('cfg_tcont').value.trim());
+    fd.append('pppoe_user',    document.getElementById('cfg_pppoe_user').value.trim());
+    fd.append('pppoe_pass',    document.getElementById('cfg_pppoe_pass').value.trim());
+    fd.append('name',          '');  // kosong = controller pakai nama existing
+    fd.append('<?= csrf_token() ?>', '<?= csrf_hash() ?>');
+    try {
+        const r = await fetch(`/onus/${ONU_ID}/update-info`, { method: 'POST', body: fd });
+        const d = await r.json();
+        return d.success;
+    } catch { return false; }
+}
+
+async function saveOltConfigOnly() {
+    const res = document.getElementById('oltCfgResult');
+    res.className = 'mt-2 small text-muted';
+    res.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Menyimpan...';
+    res.classList.remove('d-none');
+    if (await doSaveOltConfig()) {
+        res.className = 'mt-2 small alert alert-success py-1';
+        res.textContent = 'Tersimpan ke database.';
+    } else {
+        res.className = 'mt-2 small alert alert-danger py-1';
+        res.textContent = 'Gagal menyimpan.';
+    }
+}
+
+async function saveAndPushOlt() {
+    const res = document.getElementById('oltCfgResult');
+    res.className = 'mt-2 small text-muted';
+    res.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Menyimpan ke DB...';
+    res.classList.remove('d-none');
+
+    if (!(await doSaveOltConfig())) {
+        res.className = 'mt-2 small alert alert-danger py-1';
+        res.textContent = 'Gagal menyimpan ke DB.';
+        return;
+    }
+
+    res.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Push ke OLT...';
+
+    const pppoeUser = document.getElementById('cfg_pppoe_user').value.trim();
+    const pppoePass = document.getElementById('cfg_pppoe_pass').value.trim();
+
+    const fd = new FormData();
+    fd.append('<?= csrf_token() ?>', '<?= csrf_hash() ?>');
+
+    let url;
+    if (pppoeUser) {
+        fd.append('action', 'pppoe');
+        fd.append('pppoe_user', pppoeUser);
+        fd.append('pppoe_pass', pppoePass);
+        url = `/onus/${ONU_ID}/acs-set`;
+    } else {
+        url = `/onus/${ONU_ID}/set-acs`;
+    }
+
+    try {
+        const r    = await fetch(url, { method: 'POST', body: fd });
+        const data = await r.json();
+        res.className = `mt-2 small alert alert-${data.success ? 'success' : 'danger'} py-1`;
+        res.innerHTML = data.message || (data.success ? 'Berhasil dipush ke OLT.' : 'Gagal push ke OLT.');
+    } catch (e) {
+        res.className = 'mt-2 small alert alert-danger py-1';
+        res.textContent = 'Error: ' + e.message;
+    }
+}
+// === End Konfigurasi OLT ===
 
 function loadSignal() {
     const box = document.getElementById('signalBox');

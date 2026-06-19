@@ -121,7 +121,7 @@ class OnuModel extends Model
 
     public function getWithOlt(int $id): ?array
     {
-        return $this->select('onus.*, olts.name as olt_name, olts.ip as olt_ip, olts.brand, olts.model, olts.user_id')
+        return $this->select('onus.*, olts.name as olt_name, olts.ip as olt_ip, olts.brand, olts.model, olts.user_id, olts.acs_url as olt_acs_url')
                     ->join('olts', 'olts.id = onus.olt_id')
                     ->where('onus.id', $id)
                     ->first();

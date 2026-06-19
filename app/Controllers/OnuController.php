@@ -263,6 +263,7 @@ class OnuController extends Controller
             'vlan_acs'      => (int)($this->request->getPost('vlan_acs') ?: 0) ?: null,
             'tcont_profile' => trim($this->request->getPost('tcont_profile') ?? '') ?: null,
             'pppoe_user'    => trim($this->request->getPost('pppoe_user') ?? '') ?: null,
+            'pppoe_pass'    => trim($this->request->getPost('pppoe_pass') ?? '') ?: null,
         ];
 
         $onuModel->update($id, $data);
