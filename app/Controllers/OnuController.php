@@ -733,6 +733,83 @@ class OnuController extends Controller
         ]);
     }
 
+    /**
+     * AJAX: Bulk push pon-onu-mng (ACS management only) ke semua ZTE ONU
+     * yang belum terdaftar di ACS. Hanya push vlan_acs + wan-ip 2 dhcp.
+     * wan-ip 1 (PPPoE) tidak disentuh — biarkan konfigurasi existing di ONU.
+     */
+    public function setAcsAll()
+    {
+        $this->response->setContentType('application/json');
+        set_time_limit(600);
+
+        $onuModel = new OnuModel();
+        $oltModel = new OltModel();
+        $cache    = new OnuCacheService();
+
+        $onus = $onuModel->getByUser($this->userId);
+
+        // Cari ONU yang belum di ACS cache (acs_device_id kosong)
+        // Muat ACS cache untuk tahu mana yang sudah terdaftar
+        $acsSnSet = [];
+        foreach (array_unique(array_column($onus, 'olt_id')) as $oltId) {
+            foreach ($cache->loadAcs((int)$oltId)['devices'] as $sn => $_) {
+                $acsSnSet[strtoupper($sn)] = true;
+            }
+        }
+
+        // Filter: ZTE ONU, belum di ACS cache, punya vlan_acs
+        $targets = array_filter($onus, fn($o) =>
+            strncasecmp($o['sn'], 'ZTEG', 4) === 0 &&
+            !isset($acsSnSet[strtoupper($o['sn'])]) &&
+            !empty($o['vlan_acs'])
+        );
+
+        if (empty($targets)) {
+            return $this->response->setJSON(['success' => true, 'pushed' => 0, 'errors' => [], 'message' => 'Tidak ada ZTE ONU yang perlu di-push ACS.']);
+        }
+
+        // Group by OLT agar 1 koneksi per OLT
+        $byOlt = [];
+        foreach ($targets as $onu) {
+            $byOlt[$onu['olt_id']][] = $onu;
+        }
+
+        $pushed = 0;
+        $errors = [];
+
+        foreach ($byOlt as $oltId => $oltOnus) {
+            $olt    = $oltModel->find($oltId);
+            $acsUrl = trim($olt['acs_url'] ?? '');
+            if (!$olt || !$acsUrl) {
+                $errors[] = "OLT {$oltId}: ACS URL belum diset.";
+                continue;
+            }
+            try {
+                $driver = OltDriverFactory::make($olt);
+                $driver->connect();
+                foreach ($oltOnus as $onu) {
+                    // vlanInternet=0: skip internet service, jangan sentuh wan-ip 1
+                    $driver->applyPonMng(
+                        $onu['board'], $onu['slot'], $onu['port'], $onu['onu_index'],
+                        (int)$onu['vlan_acs'], $acsUrl, 0
+                    );
+                    $pushed++;
+                }
+                $driver->disconnect();
+            } catch (\Exception $e) {
+                $errors[] = "OLT {$olt['name']}: " . $e->getMessage();
+            }
+        }
+
+        return $this->response->setJSON([
+            'success' => true,
+            'pushed'  => $pushed,
+            'errors'  => $errors,
+            'message' => "{$pushed} ONU berhasil di-push ACS management." . (count($errors) ? ' ' . count($errors) . ' error.' : ''),
+        ]);
+    }
+
     public function setAcs(int $id)
     {
         $onuModel = new OnuModel();

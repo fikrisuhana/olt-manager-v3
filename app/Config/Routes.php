@@ -54,6 +54,7 @@ $routes->group('', ['filter' => 'auth'], static function ($routes) {
     $routes->post('onus/(:num)/sync-name',   'OnuController::syncName/$1');   // AJAX
     $routes->post('onus/sync-all-names',     'OnuController::syncAllNames');   // AJAX bulk
     $routes->post('onus/sync-pppoe-all',     'OnuController::syncPppoeAll');   // AJAX bulk — sync PPPoE username dari OLT/ACS
+    $routes->post('onus/set-acs-all',        'OnuController::setAcsAll');      // AJAX bulk — push pon-onu-mng ACS ke ZTE yang belum di ACS
     $routes->post('onus/(:num)/acs-set',      'OnuController::acsSet/$1');       // AJAX
     $routes->get('onus/(:num)/fetch-config',  'OnuController::fetchConfig/$1');  // AJAX
     $routes->post('onus/(:num)/set-acs',      'OnuController::setAcs/$1');        // AJAX

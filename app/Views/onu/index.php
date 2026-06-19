@@ -12,6 +12,11 @@
             <button class="btn btn-sm btn-outline-secondary" id="btnSyncPppoe" title="Sync PPPoE username dari OLT/ACS ke database">
                 <i class="bi bi-person-check me-1"></i>Sync PPPoE
             </button>
+            <?php if ($filter === 'no_acs'): ?>
+            <button class="btn btn-sm btn-outline-danger" id="btnSetAcsAll" title="Push pon-onu-mng ACS ke semua ZTE yang belum di ACS">
+                <i class="bi bi-broadcast me-1"></i>Push ACS Massal
+            </button>
+            <?php endif; ?>
         </div>
     </div>
     <div class="card-body p-0">
@@ -192,6 +197,28 @@
 <script>
 const _csrf = { name: '<?= csrf_token() ?>', hash: '<?= csrf_hash() ?>' };
 
+
+document.getElementById('btnSetAcsAll')?.addEventListener('click', function() {
+    const count = <?= $counts['no_acs'] ?>;
+    if (!confirm(`Push pon-onu-mng ACS ke ZTE ONU yang belum di ACS?\n\nHanya push: service acs + wan-ip 2 dhcp\nPPPoE (wan-ip 1) tidak disentuh.\n\nProses ini mungkin memakan waktu beberapa menit.`)) return;
+    this.disabled = true;
+    this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Pushing...';
+    const fd = new FormData();
+    fd.append(_csrf.name, _csrf.hash);
+    fetch('/onus/set-acs-all', { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(data => {
+            this.disabled = false;
+            this.innerHTML = '<i class="bi bi-broadcast me-1"></i>Push ACS Massal';
+            let msg = data.message || (data.success ? 'Selesai.' : 'Gagal.');
+            if (data.errors && data.errors.length) msg += '\n\nError:\n' + data.errors.join('\n');
+            alert(msg);
+        })
+        .catch(() => {
+            this.disabled = false;
+            this.innerHTML = '<i class="bi bi-broadcast me-1"></i>Push ACS Massal';
+        });
+});
 
 document.getElementById('btnSyncPppoe')?.addEventListener('click', function() {
     if (!confirm('Sync PPPoE username dari OLT (ZTE) dan ACS (FH/lainnya) ke database?\nProses ini mungkin memakan waktu beberapa menit.')) return;
