@@ -79,16 +79,16 @@
                                    placeholder="<?= ($olt && !empty($olt['enable_password'])) ? '(sudah diset — kosongkan jika tidak ingin mengubah)' : 'Kosongkan jika tidak ada' ?>">
                         </div>
                         <div class="col-4">
-                            <label class="form-label">Firmware Version <span class="text-muted small">(opsional)</span></label>
-                            <input type="text" name="firmware_version" class="form-control"
-                                   value="<?= esc($olt['firmware_version'] ?? '') ?>"
-                                   placeholder="cth: 1.2 atau 2.1"
-                                   list="fw-version-list">
-                            <datalist id="fw-version-list">
-                                <option value="1.2">
-                                <option value="2.1">
-                            </datalist>
-                            <div class="form-text">v1.x → <code>service hsi</code>, v2.x → <code>service int</code></div>
+                            <label class="form-label">Firmware Version</label>
+                            <select name="firmware_version" class="form-select">
+                                <option value="">— Auto detect —</option>
+                                <?php foreach (['1.2' => 'v1.2 (service hsi)', '2.1' => 'v2.1 (service int)'] as $val => $label): ?>
+                                <option value="<?= $val ?>" <?= ($olt['firmware_version'] ?? '') === $val ? 'selected' : '' ?>>
+                                    <?= $label ?>
+                                </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <div class="form-text text-muted">Kosongkan jika tidak tahu — auto detect.</div>
                         </div>
                     </div>
 
