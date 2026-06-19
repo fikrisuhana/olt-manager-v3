@@ -628,6 +628,7 @@ class OltController extends Controller
             'snmp_port'       => (int)($this->request->getPost('snmp_port') ?: 161),
             'acs_url'          => $this->request->getPost('acs_url') ?: null,
             'pppoe_vlan_profile' => $this->request->getPost('pppoe_vlan_profile') ?: null,
+            'firmware_version' => $this->request->getPost('firmware_version') ?: null,
             'tcont_profiles'   => $this->request->getPost('tcont_profiles') ?: null,
             'traffic_profiles' => $this->request->getPost('traffic_profiles') ?: null,
             'description'      => $this->request->getPost('description'),

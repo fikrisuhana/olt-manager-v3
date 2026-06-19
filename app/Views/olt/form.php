@@ -73,10 +73,22 @@
                                    placeholder="<?= $olt ? 'Kosongkan jika tidak ganti' : 'Password' ?>"
                                    <?= $olt ? '' : 'required' ?>>
                         </div>
-                        <div class="col-12">
+                        <div class="col-8">
                             <label class="form-label">Enable Password <span class="text-muted small">(opsional — isi jika OLT minta password saat <code>enable</code>)</span></label>
                             <input type="password" name="enable_password" class="form-control"
                                    placeholder="<?= ($olt && !empty($olt['enable_password'])) ? '(sudah diset — kosongkan jika tidak ingin mengubah)' : 'Kosongkan jika tidak ada' ?>">
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label">Firmware Version <span class="text-muted small">(opsional)</span></label>
+                            <input type="text" name="firmware_version" class="form-control"
+                                   value="<?= esc($olt['firmware_version'] ?? '') ?>"
+                                   placeholder="cth: 1.2 atau 2.1"
+                                   list="fw-version-list">
+                            <datalist id="fw-version-list">
+                                <option value="1.2">
+                                <option value="2.1">
+                            </datalist>
+                            <div class="form-text">v1.x → <code>service hsi</code>, v2.x → <code>service int</code></div>
                         </div>
                     </div>
 

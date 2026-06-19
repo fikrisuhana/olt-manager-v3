@@ -1,0 +1,1 @@
+ALTER TABLE olts ADD COLUMN firmware_version VARCHAR(20) NULL DEFAULT NULL AFTER model;

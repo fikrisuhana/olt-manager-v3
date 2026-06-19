@@ -484,6 +484,18 @@ class ZteDriver implements OltDriverInterface
      */
     private function applyServiceInternet(int $vlan, array &$log): void
     {
+        // Jika firmware_version diset, pilih keyword langsung tanpa trial-error
+        $ver = trim($this->config['firmware_version'] ?? '');
+        if ($ver) {
+            $kw = version_compare($ver, '2.0', '>=') ? 'int' : 'hsi';
+            $out = $this->telnet->execute("service {$kw} gemport 1 vlan {$vlan}", $this->mngPrompt, 5);
+            if (stripos($out, 'Error') === false && stripos($out, 'Invalid') === false) {
+                $log[] = "service {$kw} vlan {$vlan} OK (v{$ver})";
+                return;
+            }
+            $log[] = "WARN: service {$kw} gagal (v{$ver}), coba auto-detect";
+        }
+        // Auto-detect: coba hsi → int → ppp
         foreach (['hsi', 'int', 'ppp'] as $kw) {
             $out = $this->telnet->execute("service {$kw} gemport 1 vlan {$vlan}", $this->mngPrompt, 5);
             if (stripos($out, 'Error') === false && stripos($out, 'Invalid') === false) {
