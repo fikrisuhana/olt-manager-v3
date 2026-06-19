@@ -328,13 +328,14 @@ class ZteDriver implements OltDriverInterface
                     $log[] = "WARN pon-onu-mng: service acs → " . trim(substr($out, -120));
                 }
             }
+            $isFiberhome = strncasecmp($sn, 'FHTT', 4) === 0;
             if ($vlanInternet) {
-                $this->applyServiceInternet($vlanInternet, $log);
+                // ZTE ONU dengan PPPoE → service ppp, Fiberhome → service int
+                $this->applyServiceInternet($vlanInternet, $log, !$isFiberhome && !empty($pppoeUser));
             }
             $this->telnet->execute("vlan port veip_1 mode hybrid", $this->mngPrompt, 5);
 
             // PPPoE WAN via pon-onu-mng — hanya ZTE ONU, Fiberhome pakai ACS/TR-069
-            $isFiberhome = strncasecmp($sn, 'FHTT', 4) === 0;
             if ($pppoeUser && $pppoePass && !$isFiberhome) {
                 $out = $this->telnet->execute(
                     "wan-ip 1 mode pppoe username {$pppoeUser} password {$pppoePass} vlan-profile {$pppoeProfile} host 1",
@@ -442,7 +443,7 @@ class ZteDriver implements OltDriverInterface
         $this->telnet->execute("pon-onu-mng gpon-onu_{$board}/{$slot}/{$port}:{$onuIndex}", $this->mngPrompt, 5);
 
         if ($vlanInternet) {
-            $this->applyServiceInternet($vlanInternet, $log);
+            $this->applyServiceInternet($vlanInternet, $log, !empty($pppoeUser));
         }
         if ($vlanAcs) {
             $out   = $this->telnet->execute("service acs gemport 1 vlan {$vlanAcs}", $this->mngPrompt, 5);
@@ -483,13 +484,18 @@ class ZteDriver implements OltDriverInterface
      * ZTE firmware berbeda-beda: 'hsi', 'int', atau 'ppp'.
      * Coba berurutan sampai berhasil.
      */
-    private function applyServiceInternet(int $vlan, array &$log): void
+    private function applyServiceInternet(int $vlan, array &$log, bool $forPppoe = false): void
     {
-        // Jika firmware_version diset, pilih keyword langsung tanpa trial-error
-        // v1.x → service hsi, v2.x → service ppp (PPPoE) / service int (bridge)
+        // v1.x → service hsi
+        // v2.x + PPPoE → service ppp
+        // v2.x + non-PPPoE (Fiberhome) → service int
         $ver = trim($this->config['firmware_version'] ?? '');
         if ($ver) {
-            $kw = version_compare($ver, '2.0', '>=') ? 'ppp' : 'hsi';
+            if (version_compare($ver, '2.0', '>=')) {
+                $kw = $forPppoe ? 'ppp' : 'int';
+            } else {
+                $kw = 'hsi';
+            }
             $out = $this->telnet->execute("service {$kw} gemport 1 vlan {$vlan}", $this->mngPrompt, 5);
             if (stripos($out, 'Error') === false && stripos($out, 'Invalid') === false) {
                 $log[] = "service {$kw} vlan {$vlan} OK (v{$ver})";
@@ -497,8 +503,9 @@ class ZteDriver implements OltDriverInterface
             }
             $log[] = "WARN: service {$kw} gagal (v{$ver}), coba auto-detect";
         }
-        // Auto-detect: coba hsi → ppp → int
-        foreach (['hsi', 'ppp', 'int'] as $kw) {
+        // Auto-detect: PPPoE → ppp → hsi → int, non-PPPoE → hsi → int → ppp
+        $order = $forPppoe ? ['ppp', 'hsi', 'int'] : ['hsi', 'int', 'ppp'];
+        foreach ($order as $kw) {
             $out = $this->telnet->execute("service {$kw} gemport 1 vlan {$vlan}", $this->mngPrompt, 5);
             if (stripos($out, 'Error') === false && stripos($out, 'Invalid') === false) {
                 $log[] = "service {$kw} vlan {$vlan} OK";
