@@ -628,16 +628,9 @@ class OnuController extends Controller
         $oltModel = new OltModel();
         $onus     = $onuModel->getByUser($this->userId);
 
-        // Hanya ONU yang namanya masih SN (perlu sync)
-        $toSync = array_filter($onus, fn($o) => strcasecmp($o['name'] ?? '', $o['sn']) === 0);
-
-        if (empty($toSync)) {
-            return $this->response->setJSON(['success' => true, 'updated' => 0, 'message' => 'Semua nama sudah benar.']);
-        }
-
         // Group by OLT agar 1 koneksi per OLT
         $byOlt = [];
-        foreach ($toSync as $onu) {
+        foreach ($onus as $onu) {
             $byOlt[$onu['olt_id']][] = $onu;
         }
 
