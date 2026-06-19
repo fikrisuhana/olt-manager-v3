@@ -593,29 +593,30 @@ class OnuController extends Controller
         try {
             $driver = OltDriverFactory::make($olt);
             $driver->connect();
-            $config = $driver->getOnuConfig(
-                $onu['board'], $onu['slot'], $onu['port'], $onu['onu_index']
-            );
 
-            // Baca PPPoE username dari pon-onu-mng jika belum ada di DB
-            $pppoeUser = null;
-            if (method_exists($driver, 'getPonMngPppoeUser')) {
-                $pppoeUser = $driver->getPonMngPppoeUser(
-                    $onu['board'], $onu['slot'], $onu['port'], $onu['onu_index']
-                );
-                // Simpan ke DB jika ditemukan
-                if ($pppoeUser && empty($onu['pppoe_user'])) {
-                    $onuModel->update($id, ['pppoe_user' => $pppoeUser]);
-                }
-            }
+            $config    = $driver->getOnuConfig($onu['board'], $onu['slot'], $onu['port'], $onu['onu_index']);
+            $ponMng    = method_exists($driver, 'getPonMngConfig')
+                ? $driver->getPonMngConfig($onu['board'], $onu['slot'], $onu['port'], $onu['onu_index'])
+                : null;
 
             $driver->disconnect();
+
+            $pppoeUser = $ponMng['pppoe_user'] ?? null;
+            $pppoePass = $ponMng['pppoe_pass'] ?? null;
+
+            // Simpan ke DB jika ditemukan dan DB masih kosong
+            $dbUpdate = [];
+            if ($pppoeUser && empty($onu['pppoe_user'])) $dbUpdate['pppoe_user'] = $pppoeUser;
+            if ($pppoePass && empty($onu['pppoe_pass'])) $dbUpdate['pppoe_pass'] = $pppoePass;
+            if ($dbUpdate) $onuModel->update($id, $dbUpdate);
 
             return $this->response->setJSON([
                 'success'    => true,
                 'source'     => 'olt',
                 'config'     => $config,
+                'pon_mng'    => $ponMng,
                 'pppoe_user' => $pppoeUser,
+                'pppoe_pass' => $pppoePass,
             ]);
         } catch (\Exception $e) {
             return $this->response->setJSON(['success' => false, 'message' => $e->getMessage()]);

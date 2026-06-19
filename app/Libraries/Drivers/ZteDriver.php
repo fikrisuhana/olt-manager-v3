@@ -709,20 +709,45 @@ class ZteDriver implements OltDriverInterface
     }
 
     /**
-     * Baca PPPoE username dari konfigurasi pon-onu-mng OLT.
-     * Command: show running-config pon-onu-mng gpon-onu_B/S/P:I
-     * Parse baris: wan-ip 1 mode pppoe username USER ...
+     * Ambil raw config pon-onu-mng dan parse semua field relevan.
+     * Return: ['raw' => string, 'pppoe_user' => ?string, 'pppoe_pass' => ?string,
+     *          'services' => [...], 'wan_ip' => [...]]
      */
-    public function getPonMngPppoeUser(string $board, string $slot, string $port, string $onuIndex): ?string
+    public function getPonMngConfig(string $board, string $slot, string $port, string $onuIndex): array
     {
-        $output = $this->telnet->execute(
+        $raw = $this->telnet->execute(
             "show running-config pon-onu-mng gpon-onu_{$board}/{$slot}/{$port}:{$onuIndex}",
             $this->rootPrompt, 10
         );
-        if (preg_match('/wan-ip\s+1\s+mode\s+pppoe\s+username\s+(\S+)/i', $output, $m)) {
-            return $m[1];
+
+        $result = ['raw' => $raw, 'pppoe_user' => null, 'pppoe_pass' => null, 'services' => [], 'wan_ip' => []];
+
+        foreach (explode("\n", $raw) as $line) {
+            $line = trim($line);
+            // wan-ip 1 mode pppoe username USER password PASS ...
+            if (preg_match('/wan-ip\s+(\d+)\s+mode\s+pppoe\s+username\s+(\S+)\s+password\s+(\S+)/i', $line, $m)) {
+                $result['wan_ip'][$m[1]] = ['mode' => 'pppoe', 'username' => $m[2], 'password' => $m[3]];
+                if ($m[1] === '1') {
+                    $result['pppoe_user'] = $m[2];
+                    $result['pppoe_pass'] = $m[3];
+                }
+            }
+            // wan-ip 2 mode dhcp ...
+            if (preg_match('/wan-ip\s+(\d+)\s+mode\s+dhcp/i', $line, $m)) {
+                $result['wan_ip'][$m[1]] = ['mode' => 'dhcp'];
+            }
+            // service hsi/ppp/acs gemport 1 vlan N
+            if (preg_match('/service\s+(\S+)\s+gemport\s+\d+\s+vlan\s+(\d+)/i', $line, $m)) {
+                $result['services'][] = ['name' => $m[1], 'vlan' => (int)$m[2]];
+            }
         }
-        return null;
+
+        return $result;
+    }
+
+    public function getPonMngPppoeUser(string $board, string $slot, string $port, string $onuIndex): ?string
+    {
+        return $this->getPonMngConfig($board, $slot, $port, $onuIndex)['pppoe_user'];
     }
 
     public function getBrand(): string { return 'ZTE'; }
