@@ -697,41 +697,21 @@ class OnuController extends Controller
     public function syncPppoeAll()
     {
         $this->response->setContentType('application/json');
-        set_time_limit(600);
 
-        $onuModel   = new OnuModel();
-        $oltModel   = new OltModel();
-        $acsModel   = new AcsServerModel();
-        $cache      = new OnuCacheService();
-        $onus       = $onuModel->getByUser($this->userId);
+        $onuModel = new OnuModel();
+        $cache    = new OnuCacheService();
+        $onus     = $onuModel->getByUser($this->userId);
 
-        // Muat semua ACS cache terlebih dahulu (untuk FH/Nokia/Huawei)
-        $acsData  = [];
-        $acsServer = $acsModel->getDefault($this->userId);
-        if ($acsServer) {
-            foreach (array_unique(array_column($onus, 'olt_id')) as $oltId) {
-                foreach ($cache->loadAcs((int)$oltId)['devices'] as $sn => $info) {
-                    $acsData[strtoupper($sn)] = $info;
-                }
-            }
-        }
-
-        // Group ZTE ONU by OLT (perlu koneksi OLT)
-        $zteByOlt = [];
-        $nonZte   = [];
-        foreach ($onus as $onu) {
-            if (strncasecmp($onu['sn'], 'ZTEG', 4) === 0) {
-                $zteByOlt[$onu['olt_id']][] = $onu;
-            } else {
-                $nonZte[] = $onu;
+        // Semua brand (ZTE, FH, Nokia, Huawei) — ambil dari ACS cache
+        $acsData = [];
+        foreach (array_unique(array_column($onus, 'olt_id')) as $oltId) {
+            foreach ($cache->loadAcs((int)$oltId)['devices'] as $sn => $info) {
+                $acsData[strtoupper($sn)] = $info;
             }
         }
 
         $updated = 0;
-        $errors  = [];
-
-        // FH/Nokia/Huawei: ambil dari ACS cache
-        foreach ($nonZte as $onu) {
+        foreach ($onus as $onu) {
             $pppoeUser = $acsData[strtoupper($onu['sn'])]['pppoe_user'] ?? null;
             if ($pppoeUser && $pppoeUser !== ($onu['pppoe_user'] ?? '')) {
                 $onuModel->update($onu['id'], ['pppoe_user' => $pppoeUser]);
@@ -739,33 +719,9 @@ class OnuController extends Controller
             }
         }
 
-        // ZTE: baca dari pon-onu-mng running-config OLT (1 koneksi per OLT)
-        foreach ($zteByOlt as $oltId => $oltOnus) {
-            $olt = $oltModel->find($oltId);
-            if (!$olt) continue;
-            try {
-                $driver = OltDriverFactory::make($olt);
-                $driver->connect();
-                foreach ($oltOnus as $onu) {
-                    if (!method_exists($driver, 'getPonMngPppoeUser')) continue;
-                    $user = $driver->getPonMngPppoeUser(
-                        $onu['board'], $onu['slot'], $onu['port'], $onu['onu_index']
-                    );
-                    if ($user && $user !== ($onu['pppoe_user'] ?? '')) {
-                        $onuModel->update($onu['id'], ['pppoe_user' => $user]);
-                        $updated++;
-                    }
-                }
-                $driver->disconnect();
-            } catch (\Exception $e) {
-                $errors[] = "OLT {$oltId}: " . $e->getMessage();
-            }
-        }
-
         return $this->response->setJSON([
             'success' => true,
             'updated' => $updated,
-            'errors'  => $errors,
             'message' => "{$updated} PPPoE username berhasil disinkronisasi ke database.",
         ]);
     }

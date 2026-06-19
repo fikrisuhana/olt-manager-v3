@@ -88,10 +88,7 @@
                                 </td>
                                 <?php
                                     $snUp = strtoupper($onu['sn']);
-                                    $isZte = strncmp($snUp, 'ZTEG', 4) === 0;
-                                    $pppUser = $isZte
-                                        ? ($onu['pppoe_user'] ?? null)
-                                        : ($acsData[$snUp]['pppoe_user'] ?? $onu['pppoe_user'] ?? null);
+                                    $pppUser = $acsData[$snUp]['pppoe_user'] ?? $onu['pppoe_user'] ?? null;
                                 ?>
                                 <td class="small">
                                     <?= $pppUser ? esc($pppUser) : '<span class="text-muted">—</span>' ?>
