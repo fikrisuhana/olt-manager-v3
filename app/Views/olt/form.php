@@ -82,8 +82,11 @@
                             <label class="form-label">Firmware Version</label>
                             <select name="firmware_version" class="form-select">
                                 <option value="">— Auto detect —</option>
-                                <?php foreach (['1.2' => 'v1.2 (service hsi)', '2.1' => 'v2.1 (service int)'] as $val => $label): ?>
-                                <option value="<?= $val ?>" <?= ($olt['firmware_version'] ?? '') === $val ? 'selected' : '' ?>>
+                                <?php
+                                $fwSelected = is_array($olt) ? ($olt['firmware_version'] ?? '') : '';
+                                foreach (['1.2' => 'v1.2 (service hsi)', '2.1' => 'v2.1 (service int)'] as $val => $label):
+                                ?>
+                                <option value="<?= $val ?>" <?= $fwSelected === $val ? 'selected' : '' ?>>
                                     <?= $label ?>
                                 </option>
                                 <?php endforeach; ?>
