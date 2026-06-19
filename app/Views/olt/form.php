@@ -76,8 +76,7 @@
                         <div class="col-12">
                             <label class="form-label">Enable Password <span class="text-muted small">(opsional — isi jika OLT minta password saat <code>enable</code>)</span></label>
                             <input type="password" name="enable_password" class="form-control"
-                                   placeholder="Kosongkan jika tidak ada"
-                                   value="">
+                                   placeholder="<?= ($olt && !empty($olt['enable_password'])) ? '(sudah diset — kosongkan jika tidak ingin mengubah)' : 'Kosongkan jika tidak ada' ?>">
                         </div>
                     </div>
 
