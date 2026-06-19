@@ -86,6 +86,9 @@ class OltController extends Controller
         if (empty($data['telnet_pass'])) {
             unset($data['telnet_pass']);
         }
+        if ($data['enable_password'] === null) {
+            unset($data['enable_password']);
+        }
 
         $oltModel->update($id, $data);
         return redirect()->to("/olts/{$id}")->with('success', 'OLT berhasil diperbarui.');
