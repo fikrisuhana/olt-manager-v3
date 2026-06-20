@@ -150,12 +150,23 @@ class DashboardController extends Controller
                 $onus = $onuModel->getByOlt($olt['id']);
                 if (empty($onus)) continue;
 
+                // Hanya ONU non-ZTE, belum di ACS, sudah punya credentials
+                // ONU yang sudah acs_device_id-nya diisi → skip total (tidak query ACS)
+                $pending = array_filter($onus, fn($o) =>
+                    empty($o['acs_device_id']) &&
+                    !empty($o['pppoe_user']) &&
+                    !empty($o['pppoe_pass']) &&
+                    strncasecmp($o['sn'], 'ZTEG', 4) !== 0
+                );
+
+                if (empty($pending)) continue;
+
                 $onuBySn = [];
-                foreach ($onus as $o) {
+                foreach ($pending as $o) {
                     $onuBySn[strtoupper($o['sn'])] = $o;
                 }
 
-                $sns = array_map(fn($o) => strtoupper($o['sn']), $onus);
+                $sns = array_map(fn($o) => strtoupper($o['sn']), $pending);
 
                 try {
                     $acsData = $acsService->getDevicesBySns($sns);
@@ -165,7 +176,7 @@ class DashboardController extends Controller
                     continue;
                 }
 
-                $cache->saveAcs($olt['id'], $acsData);
+                // Tidak update cache di sini — biarkan syncAcs() yang handle cache dashboard
 
                 foreach ($acsData as $sn => $info) {
                     $onu = $onuBySn[strtoupper($sn)] ?? null;
