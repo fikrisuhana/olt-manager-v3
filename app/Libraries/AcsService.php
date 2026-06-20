@@ -84,8 +84,9 @@ class AcsService
         $encodedId = rawurlencode($deviceId);
 
         if ($brand === 'fiberhome') {
-            // Pastikan WAN PPP slot ada — buat jika belum
-            $this->ensureFiberhomePppWan($encodedId, $wcd);
+            // Pastikan WAN PPP slot ada — return actual WCD index (bisa 1 jika fresh ONU)
+            $actualWcd = $this->ensureFiberhomePppWan($encodedId, $wcd);
+            $base      = "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.{$actualWcd}.WANPPPConnection.{$ppp}";
 
             $vlanId   = (int)($extra['vlan_internet'] ?? 0);
             $connName = $vlanId ? "2_INTERNET_R_VID_{$vlanId}" : '2_INTERNET_R_VID';
@@ -137,47 +138,50 @@ class AcsService
     }
 
     /**
-     * Pastikan WANConnectionDevice.{wcd} dan WANPPPConnection ada.
-     * Cek dulu WANConnectionDevice — kalau belum ada buat via addObject.
-     * Lalu cek WANPPPConnection — kalau belum ada buat juga.
+     * Pastikan WANConnectionDevice dan WANPPPConnection ada untuk FH ONU.
+     * Return: WCD index yang aktual digunakan.
+     *
+     * WANConnectionDeviceNumberOfEntries._value bisa null pada ONU fresh (belum dilaporkan).
+     * Solusi: hitung dari actual WCD keys di GenieACS tree (bukan dari NumberOfEntries).
+     * addObject WANConnectionDevice. selalu membuat index = current_count + 1.
      */
-    private function ensureFiberhomePppWan(string $encodedId, string $wcd): void
+    private function ensureFiberhomePppWan(string $encodedId, string $targetWcd): string
     {
         $wanDevPath = "InternetGatewayDevice.WANDevice.1";
-        $wcdPath    = "{$wanDevPath}.WANConnectionDevice.{$wcd}";
         $query      = urlencode(json_encode(['_id' => rawurldecode($encodedId)]));
 
-        // 1. Cek apakah WANConnectionDevice.{wcd} sudah ada
-        $proj     = "{$wanDevPath}.WANConnectionDeviceNumberOfEntries";
+        // 1. Ambil seluruh WCD tree — hitung instance numeric (lebih andal dari NumberOfEntries)
+        $proj     = "{$wanDevPath}.WANConnectionDevice";
         $response = $this->request('GET', "/devices?query={$query}&projection={$proj}&limit=1");
         $wcdCount = 0;
+        $wcdTree  = [];
         if ($response['status'] === 200) {
-            $devices  = json_decode($response['body'], true);
-            $wcdCount = (int)($devices[0]['InternetGatewayDevice']['WANDevice']['1']['WANConnectionDeviceNumberOfEntries']['_value'] ?? 0);
+            $devices = json_decode($response['body'], true);
+            $wcdTree = $devices[0]['InternetGatewayDevice']['WANDevice']['1']['WANConnectionDevice'] ?? [];
+            $wcdCount = count(array_filter(array_keys($wcdTree), 'is_numeric'));
         }
 
-        if ($wcdCount < (int)$wcd) {
-            // WANConnectionDevice.{wcd} belum ada — buat dulu
+        // addObject akan buat di index = count+1; jika sudah cukup pakai targetWcd langsung
+        $actualWcd = $wcdCount >= (int)$targetWcd ? $targetWcd : (string)($wcdCount + 1);
+
+        if ($wcdCount < (int)$targetWcd) {
             $task = ['name' => 'addObject', 'objectName' => "{$wanDevPath}.WANConnectionDevice."];
             $this->request('POST', "/devices/{$encodedId}/tasks?connection_request&timeout=10000", $task);
             sleep(3);
         }
 
-        // 2. Cek apakah WANPPPConnection ada di WCD.{wcd}
-        $proj     = "{$wcdPath}.WANPPPConnectionNumberOfEntries";
-        $response = $this->request('GET', "/devices?query={$query}&projection={$proj}&limit=1");
-        if ($response['status'] === 200) {
-            $devices = json_decode($response['body'], true);
-            $count   = $devices[0]['InternetGatewayDevice']['WANDevice']['1']['WANConnectionDevice'][$wcd]['WANPPPConnectionNumberOfEntries']['_value'] ?? null;
-            if ($count !== null && (int)$count > 0) {
-                return; // PPP connection sudah ada
-            }
+        // 2. Cek WANPPPConnection di WCD yang aktual (ambil dari tree yang sudah ada)
+        $pppCount = (int)($wcdTree[$actualWcd]['WANPPPConnectionNumberOfEntries']['_value'] ?? 0);
+        if ($pppCount > 0) {
+            return $actualWcd;
         }
 
-        // Buat WANPPPConnection baru
-        $task = ['name' => 'addObject', 'objectName' => "{$wcdPath}.WANPPPConnection."];
+        $wcdPath = "{$wanDevPath}.WANConnectionDevice.{$actualWcd}";
+        $task    = ['name' => 'addObject', 'objectName' => "{$wcdPath}.WANPPPConnection."];
         $this->request('POST', "/devices/{$encodedId}/tasks?connection_request&timeout=10000", $task);
         sleep(3);
+
+        return $actualWcd;
     }
 
     /**
@@ -383,22 +387,25 @@ class AcsService
 
         if ($brand === 'fiberhome') {
             $wanDevPath = "InternetGatewayDevice.WANDevice.1";
-            $wcdPath    = "{$wanDevPath}.WANConnectionDevice.{$wcd}";
             $query      = urlencode(json_encode(['_id' => $deviceId]));
 
-            // Cek state WAN — baru queue addObject yang perlu saja
-            $proj = "{$wanDevPath}.WANConnectionDeviceNumberOfEntries,{$wcdPath}.WANPPPConnectionNumberOfEntries";
-            $res  = $this->request('GET', "/devices?query={$query}&projection={$proj}&limit=1");
-
-            $wcdExists = false;
-            $pppExists = false;
+            // Hitung WCD dari tree GenieACS — NumberOfEntries._value bisa null pada ONU fresh
+            $proj    = "{$wanDevPath}.WANConnectionDevice";
+            $res     = $this->request('GET', "/devices?query={$query}&projection={$proj}&limit=1");
+            $wcdCount = 0;
+            $wcdTree  = [];
             if ($res['status'] === 200) {
-                $d        = json_decode($res['body'], true)[0] ?? [];
-                $wcdCount = (int)($d['InternetGatewayDevice']['WANDevice']['1']['WANConnectionDeviceNumberOfEntries']['_value'] ?? 0);
-                $pppCount = (int)($d['InternetGatewayDevice']['WANDevice']['1']['WANConnectionDevice'][$wcd]['WANPPPConnectionNumberOfEntries']['_value'] ?? 0);
-                $wcdExists = $wcdCount >= (int)$wcd;
-                $pppExists = $pppCount > 0;
+                $d = json_decode($res['body'], true)[0] ?? [];
+                $wcdTree  = $d['InternetGatewayDevice']['WANDevice']['1']['WANConnectionDevice'] ?? [];
+                $wcdCount = count(array_filter(array_keys($wcdTree), 'is_numeric'));
             }
+
+            $wcdExists = $wcdCount >= (int)$wcd;
+            $actualWcd = $wcdExists ? $wcd : (string)($wcdCount + 1);
+            $wcdPath   = "{$wanDevPath}.WANConnectionDevice.{$actualWcd}";
+
+            $pppCount  = (int)($wcdTree[$actualWcd]['WANPPPConnectionNumberOfEntries']['_value'] ?? 0);
+            $pppExists = $wcdExists && $pppCount > 0;
 
             if (!$wcdExists) {
                 $this->request('POST', "/devices/{$encodedId}/tasks", [
@@ -411,6 +418,8 @@ class AcsService
                 ]);
             }
 
+            // Gunakan actualWcd untuk base path setParameterValues
+            $base   = "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.{$actualWcd}.WANPPPConnection.{$ppp}";
             $vlanId = (int)($extra['vlan_internet'] ?? 0);
             $params = [
                 ["{$base}.Enable",           true,        'xsd:boolean'],
