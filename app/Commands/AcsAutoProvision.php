@@ -22,19 +22,33 @@ class AcsAutoProvision extends BaseCommand
 
     public function run(array $params): void
     {
-        $dryRun     = array_key_exists('dry-run', $params) || CLI::getOption('dry-run');
-        $acsModel   = new AcsServerModel();
-        $oltModel   = new OltModel();
-        $onuModel   = new OnuModel();
-        $cache      = new OnuCacheService();
+        try {
+            $this->doRun($params);
+        } catch (\Throwable $e) {
+            CLI::error('FATAL: ' . $e->getMessage());
+            CLI::error($e->getFile() . ':' . $e->getLine());
+        }
+    }
+
+    private function doRun(array $params): void
+    {
+        CLI::write('ACS Auto-Provision dimulai...');
+
+        $dryRun   = CLI::getOption('dry-run') !== null;
+        $acsModel = new AcsServerModel();
+        $oltModel = new OltModel();
+        $onuModel = new OnuModel();
+        $cache    = new OnuCacheService();
 
         // Ambil semua ACS server default per user
-        $db          = \Config\Database::connect();
-        $userIds     = $db->table('acs_servers')
-                          ->select('user_id')
-                          ->where('is_default', 1)
-                          ->distinct()
-                          ->get()->getResultArray();
+        $db      = db_connect();
+        $userIds = $db->table('acs_servers')
+                      ->select('user_id')
+                      ->where('is_default', 1)
+                      ->distinct()
+                      ->get()->getResultArray();
+
+        CLI::write('User dengan ACS default: ' . count($userIds));
 
         if (empty($userIds)) {
             CLI::write('Tidak ada ACS server terdaftar.');
