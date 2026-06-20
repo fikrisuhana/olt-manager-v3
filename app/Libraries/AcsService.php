@@ -353,6 +353,49 @@ class AcsService
     }
 
     /**
+     * Queue PPPoE task tanpa connection_request (async, jalan saat ONU inform berikutnya).
+     * Dipakai untuk auto-provisioning saat Sync ACS — tidak nunggu ONU online.
+     * Tidak lakukan addObject — jika WAN slot belum ada, task fail; user bisa push manual.
+     */
+    public function queueProvisionPppoe(string $deviceId, string $pppoeUser, string $pppoePass, string $brand = 'default', array $extra = []): bool
+    {
+        $brand  = strtolower($brand);
+        $paths  = self::WAN_PATHS[$brand] ?? self::WAN_PATHS['default'];
+        $wcd    = $paths['wcd_index'];
+        $ppp    = $paths['ppp_index'];
+        $base   = "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.{$wcd}.WANPPPConnection.{$ppp}";
+        $encodedId = rawurlencode($deviceId);
+
+        if ($brand === 'fiberhome') {
+            $vlanId = (int)($extra['vlan_internet'] ?? 0);
+            $params = [
+                ["{$base}.Enable",           true,        'xsd:boolean'],
+                ["{$base}.ConnectionType",   'IP_Routed', 'xsd:string'],
+                ["{$base}.NATEnabled",       true,        'xsd:boolean'],
+                ["{$base}.X_FH_ServiceList", 'INTERNET',  'xsd:string'],
+                ["{$base}.Username",         $pppoeUser,  'xsd:string'],
+                ["{$base}.Password",         $pppoePass,  'xsd:string'],
+            ];
+            if ($vlanId > 0) {
+                $params[] = ["{$base}.VLANEnable", true,    'xsd:boolean'];
+                $params[] = ["{$base}.VLANID",     $vlanId, 'xsd:unsignedInt'];
+            }
+        } else {
+            $params = [
+                ["{$base}.Username", $pppoeUser, 'xsd:string'],
+                ["{$base}.Password", $pppoePass, 'xsd:string'],
+                ["{$base}.Enable",   true,        'xsd:boolean'],
+            ];
+        }
+
+        $response = $this->request('POST', "/devices/{$encodedId}/tasks", [
+            'name'            => 'setParameterValues',
+            'parameterValues' => $params,
+        ]);
+        return in_array($response['status'], [200, 201, 202]);
+    }
+
+    /**
      * Reboot ONU via GenieACS.
      */
     public function rebootDevice(string $deviceId): bool

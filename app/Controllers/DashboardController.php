@@ -120,13 +120,14 @@ class DashboardController extends Controller
         $cache    = new OnuCacheService();
         $olts     = $oltModel->getByUser($userId);
 
-        $totalOnline = 0;
-        $totalSynced = 0;
-        $errors      = [];
+        $totalOnline  = 0;
+        $totalSynced  = 0;
+        $errors       = [];
+        $pppoeUpdated = 0;
+        $autoPushed   = 0;
 
         try {
-            $acsService  = new AcsService($acs);
-            $pppoeUpdated = 0;
+            $acsService = new AcsService($acs);
 
             foreach ($olts as $olt) {
                 $onus = $onuModel->getByOlt($olt['id']);
@@ -146,14 +147,39 @@ class DashboardController extends Controller
                 $totalOnline += $online;
                 $totalSynced += count($acsData);
 
-                // Update pppoe_user di DB jika ACS punya data tapi DB belum
                 foreach ($acsData as $sn => $info) {
-                    $pppoeUser = $info['pppoe_user'] ?? null;
-                    if (!$pppoeUser) continue;
                     $onu = $onuBySn[strtoupper($sn)] ?? null;
-                    if ($onu && empty($onu['pppoe_user'])) {
-                        $onuModel->update($onu['id'], ['pppoe_user' => $pppoeUser]);
+                    if (!$onu) continue;
+
+                    $acsHasPppoe = !empty($info['pppoe_user']);
+                    $dbHasPppoe  = !empty($onu['pppoe_user']);
+                    $isZte       = strncasecmp($onu['sn'], 'ZTEG', 4) === 0;
+
+                    // ACS punya PPPoE tapi DB belum → simpan ke DB
+                    if ($acsHasPppoe && !$dbHasPppoe) {
+                        $onuModel->update($onu['id'], ['pppoe_user' => $info['pppoe_user']]);
                         $pppoeUpdated++;
+                    }
+
+                    // DB punya PPPoE tapi ACS belum + bukan ZTE → auto-queue push via ACS
+                    // ZTE skip: PPPoE sudah dikonfigurasi di OLT pon-onu-mng, bukan via ACS
+                    if ($dbHasPppoe && !$acsHasPppoe && !$isZte && !empty($onu['pppoe_pass'])) {
+                        $mfr   = strtolower($info['manufacturer'] ?? '');
+                        $brand = (str_contains($mfr, 'fiber') || str_contains($mfr, 'fh'))
+                               ? 'fiberhome'
+                               : (str_contains($mfr, 'huawei') ? 'huawei' : 'default');
+                        try {
+                            $acsService->queueProvisionPppoe(
+                                $info['device_id'],
+                                $onu['pppoe_user'],
+                                $onu['pppoe_pass'],
+                                $brand,
+                                ['vlan_internet' => (int)($onu['vlan_internet'] ?? 0)]
+                            );
+                            $autoPushed++;
+                        } catch (\Exception $e) {
+                            $errors[] = "Auto-push {$sn}: " . $e->getMessage();
+                        }
                     }
                 }
             }
@@ -161,12 +187,19 @@ class DashboardController extends Controller
             return $this->response->setJSON(['success' => false, 'message' => $e->getMessage()]);
         }
 
+        $msg = "{$totalOnline} online dari {$totalSynced} device di ACS.";
+        if ($pppoeUpdated) $msg .= " {$pppoeUpdated} PPPoE username disimpan ke DB.";
+        if ($autoPushed)   $msg .= " {$autoPushed} ONU di-queue auto-provisioning PPPoE.";
+        if ($errors)       $msg .= " " . count($errors) . " error.";
+
         return $this->response->setJSON([
             'success'       => true,
             'online'        => $totalOnline,
             'synced'        => $totalSynced,
             'pppoe_updated' => $pppoeUpdated,
-            'message'       => "{$totalOnline} online dari {$totalSynced} device di ACS." . ($pppoeUpdated ? " {$pppoeUpdated} PPPoE username disimpan ke DB." : ''),
+            'auto_pushed'   => $autoPushed,
+            'errors'        => $errors,
+            'message'       => $msg,
         ]);
     }
 }

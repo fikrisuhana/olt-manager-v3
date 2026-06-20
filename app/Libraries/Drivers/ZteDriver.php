@@ -335,13 +335,22 @@ class ZteDriver implements OltDriverInterface
             }
             $this->telnet->execute("vlan port veip_1 mode hybrid", $this->mngPrompt, 5);
 
-            // DHCP management IP agar ZTE ONU bisa konek ke ACS (iphost 2 = management channel)
+            // DHCP management IP + ACS URL agar ZTE ONU konek ke TR-069/GenieACS
             if ($vlanAcs && !$isFiberhome) {
                 $out = $this->telnet->execute("wan-ip 2 mode dhcp iphost 2", $this->mngPrompt, 5);
                 if (stripos($out, 'Error') !== false || stripos($out, 'Invalid') !== false) {
                     $log[] = "WARN pon-onu-mng: wan-ip 2 dhcp → " . trim(substr($out, -120));
                 } else {
                     $log[] = "wan-ip 2 dhcp (ACS management) OK";
+                }
+                $acsUrl = trim($params['acs_url'] ?? '');
+                if ($acsUrl) {
+                    $out = $this->telnet->execute("ip-host 2 tr069-server-url {$acsUrl}", $this->mngPrompt, 5);
+                    if (stripos($out, 'Error') !== false || stripos($out, 'Invalid') !== false) {
+                        $log[] = "WARN pon-onu-mng: ip-host 2 tr069-server-url → " . trim(substr($out, -120));
+                    } else {
+                        $log[] = "ip-host 2 tr069-server-url {$acsUrl} OK";
+                    }
                 }
             }
 
@@ -470,6 +479,11 @@ class ZteDriver implements OltDriverInterface
         if ($vlanAcs) {
             $out   = $this->telnet->execute("wan-ip 2 mode dhcp iphost 2", $this->mngPrompt, 5);
             $log[] = "wan-ip 2 dhcp → " . trim(preg_replace('/\s+/', ' ', $out));
+            // Set TR-069 ACS server URL agar ONU tahu harus konek ke mana
+            if ($acsUrl) {
+                $out   = $this->telnet->execute("ip-host 2 tr069-server-url {$acsUrl}", $this->mngPrompt, 5);
+                $log[] = "ip-host 2 tr069-server-url → " . trim(preg_replace('/\s+/', ' ', $out));
+            }
         }
 
         if ($pppoeUser && $pppoePass) {
