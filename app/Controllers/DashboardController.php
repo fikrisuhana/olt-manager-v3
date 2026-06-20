@@ -151,34 +151,40 @@ class DashboardController extends Controller
                     $onu = $onuBySn[strtoupper($sn)] ?? null;
                     if (!$onu) continue;
 
-                    $acsHasPppoe = !empty($info['pppoe_user']);
-                    $dbHasPppoe  = !empty($onu['pppoe_user']);
-                    $isZte       = strncasecmp($onu['sn'], 'ZTEG', 4) === 0;
+                    $isZte      = strncasecmp($onu['sn'], 'ZTEG', 4) === 0;
+                    $wasInAcs   = !empty($onu['acs_device_id']);   // sudah pernah diproses ACS?
+                    $deviceId   = $info['device_id'] ?? null;
 
                     // ACS punya PPPoE tapi DB belum → simpan ke DB
-                    if ($acsHasPppoe && !$dbHasPppoe) {
+                    if (!empty($info['pppoe_user']) && empty($onu['pppoe_user'])) {
                         $onuModel->update($onu['id'], ['pppoe_user' => $info['pppoe_user']]);
                         $pppoeUpdated++;
                     }
 
-                    // DB punya PPPoE tapi ACS belum + bukan ZTE → auto-queue push via ACS
-                    // ZTE skip: PPPoE sudah dikonfigurasi di OLT pon-onu-mng, bukan via ACS
-                    if ($dbHasPppoe && !$acsHasPppoe && !$isZte && !empty($onu['pppoe_pass'])) {
-                        $mfr   = strtolower($info['manufacturer'] ?? '');
-                        $brand = (str_contains($mfr, 'fiber') || str_contains($mfr, 'fh'))
-                               ? 'fiberhome'
-                               : (str_contains($mfr, 'huawei') ? 'huawei' : 'default');
-                        try {
-                            $acsService->queueProvisionPppoe(
-                                $info['device_id'],
-                                $onu['pppoe_user'],
-                                $onu['pppoe_pass'],
-                                $brand,
-                                ['vlan_internet' => (int)($onu['vlan_internet'] ?? 0)]
-                            );
-                            $autoPushed++;
-                        } catch (\Exception $e) {
-                            $errors[] = "Auto-push {$sn}: " . $e->getMessage();
+                    // ONU baru pertama kali muncul di ACS (acs_device_id masih kosong di DB)
+                    if (!$wasInAcs && $deviceId) {
+                        // Simpan device_id agar next sync tidak push lagi
+                        $onuModel->update($onu['id'], ['acs_device_id' => $deviceId]);
+
+                        // Auto-push PPPoE hanya untuk non-ZTE yang punya credentials di DB
+                        // ZTE skip: PPPoE dikonfigurasi di OLT pon-onu-mng, bukan via ACS
+                        if (!$isZte && !empty($onu['pppoe_user']) && !empty($onu['pppoe_pass'])) {
+                            $mfr   = strtolower($info['manufacturer'] ?? '');
+                            $brand = (str_contains($mfr, 'fiber') || str_contains($mfr, 'fh'))
+                                   ? 'fiberhome'
+                                   : (str_contains($mfr, 'huawei') ? 'huawei' : 'default');
+                            try {
+                                $acsService->queueProvisionPppoe(
+                                    $deviceId,
+                                    $onu['pppoe_user'],
+                                    $onu['pppoe_pass'],
+                                    $brand,
+                                    ['vlan_internet' => (int)($onu['vlan_internet'] ?? 0)]
+                                );
+                                $autoPushed++;
+                            } catch (\Exception $e) {
+                                $errors[] = "Auto-push {$sn}: " . $e->getMessage();
+                            }
                         }
                     }
                 }
