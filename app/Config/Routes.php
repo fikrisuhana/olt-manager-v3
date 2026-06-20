@@ -11,6 +11,9 @@ $routes->get('/', static function () {
         : redirect()->to('/login');
 });
 
+// Cron endpoint — tanpa auth middleware, diamankan dengan token
+$routes->get('internal/acs-provision/(:any)', 'DashboardController::cronProvision/$1');
+
 // Auth (tidak perlu login)
 $routes->get('login',           'AuthController::login');
 $routes->post('login/process',  'AuthController::loginProcess');

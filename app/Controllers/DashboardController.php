@@ -101,6 +101,121 @@ class DashboardController extends Controller
     }
 
     /**
+     * Cron endpoint: auto-provision PPPoE untuk ONU non-ZTE yang baru muncul di ACS.
+     * Dipanggil via curl dari crontab — tidak perlu session/login.
+     * Token di-set via CRON_TOKEN di .env.
+     */
+    public function cronProvision(string $token): void
+    {
+        $expected = env('CRON_TOKEN', '');
+        if (!$expected || !hash_equals($expected, $token)) {
+            http_response_code(403);
+            echo json_encode(['error' => 'Unauthorized']);
+            return;
+        }
+
+        $acsModel = new AcsServerModel();
+        $oltModel = new OltModel();
+        $onuModel = new OnuModel();
+        $cache    = new OnuCacheService();
+
+        $db      = \Config\Database::connect();
+        $userIds = $db->table('acs_servers')
+                      ->select('user_id')
+                      ->where('is_default', 1)
+                      ->distinct()
+                      ->get()->getResultArray();
+
+        $totalPushed = 0;
+        $totalErrors = 0;
+        $log         = [];
+
+        foreach ($userIds as $row) {
+            $userId = (int) $row['user_id'];
+            $acs    = $acsModel->getDefault($userId);
+            if (!$acs) continue;
+
+            $olts = $oltModel->getByUser($userId);
+            if (empty($olts)) continue;
+
+            try {
+                $acsService = new AcsService($acs);
+            } catch (\Exception $e) {
+                $log[] = "User {$userId}: gagal init ACS — " . $e->getMessage();
+                $totalErrors++;
+                continue;
+            }
+
+            foreach ($olts as $olt) {
+                $onus = $onuModel->getByOlt($olt['id']);
+                if (empty($onus)) continue;
+
+                $onuBySn = [];
+                foreach ($onus as $o) {
+                    $onuBySn[strtoupper($o['sn'])] = $o;
+                }
+
+                $sns = array_map(fn($o) => strtoupper($o['sn']), $onus);
+
+                try {
+                    $acsData = $acsService->getDevicesBySns($sns);
+                } catch (\Exception $e) {
+                    $log[] = "OLT {$olt['name']}: gagal query ACS — " . $e->getMessage();
+                    $totalErrors++;
+                    continue;
+                }
+
+                $cache->saveAcs($olt['id'], $acsData);
+
+                foreach ($acsData as $sn => $info) {
+                    $onu = $onuBySn[strtoupper($sn)] ?? null;
+                    if (!$onu) continue;
+
+                    $isZte    = strncasecmp($onu['sn'], 'ZTEG', 4) === 0;
+                    $wasInAcs = !empty($onu['acs_device_id']);
+                    $deviceId = $info['device_id'] ?? null;
+
+                    if (!$wasInAcs && $deviceId) {
+                        $onuModel->update($onu['id'], ['acs_device_id' => $deviceId]);
+
+                        if ($isZte || empty($onu['pppoe_user']) || empty($onu['pppoe_pass'])) {
+                            continue;
+                        }
+
+                        $mfr   = strtolower($info['manufacturer'] ?? '');
+                        $brand = (str_contains($mfr, 'fiber') || str_contains($mfr, 'fh'))
+                               ? 'fiberhome'
+                               : (str_contains($mfr, 'huawei') ? 'huawei' : 'default');
+
+                        try {
+                            $acsService->queueProvisionPppoe(
+                                $deviceId,
+                                $onu['pppoe_user'],
+                                $onu['pppoe_pass'],
+                                $brand,
+                                ['vlan_internet' => (int)($onu['vlan_internet'] ?? 0)]
+                            );
+                            $log[] = "PUSHED: {$sn} ({$brand})";
+                            $totalPushed++;
+                        } catch (\Exception $e) {
+                            $log[] = "ERROR {$sn}: " . $e->getMessage();
+                            $totalErrors++;
+                        }
+                    }
+                }
+            }
+        }
+
+        header('Content-Type: application/json');
+        echo json_encode([
+            'pushed' => $totalPushed,
+            'errors' => $totalErrors,
+            'log'    => $log,
+            'time'   => date('Y-m-d H:i:s'),
+        ]);
+    }
+
+    /**
      * AJAX: sync ACS cache untuk semua OLT milik user.
      * Hanya query GenieACS (tidak konek OLT via Telnet) — cepat.
      */
