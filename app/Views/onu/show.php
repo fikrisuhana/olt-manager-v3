@@ -789,10 +789,18 @@ function setPppoe() {
     el.classList.remove('d-none');
 
     fetch(`/onus/${ONU_ID}/acs-set`, { method: 'POST', body: fd })
-        .then(r => r.json())
+        .then(r => r.text().then(text => {
+            try { return JSON.parse(text); } catch(e) {
+                throw new Error(`Server error (${r.status}): ${text.substring(0, 200)}`);
+            }
+        }))
         .then(data => {
             el.className = `mt-2 small alert alert-${data.success ? 'success' : 'danger'}`;
             el.textContent = data.message || (data.success ? 'PPPoE berhasil dipush ke ONU.' : 'Gagal.');
+        })
+        .catch(err => {
+            el.className = 'mt-2 small alert alert-danger';
+            el.textContent = 'Error: ' + err.message;
         });
 }
 
