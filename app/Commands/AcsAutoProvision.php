@@ -37,7 +37,7 @@ class AcsAutoProvision extends BaseCommand
                           ->get()->getResultArray();
 
         if (empty($userIds)) {
-            CLI::writeLn('Tidak ada ACS server terdaftar.');
+            CLI::write('Tidak ada ACS server terdaftar.');
             return;
         }
 
@@ -98,13 +98,13 @@ class AcsAutoProvision extends BaseCommand
 
                         // Skip ZTE: PPPoE diatur via OLT pon-onu-mng, bukan ACS
                         if ($isZte) {
-                            CLI::writeLn("[SKIP-ZTE] {$sn} — device_id disimpan, PPPoE skip.");
+                            CLI::write("[SKIP-ZTE] {$sn} — device_id disimpan, PPPoE skip.");
                             continue;
                         }
 
                         // Butuh credentials
                         if (empty($onu['pppoe_user']) || empty($onu['pppoe_pass'])) {
-                            CLI::writeLn("[SKIP-NOCRED] {$sn} — belum ada PPPoE credentials di DB.");
+                            CLI::write("[SKIP-NOCRED] {$sn} — belum ada PPPoE credentials di DB.");
                             continue;
                         }
 
@@ -114,7 +114,7 @@ class AcsAutoProvision extends BaseCommand
                                : (str_contains($mfr, 'huawei') ? 'huawei' : 'default');
 
                         if ($dryRun) {
-                            CLI::writeLn("[DRY-RUN] Akan push PPPoE ke {$sn} ({$brand}) user={$onu['pppoe_user']}");
+                            CLI::write("[DRY-RUN] Akan push PPPoE ke {$sn} ({$brand}) user={$onu['pppoe_user']}");
                             $totalPushed++;
                             continue;
                         }
@@ -127,7 +127,7 @@ class AcsAutoProvision extends BaseCommand
                                 $brand,
                                 ['vlan_internet' => (int)($onu['vlan_internet'] ?? 0)]
                             );
-                            CLI::writeLn("[PUSHED] {$sn} ({$brand}) → PPPoE queued ke ACS.");
+                            CLI::write("[PUSHED] {$sn} ({$brand}) → PPPoE queued ke ACS.");
                             $totalPushed++;
                         } catch (\Exception $e) {
                             CLI::error("[ERROR] {$sn}: " . $e->getMessage());
@@ -138,7 +138,7 @@ class AcsAutoProvision extends BaseCommand
             }
         }
 
-        CLI::writeLn('');
-        CLI::writeLn("Selesai: {$totalPushed} ONU di-push, {$totalErrors} error.");
+        CLI::write('');
+        CLI::write("Selesai: {$totalPushed} ONU di-push, {$totalErrors} error.");
     }
 }
