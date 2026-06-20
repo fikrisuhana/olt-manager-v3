@@ -19,6 +19,7 @@ services:
       DB_PASS: ${DB_PASS:-gpon_secret}
       SESSION_EXPIRATION: "7200"
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
+      CRON_TOKEN: ${CRON_TOKEN:-}
     volumes:
       - gpon_writable:/var/www/html/writable
     depends_on:

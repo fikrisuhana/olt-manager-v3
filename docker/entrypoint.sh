@@ -28,6 +28,8 @@ app.sessionSavePath   = '/var/www/html/writable/session'
 app.sessionCookieSecure = false
 
 encryption.key = ${ENCRYPTION_KEY:-$(php -r 'echo bin2hex(random_bytes(32));')}
+
+CRON_TOKEN = ${CRON_TOKEN:-}
 EOF
     echo ">>> .env created."
 else
