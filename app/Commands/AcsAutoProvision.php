@@ -22,16 +22,21 @@ class AcsAutoProvision extends BaseCommand
 
     public function run(array $params): void
     {
+        echo "=== RUN() CALLED ===\n";
+        flush();
         try {
             $this->doRun($params);
         } catch (\Throwable $e) {
-            CLI::error('FATAL: ' . $e->getMessage());
-            CLI::error($e->getFile() . ':' . $e->getLine());
+            echo "FATAL: " . $e->getMessage() . "\n";
+            echo $e->getFile() . ':' . $e->getLine() . "\n";
+            echo $e->getTraceAsString() . "\n";
         }
+        echo "=== DONE ===\n";
     }
 
     private function doRun(array $params): void
     {
+        echo "doRun() started\n";
         CLI::write('ACS Auto-Provision dimulai...');
 
         $dryRun   = CLI::getOption('dry-run') !== null;
