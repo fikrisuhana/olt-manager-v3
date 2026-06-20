@@ -308,7 +308,11 @@
                         </div>
                         <div class="mt-2">
                             <div class="form-text">
-                                <i class="bi bi-info-circle me-1"></i>Jika diisi, ONU akan dikonfigurasi otomatis via <strong>GenieACS/TR-069</strong> setelah muncul di ACS (~1–5 menit).
+                                <?php if (strtoupper($olt['brand'] ?? '') === 'ZTE'): ?>
+                                <i class="bi bi-info-circle me-1"></i>ZTE: PPPoE dikonfigurasi langsung via <strong>OLT pon-onu-mng</strong> saat registrasi. ONU juga otomatis konek ke ACS setelah mendapat IP management.
+                                <?php else: ?>
+                                <i class="bi bi-info-circle me-1"></i>Jika diisi, PPPoE dikonfigurasi otomatis via <strong>GenieACS/TR-069</strong> setelah ONU muncul di ACS (~1–5 menit).
+                                <?php endif; ?>
                             </div>
                         </div>
                     </div>
