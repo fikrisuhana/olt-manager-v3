@@ -116,13 +116,29 @@
                         ACS / GenieACS
                     </h6>
 
-                    <div class="row g-3 mb-4">
-                        <div class="col-8">
+                    <div class="row g-3 mb-3">
+                        <div class="col-12">
                             <label class="form-label">ACS URL (TR-069)</label>
                             <input type="text" name="acs_url" class="form-control"
                                    value="<?= esc($olt['acs_url'] ?? '') ?>"
                                    placeholder="http://136.1.1.8:7547">
-                            <div class="form-text">URL CWMP GenieACS — diset otomatis ke ONU via OMCI saat register (ZTE). Kosongkan jika tidak pakai ACS.</div>
+                            <div class="form-text">URL CWMP GenieACS — diset ke ONU via <code>tr069-mgmt 1 acs</code> saat register (ZTE).</div>
+                        </div>
+                    </div>
+                    <div class="row g-3 mb-4">
+                        <div class="col-4">
+                            <label class="form-label">ACS Username</label>
+                            <input type="text" name="acs_user" class="form-control"
+                                   value="<?= esc($olt['acs_user'] ?? '') ?>"
+                                   placeholder="acs">
+                            <div class="form-text">Username autentikasi GenieACS (opsional).</div>
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label">ACS Password</label>
+                            <input type="text" name="acs_pass" class="form-control"
+                                   value="<?= esc($olt['acs_pass'] ?? '') ?>"
+                                   placeholder="acspass">
+                            <div class="form-text">Password autentikasi GenieACS (opsional).</div>
                         </div>
                         <div class="col-4">
                             <label class="form-label">PPPoE VLAN Profile</label>

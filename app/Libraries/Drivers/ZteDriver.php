@@ -339,15 +339,9 @@ class ZteDriver implements OltDriverInterface
             // ip-host 1 = management channel, tr069-mgmt 1 acs = ACS URL (diverifikasi di OLT v1+v2)
             if ($vlanAcs && !$isFiberhome) {
                 $this->applyWanIpDhcp(1, $log);
-                $acsUrl = trim($params['acs_url'] ?? '');
+                $acsUrl = trim($params['acs_url'] ?? $this->config['acs_url'] ?? '');
                 if ($acsUrl) {
-                    $out = $this->telnet->execute("tr069-mgmt 1 acs {$acsUrl}", $this->mngPrompt, 5);
-                    if (stripos($out, 'Error') !== false || stripos($out, 'Invalid') !== false) {
-                        $log[] = "WARN: tr069-mgmt 1 acs → " . trim(substr($out, -120));
-                    } else {
-                        $this->telnet->execute("tr069-mgmt 1 state unlock", $this->mngPrompt, 5);
-                        $log[] = "tr069-mgmt 1 acs {$acsUrl} + state unlock OK";
-                    }
+                    $this->applyTr069Mgmt($acsUrl, $log);
                 }
             }
 
@@ -476,13 +470,7 @@ class ZteDriver implements OltDriverInterface
         if ($vlanAcs) {
             $this->applyWanIpDhcp(1, $log);
             if ($acsUrl) {
-                $out = $this->telnet->execute("tr069-mgmt 1 acs {$acsUrl}", $this->mngPrompt, 5);
-                if (stripos($out, 'Error') !== false || stripos($out, 'Invalid') !== false) {
-                    $log[] = "WARN: tr069-mgmt 1 acs → " . trim(substr($out, -120));
-                } else {
-                    $this->telnet->execute("tr069-mgmt 1 state unlock", $this->mngPrompt, 5);
-                    $log[] = "tr069-mgmt 1 acs {$acsUrl} + state unlock OK";
-                }
+                $this->applyTr069Mgmt($acsUrl, $log);
             }
         }
 
@@ -514,6 +502,24 @@ class ZteDriver implements OltDriverInterface
      * ZTE firmware berbeda-beda: 'hsi', 'int', atau 'ppp'.
      * Coba berurutan sampai berhasil.
      */
+    // tr069-mgmt 1 acs {url} [validate basic username {u} password {p}] + state unlock
+    private function applyTr069Mgmt(string $acsUrl, array &$log): void
+    {
+        $acsUser = trim($this->config['acs_user'] ?? '');
+        $acsPass = trim($this->config['acs_pass'] ?? '');
+        $cmd     = $acsUser && $acsPass
+            ? "tr069-mgmt 1 acs {$acsUrl} validate basic username {$acsUser} password {$acsPass}"
+            : "tr069-mgmt 1 acs {$acsUrl}";
+
+        $out = $this->telnet->execute($cmd, $this->mngPrompt, 5);
+        if (stripos($out, 'Error') !== false || stripos($out, 'Invalid') !== false) {
+            $log[] = "WARN: tr069-mgmt 1 acs → " . trim(substr($out, -120));
+        } else {
+            $this->telnet->execute("tr069-mgmt 1 state unlock", $this->mngPrompt, 5);
+            $log[] = "tr069-mgmt 1 acs" . ($acsUser ? " + validate basic {$acsUser}" : "") . " + state unlock OK";
+        }
+    }
+
     // ip-host N dhcp-enable enable — diverifikasi langsung di OLT v1 dan v2
     private function applyWanIpDhcp(int $ipHost, array &$log): void
     {
