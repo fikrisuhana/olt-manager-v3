@@ -225,33 +225,110 @@
                 <h6 class="mb-0 fw-semibold"><i class="bi bi-wifi me-1"></i>Edit WiFi</h6>
             </div>
             <div class="card-body">
-                <div class="row g-3">
-                    <div class="col-6">
-                        <label class="form-label small fw-medium">SSID (Nama WiFi)</label>
-                        <input type="text" id="wifi_ssid" class="form-control" placeholder="Nama-WiFi-Saya">
+                <!-- Info WiFi saat ini (diisi oleh Refresh ACS) -->
+                <div id="wifiInfoRow" class="d-none mb-3">
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <div class="rounded p-2" style="background:#f0f9ff;border:1px solid #bae6fd">
+                                <div class="d-flex align-items-center gap-1 mb-1">
+                                    <i class="bi bi-wifi text-primary small"></i>
+                                    <small class="fw-semibold text-primary">2.4GHz</small>
+                                </div>
+                                <div class="font-monospace small text-truncate" id="wifiInfo24" title="">—</div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="rounded p-2" style="background:#f0fdf4;border:1px solid #bbf7d0">
+                                <div class="d-flex align-items-center gap-1 mb-1">
+                                    <i class="bi bi-wifi text-success small"></i>
+                                    <small class="fw-semibold text-success">5GHz</small>
+                                </div>
+                                <div class="font-monospace small text-truncate" id="wifiInfo5" title="">—</div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="col-6">
-                        <label class="form-label small fw-medium">Password WiFi (WPA/WPA2 PSK)</label>
-                        <div class="input-group">
-                            <input type="password" id="wifi_key" class="form-control" placeholder="min 8 karakter">
-                            <button class="btn btn-outline-secondary" type="button"
-                                    onclick="togglePass('wifi_key',this)" tabindex="-1">
-                                <i class="bi bi-eye"></i>
+                </div>
+
+                <!-- Toggle mode -->
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" id="wifi_dual_band" checked onchange="toggleWifiMode()">
+                    <label class="form-check-label small" for="wifi_dual_band">
+                        Terapkan ke <strong>2.4GHz &amp; 5GHz</strong> sekaligus (SSID &amp; password sama)
+                    </label>
+                </div>
+
+                <!-- Mode single: satu SSID + password untuk kedua band -->
+                <div id="wifiSingleForm">
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <label class="form-label small fw-medium">SSID (Nama WiFi)</label>
+                            <input type="text" id="wifi_ssid" class="form-control" placeholder="Nama-WiFi">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-medium">Password WiFi</label>
+                            <div class="input-group">
+                                <input type="password" id="wifi_key" class="form-control" placeholder="min 8 karakter">
+                                <button class="btn btn-outline-secondary" type="button"
+                                        onclick="togglePass('wifi_key',this)" tabindex="-1">
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-text">SSID &amp; password sama untuk 2.4GHz dan 5GHz.</div>
+                    <div id="wifiResult" class="mt-2 d-none small"></div>
+                    <button class="btn btn-primary btn-sm mt-3" onclick="setWifi('both')">
+                        <i class="bi bi-cloud-upload me-1"></i>Push ke ONU (2.4GHz &amp; 5GHz)
+                    </button>
+                </div>
+
+                <!-- Mode terpisah: form sendiri per band -->
+                <div id="wifiSeparateForm" class="d-none">
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <div class="fw-semibold small mb-2"><i class="bi bi-wifi text-primary me-1"></i>2.4GHz</div>
+                            <div class="mb-2">
+                                <label class="form-label small fw-medium">SSID</label>
+                                <input type="text" id="wifi_ssid_24" class="form-control form-control-sm" placeholder="Nama-WiFi-2.4">
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label small fw-medium">Password</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="password" id="wifi_key_24" class="form-control" placeholder="min 8 karakter">
+                                    <button class="btn btn-outline-secondary" type="button"
+                                            onclick="togglePass('wifi_key_24',this)" tabindex="-1">
+                                        <i class="bi bi-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="wifiResult24" class="mb-2 d-none small"></div>
+                            <button class="btn btn-outline-primary btn-sm w-100" onclick="setWifi('24')">
+                                <i class="bi bi-cloud-upload me-1"></i>Push 2.4GHz
+                            </button>
+                        </div>
+                        <div class="col-6">
+                            <div class="fw-semibold small mb-2"><i class="bi bi-wifi text-success me-1"></i>5GHz</div>
+                            <div class="mb-2">
+                                <label class="form-label small fw-medium">SSID</label>
+                                <input type="text" id="wifi_ssid_5" class="form-control form-control-sm" placeholder="Nama-WiFi-5G">
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label small fw-medium">Password</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="password" id="wifi_key_5" class="form-control" placeholder="min 8 karakter">
+                                    <button class="btn btn-outline-secondary" type="button"
+                                            onclick="togglePass('wifi_key_5',this)" tabindex="-1">
+                                        <i class="bi bi-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="wifiResult5" class="mb-2 d-none small"></div>
+                            <button class="btn btn-outline-success btn-sm w-100" onclick="setWifi('5')">
+                                <i class="bi bi-cloud-upload me-1"></i>Push 5GHz
                             </button>
                         </div>
                     </div>
                 </div>
-                <div class="form-check mt-2">
-                    <input class="form-check-input" type="checkbox" id="wifi_dual_band" checked>
-                    <label class="form-check-label small" for="wifi_dual_band">
-                        Terapkan ke <strong>2.4GHz &amp; 5GHz</strong> sekaligus
-                    </label>
-                </div>
-                <div class="form-text">Perubahan akan langsung dipush ke ONU via TR-069/GenieACS.</div>
-                <div id="wifiResult" class="mt-2 d-none small"></div>
-                <button class="btn btn-primary btn-sm mt-3" onclick="setWifi()">
-                    <i class="bi bi-cloud-upload me-1"></i>Push ke ONU
-                </button>
             </div>
         </div>
         <!-- Connected Clients -->
@@ -708,8 +785,32 @@ function loadAcsInfo() {
                     <tr><th class="text-muted">WiFi SSID</th><td>${i.wifi?.ssid || '-'}</td></tr>
                 </table>`;
 
-            if (i.wifi?.ssid)      document.getElementById('wifi_ssid').value  = i.wifi.ssid;
-            if (i.wifi?.password)  document.getElementById('wifi_key').value   = i.wifi.password;
+            // Isi form WiFi (single + separate)
+            if (i.wifi?.ssid) {
+                document.getElementById('wifi_ssid').value    = i.wifi.ssid;
+                document.getElementById('wifi_ssid_24').value = i.wifi.ssid;
+            }
+            if (i.wifi?.password) {
+                document.getElementById('wifi_key').value    = i.wifi.password;
+                document.getElementById('wifi_key_24').value = i.wifi.password;
+            }
+            if (i.wifi5?.ssid)     document.getElementById('wifi_ssid_5').value = i.wifi5.ssid;
+            if (i.wifi5?.password) document.getElementById('wifi_key_5').value  = i.wifi5.password;
+
+            // Tampilkan info WiFi saat ini di atas form
+            const infoRow = document.getElementById('wifiInfoRow');
+            const has24   = i.wifi?.ssid  != null;
+            const has5    = i.wifi5?.ssid != null;
+            if (infoRow && (has24 || has5)) {
+                const el24 = document.getElementById('wifiInfo24');
+                const el5  = document.getElementById('wifiInfo5');
+                el24.textContent = has24 ? i.wifi.ssid  : '—';
+                el5.textContent  = has5  ? i.wifi5.ssid : '—';
+                el24.title = has24 ? i.wifi.ssid  : '';
+                el5.title  = has5  ? i.wifi5.ssid : '';
+                infoRow.classList.remove('d-none');
+            }
+
             if (i.wan?.pppoe_user) document.getElementById('pppoe_user').value = i.wan.pppoe_user;
             if (i.wan?.pppoe_pass) document.getElementById('pppoe_pass').value = i.wan.pppoe_pass;
 
@@ -804,38 +905,62 @@ function setPppoe() {
         });
 }
 
-function setWifi() {
-    const ssid = document.getElementById('wifi_ssid').value.trim();
-    const key  = document.getElementById('wifi_key').value.trim();
-    const el   = document.getElementById('wifiResult');
+function toggleWifiMode() {
+    const dual = document.getElementById('wifi_dual_band').checked;
+    document.getElementById('wifiSingleForm').classList.toggle('d-none', !dual);
+    document.getElementById('wifiSeparateForm').classList.toggle('d-none', dual);
+}
+
+function setWifi(band = 'both') {
+    let ssid, key, el;
+    if (band === '24') {
+        ssid = document.getElementById('wifi_ssid_24').value.trim();
+        key  = document.getElementById('wifi_key_24').value.trim();
+        el   = document.getElementById('wifiResult24');
+    } else if (band === '5') {
+        ssid = document.getElementById('wifi_ssid_5').value.trim();
+        key  = document.getElementById('wifi_key_5').value.trim();
+        el   = document.getElementById('wifiResult5');
+    } else {
+        ssid = document.getElementById('wifi_ssid').value.trim();
+        key  = document.getElementById('wifi_key').value.trim();
+        el   = document.getElementById('wifiResult');
+    }
 
     if (!ssid || !key) {
         el.className = 'mt-2 small alert alert-warning';
         el.textContent = 'SSID dan password wajib diisi.';
+        el.classList.remove('d-none');
         return;
     }
     if (key.length < 8) {
         el.className = 'mt-2 small alert alert-warning';
         el.textContent = 'Password WiFi minimal 8 karakter.';
+        el.classList.remove('d-none');
         return;
     }
 
     const fd = new FormData();
-    fd.append('action',     'wifi');
-    fd.append('ssid',       ssid);
-    fd.append('wifi_key',   key);
-    fd.append('dual_band',  document.getElementById('wifi_dual_band').checked ? '1' : '0');
+    fd.append('action',   'wifi');
+    fd.append('ssid',     ssid);
+    fd.append('wifi_key', key);
+    fd.append('band',     band);
     fd.append('<?= csrf_token() ?>', '<?= csrf_hash() ?>');
 
+    const bandLabel = { both: '2.4GHz & 5GHz', '24': '2.4GHz', '5': '5GHz' }[band] ?? band;
     el.className = 'mt-2';
     el.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Memproses...';
+    el.classList.remove('d-none');
 
     fetch(`/onus/${ONU_ID}/acs-set`, { method: 'POST', body: fd })
         .then(r => r.json())
         .then(data => {
-            const band = data.dual_band ? '2.4GHz + 5GHz' : '2.4GHz';
             el.className = `mt-2 small alert alert-${data.success ? 'success' : 'danger'}`;
-            el.textContent = data.success ? `WiFi (${band}) berhasil diubah.` : (data.message || 'Gagal.');
+            el.textContent = data.success ? `WiFi (${bandLabel}) berhasil diubah.` : (data.message || 'Gagal.');
+        })
+        .catch(err => {
+            el.className = 'mt-2 small alert alert-danger';
+            el.textContent = 'Error: ' + err.message;
         });
 }
 

@@ -518,12 +518,13 @@ class OnuController extends Controller
                 return $this->response->setJSON(array_merge(['success' => $result['success']], $result));
 
             } elseif ($action === 'wifi') {
-                $ssid      = trim($this->request->getPost('ssid'));
-                $wifiKey   = trim($this->request->getPost('wifi_key'));
-                $dualBand  = (bool)$this->request->getPost('dual_band');
-                $device    = $device ?? $acsService->findDeviceBySn($onu['sn']);
-                $brand     = $device ? $acsService->getDeviceBrand($device) : 'default';
-                $result    = $acsService->setWifi($deviceId, $ssid, $wifiKey, $dualBand, $brand);
+                $ssid    = trim($this->request->getPost('ssid'));
+                $wifiKey = trim($this->request->getPost('wifi_key'));
+                $band    = $this->request->getPost('band') ?: ($this->request->getPost('dual_band') ? 'both' : '24');
+                $bands   = match ($band) { '5' => [5], '24' => [1], default => [1, 5] };
+                $device  = $device ?? $acsService->findDeviceBySn($onu['sn']);
+                $brand   = $device ? $acsService->getDeviceBrand($device) : 'default';
+                $result  = $acsService->setWifi($deviceId, $ssid, $wifiKey, $bands, $brand);
 
                 $logModel->log($this->userId, 'acs_wifi', $result['success'] ? 'success' : 'failed',
                     "WiFi SSID={$ssid}", $id, $onu['olt_id']);

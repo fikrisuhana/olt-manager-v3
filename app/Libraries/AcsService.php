@@ -337,12 +337,12 @@ class AcsService
      *              (ZTE tidak punya PreSharedKey.1.PreSharedKey — device akan fault)
      *   Huawei/Nokia/default: PreSharedKey.1.KeyPassphrase + KeyPassphrase (direct)
      */
-    public function setWifi(string $deviceId, string $ssid, string $password, bool $dualBand = false, string $brand = 'default'): array
+    public function setWifi(string $deviceId, string $ssid, string $password, array $bands = [1, 5], string $brand = 'default'): array
     {
         $brand  = strtolower($brand);
         $params = [];
 
-        foreach ($dualBand ? [1, 5] : [1] as $idx) {
+        foreach ($bands as $idx) {
             $base = "InternetGatewayDevice.LANDevice.1.WLANConfiguration.{$idx}";
             $params[] = ["{$base}.SSID", $ssid, 'xsd:string'];
 
@@ -366,9 +366,9 @@ class AcsService
         $response  = $this->request('POST', "/devices/{$encodedId}/tasks?connection_request&timeout=8000", $task);
 
         return [
-            'success'   => in_array($response['status'], [200, 201, 202]),
-            'status'    => $response['status'],
-            'dual_band' => $dualBand,
+            'success' => in_array($response['status'], [200, 201, 202]),
+            'status'  => $response['status'],
+            'bands'   => $bands,
         ];
     }
 
