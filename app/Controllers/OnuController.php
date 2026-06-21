@@ -235,7 +235,7 @@ class OnuController extends Controller
                 'onu_id'       => $onuId,
                 'sn'           => $sn,
                 'onu_index'    => $onuIndex,
-                'watch_acs'    => !empty($pppoeUser),
+                'watch_acs'    => !empty($pppoeUser) && !$isZteOnu,
                 'push_via_acs' => !empty($pppoeUser) && !$isZteOnu,
             ]);
         } catch (\Exception $e) {
