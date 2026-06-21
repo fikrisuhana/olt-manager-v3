@@ -520,15 +520,16 @@ class ZteDriver implements OltDriverInterface
         }
     }
 
-    // ip-host N dhcp-enable enable — diverifikasi langsung di OLT v1 dan v2
+    // Syntax lengkap diverifikasi langsung di OLT v1+v2:
+    // ip-host N dhcp-enable enable ping-response disable traceroute-response disable
     private function applyWanIpDhcp(int $ipHost, array &$log): void
     {
-        $cmd = "ip-host {$ipHost} dhcp-enable enable";
+        $cmd = "ip-host {$ipHost} dhcp-enable enable ping-response disable traceroute-response disable";
         $out = $this->telnet->execute($cmd, $this->mngPrompt, 5);
         if (stripos($out, 'Error') !== false || stripos($out, 'Invalid') !== false) {
             $log[] = "WARN: {$cmd} → " . trim(substr($out, -120));
         } else {
-            $log[] = "{$cmd} OK";
+            $log[] = "ip-host {$ipHost} dhcp-enable enable OK";
         }
     }
 
