@@ -509,15 +509,21 @@ class ZteDriver implements OltDriverInterface
      * Coba berurutan sampai berhasil.
      */
     /**
-     * wan-ip {n} dhcp — v1 tidak kenal keyword 'mode', v2 pakai 'mode dhcp'.
-     * Coba v2 dulu, fallback ke v1 syntax.
+     * wan-ip {n} dhcp — v2+ pakai 'mode dhcp iphost {n}', v1 hanya support wan-ip 1 (PPPoE).
+     * Pada v1 OLT, skip wan-ip 2: ACS DHCP sudah ter-handle lewat service acs + OMCI.
      */
     private function applyWanIpDhcp(int $ipHost, array &$log): void
     {
+        $ver = trim($this->config['firmware_version'] ?? '');
+        if ($ver && version_compare($ver, '2.0', '<')) {
+            $log[] = "wan-ip {$ipHost} dhcp: skip (OLT firmware v{$ver}, ACS via service acs OMCI)";
+            return;
+        }
+
         $candidates = [
             "wan-ip {$ipHost} mode dhcp iphost {$ipHost}",  // v2+
-            "wan-ip {$ipHost} dhcp iphost {$ipHost}",       // v1
-            "wan-ip {$ipHost} dhcp",                         // simpel
+            "wan-ip {$ipHost} dhcp iphost {$ipHost}",
+            "wan-ip {$ipHost} dhcp",
         ];
         foreach ($candidates as $cmd) {
             $out = $this->telnet->execute($cmd, $this->mngPrompt, 5);
