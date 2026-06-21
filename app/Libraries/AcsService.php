@@ -165,7 +165,7 @@ class AcsService
         $actualWcd = $wcdCount >= (int)$targetWcd ? $targetWcd : (string)($wcdCount + 1);
 
         if ($wcdCount < (int)$targetWcd) {
-            $task = ['name' => 'addObject', 'objectName' => "{$wanDevPath}.WANConnectionDevice."];
+            $task = ['name' => 'addObject', 'objectName' => "{$wanDevPath}.WANConnectionDevice"];
             $this->request('POST', "/devices/{$encodedId}/tasks?connection_request&timeout=10000", $task);
             sleep(3);
         }
@@ -177,7 +177,7 @@ class AcsService
         }
 
         $wcdPath = "{$wanDevPath}.WANConnectionDevice.{$actualWcd}";
-        $task    = ['name' => 'addObject', 'objectName' => "{$wcdPath}.WANPPPConnection."];
+        $task    = ['name' => 'addObject', 'objectName' => "{$wcdPath}.WANPPPConnection"];
         $this->request('POST', "/devices/{$encodedId}/tasks?connection_request&timeout=10000", $task);
         sleep(3);
 
@@ -409,12 +409,12 @@ class AcsService
 
             if (!$wcdExists) {
                 $this->request('POST', "/devices/{$encodedId}/tasks", [
-                    'name' => 'addObject', 'objectName' => "{$wanDevPath}.WANConnectionDevice.",
+                    'name' => 'addObject', 'objectName' => "{$wanDevPath}.WANConnectionDevice",
                 ]);
             }
             if (!$pppExists) {
                 $this->request('POST', "/devices/{$encodedId}/tasks", [
-                    'name' => 'addObject', 'objectName' => "{$wcdPath}.WANPPPConnection.",
+                    'name' => 'addObject', 'objectName' => "{$wcdPath}.WANPPPConnection",
                 ]);
             }
 
