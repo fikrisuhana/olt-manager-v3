@@ -336,15 +336,17 @@ class ZteDriver implements OltDriverInterface
             $this->telnet->execute("vlan port veip_1 mode hybrid", $this->mngPrompt, 5);
 
             // DHCP management IP + ACS URL agar ZTE ONU konek ke TR-069/GenieACS
+            // ip-host 1 = management channel, tr069-mgmt 1 acs = ACS URL (diverifikasi di OLT v1+v2)
             if ($vlanAcs && !$isFiberhome) {
-                $this->applyWanIpDhcp(2, $log);
+                $this->applyWanIpDhcp(1, $log);
                 $acsUrl = trim($params['acs_url'] ?? '');
                 if ($acsUrl) {
-                    $out = $this->telnet->execute("ip-host 2 tr069-server-url {$acsUrl}", $this->mngPrompt, 5);
+                    $out = $this->telnet->execute("tr069-mgmt 1 acs {$acsUrl}", $this->mngPrompt, 5);
                     if (stripos($out, 'Error') !== false || stripos($out, 'Invalid') !== false) {
-                        $log[] = "WARN pon-onu-mng: ip-host 2 tr069-server-url → " . trim(substr($out, -120));
+                        $log[] = "WARN: tr069-mgmt 1 acs → " . trim(substr($out, -120));
                     } else {
-                        $log[] = "ip-host 2 tr069-server-url {$acsUrl} OK";
+                        $this->telnet->execute("tr069-mgmt 1 state unlock", $this->mngPrompt, 5);
+                        $log[] = "tr069-mgmt 1 acs {$acsUrl} + state unlock OK";
                     }
                 }
             }
@@ -470,13 +472,17 @@ class ZteDriver implements OltDriverInterface
         }
         $this->telnet->execute("vlan port veip_1 mode hybrid", $this->mngPrompt, 5);
 
-        // DHCP management IP agar ONU bisa konek ke ACS (iphost 2 = management channel)
+        // ip-host 1 dhcp-enable + tr069-mgmt — diverifikasi di OLT v1 (136.1.1.200) dan v2 (136.1.1.210)
         if ($vlanAcs) {
-            $this->applyWanIpDhcp(2, $log);
-            // Set TR-069 ACS server URL agar ONU tahu harus konek ke mana
+            $this->applyWanIpDhcp(1, $log);
             if ($acsUrl) {
-                $out   = $this->telnet->execute("ip-host 2 tr069-server-url {$acsUrl}", $this->mngPrompt, 5);
-                $log[] = "ip-host 2 tr069-server-url → " . trim(preg_replace('/\s+/', ' ', $out));
+                $out = $this->telnet->execute("tr069-mgmt 1 acs {$acsUrl}", $this->mngPrompt, 5);
+                if (stripos($out, 'Error') !== false || stripos($out, 'Invalid') !== false) {
+                    $log[] = "WARN: tr069-mgmt 1 acs → " . trim(substr($out, -120));
+                } else {
+                    $this->telnet->execute("tr069-mgmt 1 state unlock", $this->mngPrompt, 5);
+                    $log[] = "tr069-mgmt 1 acs {$acsUrl} + state unlock OK";
+                }
             }
         }
 
@@ -508,31 +514,16 @@ class ZteDriver implements OltDriverInterface
      * ZTE firmware berbeda-beda: 'hsi', 'int', atau 'ppp'.
      * Coba berurutan sampai berhasil.
      */
-    /**
-     * wan-ip {n} dhcp — v2+ pakai 'mode dhcp iphost {n}', v1 hanya support wan-ip 1 (PPPoE).
-     * Pada v1 OLT, skip wan-ip 2: ACS DHCP sudah ter-handle lewat service acs + OMCI.
-     */
+    // ip-host N dhcp-enable enable — diverifikasi langsung di OLT v1 dan v2
     private function applyWanIpDhcp(int $ipHost, array &$log): void
     {
-        $ver = trim($this->config['firmware_version'] ?? '');
-        if ($ver && version_compare($ver, '2.0', '<')) {
-            $log[] = "wan-ip {$ipHost} dhcp: skip (OLT firmware v{$ver}, ACS via service acs OMCI)";
-            return;
+        $cmd = "ip-host {$ipHost} dhcp-enable enable";
+        $out = $this->telnet->execute($cmd, $this->mngPrompt, 5);
+        if (stripos($out, 'Error') !== false || stripos($out, 'Invalid') !== false) {
+            $log[] = "WARN: {$cmd} → " . trim(substr($out, -120));
+        } else {
+            $log[] = "{$cmd} OK";
         }
-
-        $candidates = [
-            "wan-ip {$ipHost} mode dhcp iphost {$ipHost}",  // v2+
-            "wan-ip {$ipHost} dhcp iphost {$ipHost}",
-            "wan-ip {$ipHost} dhcp",
-        ];
-        foreach ($candidates as $cmd) {
-            $out = $this->telnet->execute($cmd, $this->mngPrompt, 5);
-            if (stripos($out, 'Error') === false && stripos($out, 'Invalid') === false) {
-                $log[] = "{$cmd} OK";
-                return;
-            }
-        }
-        $log[] = "WARN pon-onu-mng: wan-ip {$ipHost} dhcp → " . trim(substr($out ?? '', -120));
     }
 
     private function applyServiceInternet(int $vlan, array &$log, bool $forPppoe = false): void
