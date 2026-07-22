@@ -428,11 +428,11 @@ function loadOltState() {
                         oltCell.innerHTML = '<span class="badge bg-warning text-dark small">Tidak di cache</span>';
                     } else {
                         const st  = (info.status || '').toLowerCase();
-                        const cls = st === 'working' ? 'bg-success'
-                                  : st === 'los'     ? 'bg-danger'
-                                  : st === 'lofi'    ? 'bg-warning text-dark'
+                        const cls = ['working','ready','up','online'].includes(st) ? 'bg-success'
+                                  : ['los','dn','offline'].includes(st)            ? 'bg-danger'
+                                  : st === 'lofi'                                   ? 'bg-warning text-dark'
                                   : 'bg-secondary';
-                        oltCell.innerHTML = `<span class="badge ${cls} small">${info.status || st}</span>`;
+                        oltCell.innerHTML = `<span class="badge ${cls} small">${info.status || st || 'unknown'}</span>`;
                     }
                 }
 

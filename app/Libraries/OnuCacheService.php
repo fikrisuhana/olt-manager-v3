@@ -73,16 +73,19 @@ class OnuCacheService
      * Tambahkan satu ONU baru ke cache (setelah register berhasil).
      * Dipanggil oleh OnuController::register() supaya tidak perlu scan ulang.
      */
-    public function addOnu(int $oltId, string $board, string $slot, string $port, int $index, string $sn, string $type = 'ALL-ONT', string $name = ''): void
+    public function addOnu(int $oltId, string $board, string $slot, string $port, int $index, string $sn, string $type = 'ALL-ONT', string $name = '', string $status = 'working'): void
     {
         $data = $this->load($oltId);
         $portKey = "{$board}/{$slot}/{$port}";
 
+        // ONU baru register berasal dari discovery (sudah nyambung optik) → default 'working'.
+        // Status pasti di-refresh saat Sync Cache berikutnya.
         $data['ports'][$portKey][] = [
-            'index' => $index,
-            'sn'    => $sn,
-            'type'  => $type,
-            'name'  => $name,
+            'index'  => $index,
+            'sn'     => $sn,
+            'type'   => $type,
+            'name'   => $name,
+            'status' => $status,
         ];
 
         usort($data['ports'][$portKey], fn($a, $b) => $a['index'] <=> $b['index']);
