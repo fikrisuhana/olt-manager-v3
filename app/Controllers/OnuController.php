@@ -346,6 +346,49 @@ class OnuController extends Controller
         $oltModel = new OltModel();
         $olt = $oltModel->find($onu['olt_id']);
 
+        // OLT Fiberhome (AN6000): CLI tidak menyediakan sinyal per-ONU yang andal
+        // (`show onu optical` ambiguous di firmware ini). RX dibaca dari ACS
+        // (VirtualParameters.RXPower) — ONU FH memang dikelola via ACS/TR-069.
+        if (in_array(strtoupper($olt['brand'] ?? ''), ['FIBERHOME', 'FH'])) {
+            $acsModel = new AcsServerModel();
+            $acs = $acsModel->getDefault($this->userId);
+            if (!$acs) {
+                return $this->response->setJSON(['success' => false, 'message' => 'Sinyal FH dibaca dari ACS, tapi tidak ada ACS server default.']);
+            }
+            try {
+                $acsService = new AcsService($acs);
+                $deviceId   = $onu['acs_device_id'];
+                if (!$deviceId) {
+                    $device = $acsService->findDeviceBySn($onu['sn']);
+                    if (!$device) {
+                        return $this->response->setJSON(['success' => false, 'message' => 'ONU belum terdaftar di ACS — sinyal belum bisa dibaca.']);
+                    }
+                    $deviceId = $device['_id'];
+                    $onuModel->update($id, ['acs_device_id' => $deviceId]);
+                }
+                $rx = $acsService->getRxPower($deviceId);
+                if (!$rx || ($rx['onu_rx'] ?? null) === null) {
+                    return $this->response->setJSON(['success' => false, 'message' => 'Data sinyal optik belum tersedia di ACS untuk ONU ini.']);
+                }
+                $onuRx   = (float)$rx['onu_rx'];
+                $quality = 'unknown';
+                if ($onuRx !== 0.0) {
+                    if ($onuRx >= -25) $quality = 'good';
+                    elseif ($onuRx >= -28) $quality = 'warn';
+                    else $quality = 'bad';
+                }
+                return $this->response->setJSON([
+                    'success' => true,
+                    'source'  => 'acs',
+                    'signal'  => ['onu_rx' => $rx['onu_rx'], 'olt_rx' => null, 'onu_tx' => null, 'olt_tx' => null, 'temperature' => $rx['temperature'] ?? null],
+                    'quality' => $quality,
+                    'label'   => "ONU-RX: {$rx['onu_rx']} dBm (dari ACS)",
+                ]);
+            } catch (\Exception $e) {
+                return $this->response->setJSON(['success' => false, 'message' => $e->getMessage()]);
+            }
+        }
+
         try {
             $driver = OltDriverFactory::make($olt);
             $driver->connect();

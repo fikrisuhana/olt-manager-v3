@@ -537,7 +537,39 @@ class AcsService
     }
 
 
-private function request(string $method, string $path, ?array $body = null): array
+/**
+     * RX optical power ONU dari ACS (dBm). Untuk OLT yang CLI-nya tak sediakan sinyal (Fiberhome).
+     * Utamakan VirtualParameters.RXPower (brand-agnostic), fallback path vendor FH/ZTE.
+     * Return: ['onu_rx' => string, 'temperature' => ?string] atau null.
+     */
+    public function getRxPower(string $deviceId): ?array
+    {
+        $proj = implode(',', [
+            'VirtualParameters.RXPower',
+            'InternetGatewayDevice.WANDevice.1.X_FH_GponInterfaceConfig.RXPower',
+            'InternetGatewayDevice.WANDevice.1.X_FH_GponInterfaceConfig.TransceiverTemperature',
+            'InternetGatewayDevice.WANDevice.1.X_ZTE-COM_WANPONInterfaceConfig.RXPower',
+            'InternetGatewayDevice.WANDevice.1.X_ZTE-COM_WANPONInterfaceConfig.TransceiverTemperature',
+        ]);
+        $query    = urlencode(json_encode(['_id' => $deviceId]));
+        $response = $this->request('GET', "/devices/?query={$query}&projection={$proj}&limit=1");
+        if ($response['status'] !== 200) return null;
+        $devices = json_decode($response['body'], true);
+        if (empty($devices)) return null;
+        $d = $devices[0];
+
+        $rx   = $d['VirtualParameters']['RXPower']['_value'] ?? null;
+        $temp = null;
+        $wan1 = $d['InternetGatewayDevice']['WANDevice']['1'] ?? [];
+        foreach (['X_FH_GponInterfaceConfig', 'X_ZTE-COM_WANPONInterfaceConfig'] as $vp) {
+            if ($rx === null   && isset($wan1[$vp]['RXPower']['_value']))                $rx   = $wan1[$vp]['RXPower']['_value'];
+            if ($temp === null && isset($wan1[$vp]['TransceiverTemperature']['_value'])) $temp = $wan1[$vp]['TransceiverTemperature']['_value'];
+        }
+        if ($rx === null) return null;
+        return ['onu_rx' => (string)$rx, 'temperature' => $temp !== null ? (string)$temp : null];
+    }
+
+    private function request(string $method, string $path, ?array $body = null): array
     {
         $ch = curl_init($this->baseUrl . $path);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
