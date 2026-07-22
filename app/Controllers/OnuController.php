@@ -219,9 +219,9 @@ class OnuController extends Controller
                 ]);
             }
 
-            // Update cache ONU
+            // Update cache ONU — status pakai OST aktual dari driver (fallback 'working')
             $cache = new OnuCacheService();
-            $cache->addOnu($oltId, $board, $slot, $port, $onuIndex, $sn, $onuType, $name);
+            $cache->addOnu($oltId, $board, $slot, $port, $onuIndex, $sn, $onuType, $name, $result['state'] ?? 'working');
 
             $logModel->log($this->userId, 'register', 'success',
                 implode(' | ', $result['log']), $onuId, $oltId);

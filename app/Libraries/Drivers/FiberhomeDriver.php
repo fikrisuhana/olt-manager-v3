@@ -210,7 +210,16 @@ class FiberhomeDriver implements OltDriverInterface
         $this->telnet->execute('save', $this->configPrompt, 30);
         $log[] = 'Konfigurasi disimpan (save)';
 
-        return ['success' => true, 'log' => $log];
+        // Baca status online (OST) AKTUAL dari OLT — biar cache akurat, bukan asumsi.
+        // 'ready' = up (online di OLT/GPON), 'offline' = dn.
+        $state   = 'working';
+        $authOut = $this->telnet->execute("show authorization {$board}/{$slot}/{$port}", $this->configPrompt, 15);
+        foreach ($this->parseAuthTable($authOut) as $a) {
+            if ((string)$a['onu_index'] === (string)$idx) { $state = $a['status']; break; }
+        }
+        $log[] = "Status OLT ONU: {$state}";
+
+        return ['success' => true, 'log' => $log, 'state' => $state];
     }
 
     // Port yang di-bind ke WAN internet (4 LAN + 2 band WiFi) — default umum.
