@@ -225,9 +225,15 @@ class OnuController extends Controller
             $logModel->log($this->userId, 'register', 'success',
                 implode(' | ', $result['log']), $onuId, $oltId);
 
-            // Deteksi ONU ZTE dari SN prefix (ZTEG) — lebih reliable dari ONU type
-            // karena Fiberhome (FHTT) bisa saja di-register dengan type ZTE-F601
+            // Tentukan apakah PPPoE dipush via ACS (bukan di OLT) — tergantung kombinasi
+            // brand OLT × brand ONU:
+            //   OLT ZTE  : ZTE ONU → PPPoE di OLT (pon-onu-mng); non-ZTE (FH) → via ACS
+            //   OLT FH   : FH ONU  → PPPoE di OLT (onu wan-cfg);  non-FH (ZTE) → via ACS
+            $oltBrand = strtoupper($olt['brand'] ?? 'ZTE');
+            $isFhOnu  = strncasecmp($sn, 'FHTT', 4) === 0 || strncasecmp($sn, 'FHSC', 4) === 0;
             $isZteOnu = strncasecmp($sn, 'ZTEG', 4) === 0;
+            $pppoeViaAcs = ($oltBrand === 'FIBERHOME' || $oltBrand === 'FH') ? !$isFhOnu : !$isZteOnu;
+
             return $this->response->setJSON([
                 'success'      => true,
                 'message'      => "ONU {$sn} berhasil didaftarkan (index {$onuIndex}).",
@@ -235,8 +241,8 @@ class OnuController extends Controller
                 'onu_id'       => $onuId,
                 'sn'           => $sn,
                 'onu_index'    => $onuIndex,
-                'watch_acs'    => !empty($pppoeUser) && !$isZteOnu,
-                'push_via_acs' => !empty($pppoeUser) && !$isZteOnu,
+                'watch_acs'    => !empty($pppoeUser) && $pppoeViaAcs,
+                'push_via_acs' => !empty($pppoeUser) && $pppoeViaAcs,
             ]);
         } catch (\Exception $e) {
             $logModel->log($this->userId, 'register', 'failed', $e->getMessage(), null, $oltId);
@@ -361,6 +367,38 @@ class OnuController extends Controller
                 'quality' => $quality,
                 'label'   => "OLT-RX: {$signal['olt_rx']} | ONU-RX: {$signal['onu_rx']} dBm",
             ]);
+        } catch (\Exception $e) {
+            return $this->response->setJSON(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * AJAX: Cek status WAN/DHCP ONU dari OLT (dapat IP atau tidak).
+     * Khusus driver yang punya getWanInfo (Fiberhome). Untuk brand lain → not_supported.
+     */
+    public function wanInfo(int $id)
+    {
+        $this->response->setContentType('application/json');
+
+        $onuModel = new OnuModel();
+        $onu = $onuModel->getWithOlt($id);
+        if (!$onu || $onu['user_id'] != $this->userId) {
+            return $this->response->setJSON(['success' => false, 'message' => 'ONU tidak ditemukan.']);
+        }
+
+        $oltModel = new OltModel();
+        $olt = $oltModel->find($onu['olt_id']);
+
+        try {
+            $driver = OltDriverFactory::make($olt);
+            if (!method_exists($driver, 'getWanInfo')) {
+                return $this->response->setJSON(['success' => false, 'message' => 'Cek DHCP hanya untuk OLT Fiberhome.']);
+            }
+            $driver->connect();
+            $info = $driver->getWanInfo($onu['board'], $onu['slot'], $onu['port'], (string)$onu['onu_index']);
+            $driver->disconnect();
+
+            return $this->response->setJSON(['success' => true, 'info' => $info]);
         } catch (\Exception $e) {
             return $this->response->setJSON(['success' => false, 'message' => $e->getMessage()]);
         }

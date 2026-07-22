@@ -124,17 +124,23 @@
                                         <td><span class="badge bg-light text-dark border"><?= esc($onu['onu_type'] ?? '-') ?></span></td>
                                         <td class="olt-state-cell"><span class="text-muted small">—</span></td>
                                         <td class="acs-cell"><span class="text-muted small">—</span></td>
-                                        <td>
+                                        <td class="text-nowrap">
                                             <button class="btn btn-sm btn-outline-secondary py-0"
-                                                    onclick="getSignal(<?= $onu['id'] ?>, this)">
+                                                    onclick="getSignal(<?= $onu['id'] ?>, this)" title="Cek sinyal RX/TX">
                                                 <i class="bi bi-reception-4"></i>
                                             </button>
+                                            <?php if (in_array(strtoupper($olt['brand'] ?? ''), ['FIBERHOME', 'FH'])): ?>
+                                            <button class="btn btn-sm btn-outline-secondary py-0 ms-1"
+                                                    onclick="checkDhcp(<?= $onu['id'] ?>, this)" title="Cek status WAN/DHCP (dapat IP?)">
+                                                <i class="bi bi-hdd-network"></i>
+                                            </button>
+                                            <?php endif; ?>
                                         </td>
                                         <td class="text-nowrap">
                                             <?php $pk = explode('/', $portKey); ?>
                                             <button class="btn btn-sm btn-outline-warning py-0 me-1"
                                                     title="Konfigurasi ulang interface OLT (tcont/gemport/vlan)"
-                                                    onclick="openRegister('<?= esc($onu['sn'], 'js') ?>','<?= $pk[0] ?>','<?= $pk[1] ?>','<?= $pk[2] ?>',<?= $onu['onu_index'] ?>,true)">
+                                                    onclick="openRegister('<?= esc($onu['sn'], 'js') ?>','<?= $pk[0] ?>','<?= $pk[1] ?>','<?= $pk[2] ?>',<?= $onu['onu_index'] ?>,true,'<?= esc($onu['onu_type'] ?? '', 'js') ?>')">
                                                 <i class="bi bi-arrow-repeat"></i>
                                             </button>
                                             <button class="btn btn-sm btn-outline-success py-0 me-1"
@@ -308,8 +314,11 @@
                         </div>
                         <div class="mt-2">
                             <div class="form-text">
-                                <?php if (strtoupper($olt['brand'] ?? '') === 'ZTE'): ?>
-                                <i class="bi bi-info-circle me-1"></i>ZTE: PPPoE dikonfigurasi langsung via <strong>OLT pon-onu-mng</strong> saat registrasi. ONU juga otomatis konek ke ACS setelah mendapat IP management.
+                                <?php $b = strtoupper($olt['brand'] ?? ''); ?>
+                                <?php if ($b === 'ZTE'): ?>
+                                <i class="bi bi-info-circle me-1"></i>ZTE: PPPoE dikonfigurasi langsung via <strong>OLT pon-onu-mng</strong> saat registrasi (ONU ZTE). ONU FiberHome → dipush via <strong>GenieACS/TR-069</strong>.
+                                <?php elseif ($b === 'FIBERHOME' || $b === 'FH'): ?>
+                                <i class="bi bi-info-circle me-1"></i>FiberHome: ONU FH → PPPoE dikonfigurasi langsung di <strong>OLT (onu wan-cfg)</strong>. ONU non-FH (ZTE, dll) → dipush via <strong>GenieACS/TR-069</strong>.
                                 <?php else: ?>
                                 <i class="bi bi-info-circle me-1"></i>Jika diisi, PPPoE dikonfigurasi otomatis via <strong>GenieACS/TR-069</strong> setelah ONU muncul di ACS (~1–5 menit).
                                 <?php endif; ?>
@@ -380,6 +389,8 @@
 <?= $this->section('scripts') ?>
 <script>
 const OLT_ID = <?= $olt['id'] ?>;
+const OLT_BRAND = '<?= strtoupper($olt['brand'] ?? 'ZTE') ?>';
+const IS_FH = (OLT_BRAND === 'FIBERHOME' || OLT_BRAND === 'FH');
 
 // Auto-load OLT state dari cache saat halaman dibuka
 document.addEventListener('DOMContentLoaded', () => {
@@ -570,7 +581,7 @@ function scanOnu() {
                          <span class="badge bg-secondary">Sudah di DB</span>
                          ${o.existing_id ? `<a href="/onus/${o.existing_id}" class="btn btn-sm btn-outline-secondary py-0 px-1" title="Lihat ONU"><i class="bi bi-eye"></i></a>` : ''}
                          <button class="btn btn-sm btn-outline-warning py-0 px-1" title="Konfigurasi ulang ke OLT"
-                             onclick="openRegister('${o.sn}','${o.board}','${o.slot}','${o.port}',${nextIdx},true)">
+                             onclick="openRegister('${o.sn}','${o.board}','${o.slot}','${o.port}',${nextIdx},true,'${o.onu_type||''}')">
                              <i class="bi bi-arrow-repeat me-1"></i>Konfigurasi Ulang
                          </button>
                        </div>`
@@ -578,12 +589,16 @@ function scanOnu() {
                         ? `<button class="btn btn-sm btn-secondary" disabled title="Sync Cache dulu untuk index yang aman">
                              <i class="bi bi-lock me-1"></i>Sync Cache dulu
                            </button>`
-                        : `<button class="btn btn-sm btn-success" onclick="openRegister('${o.sn}','${o.board}','${o.slot}','${o.port}',${nextIdx})">
+                        : `<button class="btn btn-sm btn-success" onclick="openRegister('${o.sn}','${o.board}','${o.slot}','${o.port}',${nextIdx},false,'${o.onu_type||''}')">
                              <i class="bi bi-plus me-1"></i>Register (idx ${nextIdx})
                            </button>`;
+                const typeCell = o.onu_type
+                    ? `<span class="badge bg-light text-dark border">${o.onu_type}</span>`
+                    : '<span class="text-muted small">-</span>';
                 return `<tr>
                     <td class="font-monospace small">${o.sn}</td>
                     <td class="small text-muted">${portLabel}</td>
+                    <td>${typeCell}</td>
                     <td><span class="badge bg-warning text-dark">${o.state ?? '-'}</span></td>
                     <td>${badge}</td>
                 </tr>`;
@@ -592,7 +607,7 @@ function scanOnu() {
             container.innerHTML = `<div class="table-responsive">
                 <table class="table table-hover mb-0">
                     <thead class="table-light">
-                        <tr><th>Serial Number</th><th>Port</th><th>State</th><th></th></tr>
+                        <tr><th>Serial Number</th><th>Port</th><th>Tipe</th><th>State</th><th></th></tr>
                     </thead>
                     <tbody>${rows}</tbody>
                 </table>
@@ -605,7 +620,7 @@ function scanOnu() {
         });
 }
 
-function openRegister(sn, board, slot, port, idx, force = false) {
+function openRegister(sn, board, slot, port, idx, force = false, onuType = '') {
     document.getElementById('r_sn').value    = sn;
     document.getElementById('r_board').value = board;
     document.getElementById('r_slot').value  = slot;
@@ -623,7 +638,8 @@ function openRegister(sn, board, slot, port, idx, force = false) {
 
     // Reset form
     document.querySelector('[name="name"]').value          = '';
-    document.querySelector('[name="onu_type"]').value      = 'ALL-ONT';
+    // Tipe ONU: FH wajib tipe spesifik (dari scan), ZTE default ALL-ONT
+    document.querySelector('[name="onu_type"]').value      = onuType || (IS_FH ? '' : 'ALL-ONT');
     const vlanEl = document.querySelector('[name="vlan_internet"]');
     if (vlanEl) vlanEl.value = '';
     document.querySelector('[name="vlan_acs"]').value      = '';
@@ -648,6 +664,36 @@ function previewCli() {
     const vlanA  = parseInt(document.querySelector('[name="vlan_acs"]').value) || 0;
     const tcont  = document.querySelector('[name="tcont_profile"]').value.trim();
     const pppoeU = document.querySelector('[name="pppoe_user"]').value.trim();
+    const pppoeP = document.querySelector('[name="pppoe_pass"]').value.trim();
+
+    // ── Fiberhome AN6000 preview (diverifikasi di OLT) ──────────────
+    if (IS_FH) {
+        const isFhOnu = /^FH(TT|SC)/i.test(sn);
+        let f = `! ══ Fiberhome AN6000 CLI Preview ══\n`;
+        f += `config\n`;
+        f += `whitelist add phy-id ${sn} type ${type || '<TIPE_ONU>'} slot ${slot} pon ${port} onuid ${idx}\n`;
+        f += `interface pon ${board}/${slot}/${port}\n`;
+        f += `  onu description ${idx} ${name} id 0\n`;
+        let ind = 1;
+        if (vlanA) { f += `  onu wan-cfg ${idx} index ${ind} mode tr069 type route ${vlanA} 65535 nat disable qos disable dsp dhcp entries 0\n`; ind++; }
+        if (vlanI) {
+            if (isFhOnu && pppoeU && pppoeP) {
+                f += `  onu wan-cfg ${idx} index ${ind} mode internet type route ${vlanI} 65535 nat enable qos disable dsp pppoe pro disable ${pppoeU} ${pppoeP} null auto entries 6 fe1 fe2 fe3 fe4 ssid1 ssid5\n`;
+            } else if (isFhOnu) {
+                f += `  onu wan-cfg ${idx} index ${ind} mode internet type route ${vlanI} 65535 nat enable qos disable dsp dhcp entries 6 fe1 fe2 fe3 fe4 ssid1 ssid5\n`;
+            } else {
+                f += `  ! ONU non-FH: kanal internet vlan ${vlanI} diserahkan ke ACS/TR-069 (skip di OLT)\n`;
+            }
+        }
+        f += `exit\n`;
+        f += `save\n`;
+        if (!isFhOnu && pppoeU) f += `\n! PPPoE "${pppoeU}" → dipush via GenieACS/TR-069 setelah ONU online`;
+        document.getElementById('registerLogLabel').textContent = 'Preview CLI (belum dikirim)';
+        document.getElementById('registerLogContent').style.color = '#93c5fd';
+        document.getElementById('registerLogContent').textContent = f;
+        document.getElementById('registerLog').classList.remove('d-none');
+        return;
+    }
 
     // Format diverifikasi dari ZTE C320 v1.2 (show running-config interface gpon-onu_*)
     let cli = `! ══ ZTE C320 CLI Preview ══\n`;
@@ -893,6 +939,27 @@ function getSignal(onuId, btn) {
                 alert(data.message);
             }
         });
+}
+
+function checkDhcp(onuId, btn) {
+    const orig = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    fetch(`/onus/${onuId}/wan-info`)
+        .then(r => r.json())
+        .then(data => {
+            btn.disabled = false;
+            btn.innerHTML = orig;
+            if (!data.success) { alert('Cek DHCP: ' + (data.message || 'gagal')); return; }
+            const i = data.info || {};
+            let msg;
+            if (!i.online)      msg = '⚠ ONU offline (belum sync ke OLT).';
+            else if (!i.has_wan) msg = 'ONU online, tapi belum ada WAN dikonfigurasi.';
+            else if (i.ip)      msg = '✅ Dapat IP: ' + i.ip;
+            else                msg = 'WAN ada tapi belum dapat IP (DHCP belum jalan).';
+            alert('Status WAN/DHCP:\n\n' + msg + '\n\n--- raw ---\n' + (i.raw || ''));
+        })
+        .catch(e => { btn.disabled = false; btn.innerHTML = orig; alert('Error: ' + e.message); });
 }
 
 function loadAcsStatus() {
