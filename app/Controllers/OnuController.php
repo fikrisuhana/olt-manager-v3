@@ -184,6 +184,7 @@ class OnuController extends Controller
             if ($existingOnu) {
                 $onuId = $existingOnu['id'];
                 $onuModel->update($onuId, [
+                    'name'          => $name,
                     'board'         => $board,
                     'slot'          => $slot,
                     'port'          => $port,
