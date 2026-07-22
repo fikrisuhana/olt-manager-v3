@@ -207,6 +207,7 @@
             </div>
             <form id="registerForm">
                 <?= csrf_field() ?>
+                <?php $isFhOlt = in_array(strtoupper($olt['brand'] ?? ''), ['FIBERHOME', 'FH']); ?>
                 <div class="modal-body">
                     <input type="hidden" id="r_board" name="board">
                     <input type="hidden" id="r_slot" name="slot">
@@ -239,7 +240,7 @@
                     <!-- VLAN + TCONT -->
                     <div class="border rounded p-3 mb-3" style="background:#f8fafc">
                         <div class="small fw-semibold text-muted mb-2">
-                            <i class="bi bi-diagram-3 me-1"></i>Konfigurasi Service Port (gpon-onu interface)
+                            <i class="bi bi-diagram-3 me-1"></i><?= $isFhOlt ? 'Konfigurasi VLAN (onu wan-cfg)' : 'Konfigurasi Service Port (gpon-onu interface)' ?>
                         </div>
                         <div class="row g-3">
                             <div class="col-4">
@@ -253,18 +254,20 @@
                                 <input type="number" name="vlan_internet" class="form-control form-control-sm"
                                        placeholder="100" min="1" max="4094">
                                 <?php endif; ?>
-                                <div class="form-text">service-port 1 vport 1</div>
+                                <div class="form-text"><?= $isFhOlt ? 'kanal internet (wan-cfg index)' : 'service-port 1 vport 1' ?></div>
                             </div>
                             <div class="col-4">
                                 <label class="form-label small fw-medium">VLAN ACS/Mgmt</label>
                                 <input type="number" name="vlan_acs" class="form-control form-control-sm"
                                        placeholder="155" min="1" max="4094">
-                                <div class="form-text">service-port 2 vport 1</div>
+                                <div class="form-text"><?= $isFhOlt ? 'kanal ACS/tr069 (wan-cfg index)' : 'service-port 2 vport 1' ?></div>
                             </div>
                             <?php
+                                $isFhOlt        = in_array(strtoupper($olt['brand'] ?? ''), ['FIBERHOME', 'FH']);
                                 $tcontOptions   = array_filter(array_map('trim', explode("\n", $olt['tcont_profiles'] ?? '')));
                                 $trafficOptions = array_filter(array_map('trim', explode("\n", $olt['traffic_profiles'] ?? '')));
                             ?>
+                            <?php if (!$isFhOlt): // TCONT/Traffic profile tidak dipakai di Fiberhome ?>
                             <div class="col-3">
                                 <label class="form-label small fw-medium">TCONT Profile</label>
                                 <?php if (!empty($tcontOptions)): ?>
@@ -292,6 +295,7 @@
                                 <input type="text" name="traffic_profile" class="form-control form-control-sm" placeholder="200M (opsional)">
                                 <?php endif; ?>
                             </div>
+                            <?php endif; ?>
                         </div>
                     </div>
 

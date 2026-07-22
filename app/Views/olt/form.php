@@ -78,7 +78,7 @@
                             <input type="password" name="enable_password" class="form-control"
                                    placeholder="<?= ($olt && !empty($olt['enable_password'])) ? '(sudah diset — kosongkan jika tidak ingin mengubah)' : 'Kosongkan jika tidak ada' ?>">
                         </div>
-                        <div class="col-4">
+                        <div class="col-4" id="fwVersionCol">
                             <label class="form-label">Firmware Version</label>
                             <select name="firmware_version" class="form-select">
                                 <option value="">— Auto detect —</option>
@@ -140,7 +140,7 @@
                                    placeholder="acspass">
                             <div class="form-text">Password autentikasi GenieACS (opsional).</div>
                         </div>
-                        <div class="col-4">
+                        <div class="col-4" id="pppoeProfileCol">
                             <label class="form-label">PPPoE VLAN Profile</label>
                             <input type="text" name="pppoe_vlan_profile" class="form-control"
                                    value="<?= esc($olt['pppoe_vlan_profile'] ?? 'PPPOE') ?>"
@@ -149,11 +149,11 @@
                         </div>
                     </div>
 
-                    <h6 class="fw-semibold mb-3 text-muted text-uppercase" style="font-size:.75rem;letter-spacing:.05em">
+                    <h6 class="fw-semibold mb-3 text-muted text-uppercase" id="provisioningHeader" style="font-size:.75rem;letter-spacing:.05em">
                         Konfigurasi Provisioning
                     </h6>
 
-                    <div class="mb-3">
+                    <div class="mb-3" id="provisioningSection">
                         <div class="d-flex align-items-center gap-2 mb-2">
                             <label class="form-label mb-0">TCONT &amp; Traffic Profiles</label>
                             <button type="button" class="btn btn-sm btn-outline-primary" id="btnSyncTcont" onclick="syncTcont()">
@@ -236,7 +236,7 @@
 <?= $this->endSection() ?>
 <?= $this->section('scripts') ?>
 <script>
-// ── Model default mengikuti Brand ───────────────────────────────
+// ── Model default + field spesifik mengikuti Brand ──────────────
 (function initBrandModel() {
     const brand = document.getElementById('oltBrand');
     const model = document.getElementById('oltModel');
@@ -244,12 +244,26 @@
     const DEFAULTS = { 'ZTE':'C320', 'Fiberhome':'AN6000', 'Huawei':'MA5800', 'Nokia':'', 'Calix':'' };
     // Nilai yang boleh ditimpa otomatis (default bawaan tiap brand) — biar input manual aman
     const KNOWN = ['C320','AN6000','MA5800','AN5516'];
+
+    // Field khusus ZTE — disembunyikan untuk Fiberhome (tidak dipakai):
+    // TCONT/Traffic profile, Firmware Version (v1.2/v2.1), PPPoE VLAN Profile (pon-onu-mng).
+    const ZTE_ONLY = ['fwVersionCol', 'pppoeProfileCol', 'provisioningHeader', 'provisioningSection'];
+    function applyBrandFields() {
+        const isFh = (brand.value === 'Fiberhome' || brand.value === 'FH');
+        ZTE_ONLY.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = isFh ? 'none' : '';
+        });
+    }
+
     brand.addEventListener('change', () => {
         const cur = model.value.trim();
         if (cur === '' || KNOWN.includes(cur)) {
             model.value = DEFAULTS[brand.value] ?? '';
         }
+        applyBrandFields();
     });
+    applyBrandFields(); // set sesuai brand saat load (mis. edit OLT Fiberhome)
 })();
 
 // ── TCONT + Traffic Profile tag-input ───────────────────────────
