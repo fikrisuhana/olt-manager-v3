@@ -122,16 +122,17 @@ class FiberhomeDriver implements OltDriverInterface
         $onus = [];
         foreach (explode("\n", $output) as $line) {
             $line = trim($line);
-            // Slot Pon Onu OnuType ST Lic OST PhyId
-            if (preg_match('/^(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s+([APR])\s+\S+\s+(up|dn)\s+([A-Za-z0-9]{8,20})/i', $line, $m)) {
+            // Kolom: Slot Pon Onu OnuType ST Lic OST PhyId ...
+            // ST = A/P/R, OST = up/dn (kadang state lain) → longgarkan jadi \S+.
+            if (preg_match('/^(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s+([APR])\s+(\S+)\s+(\S+)\s+([A-Za-z0-9]{8,20})/i', $line, $m)) {
                 $onus[] = [
                     'board'     => '1',
                     'slot'      => $m[1],
                     'port'      => $m[2],
                     'onu_index' => $m[3],
                     'onu_type'  => $m[4],
-                    'sn'        => strtoupper($m[7]),
-                    'status'    => strtolower($m[6]) === 'up' ? 'ready' : 'offline',
+                    'sn'        => strtoupper($m[8]),
+                    'status'    => strtolower($m[7]) === 'up' ? 'ready' : 'offline',
                 ];
             }
         }
@@ -165,9 +166,11 @@ class FiberhomeDriver implements OltDriverInterface
         $out = $this->telnet->execute($cmd, $this->configPrompt, 10);
         $log[] = "whitelist add → " . $this->flat($out);
 
-        $exists = stripos($out, 'already') !== false || stripos($out, 'exist') !== false;
+        // "already exist" (spesifik) = ONU sudah terdaftar. Jangan pakai "exist" saja —
+        // pesan error lain seperti "type not exist" juga mengandung "exist".
+        $exists = stripos($out, 'already exist') !== false || stripos($out, 'already added') !== false;
         if (!$exists) {
-            foreach (['error', 'invalid', 'fail', 'unknown', 'incomplete', '% '] as $pat) {
+            foreach (['error', 'invalid', 'fail', 'unknown', 'incomplete', 'not exist', 'illegal', '% '] as $pat) {
                 if (stripos($out, $pat) !== false) {
                     throw new \Exception("Gagal whitelist add ONU: " . $this->flat($out));
                 }
@@ -182,10 +185,13 @@ class FiberhomeDriver implements OltDriverInterface
         $this->telnet->execute("interface pon {$board}/{$slot}/{$port}", $pon, 5);
 
         // Nama pelanggan → onu description <idx> <name> id 0
-        if ($name !== '') {
-            $o = $this->telnet->execute("onu description {$idx} {$name} id 0", $pon, 5);
+        // PENTING: FH tidak menerima spasi/karakter khusus (spasi → "% Unknown command").
+        // Sanitasi jadi token aman (spasi→'-'); DB tetap simpan nama asli (lihat OnuController).
+        $descName = $this->sanitizeDesc($name);
+        if ($descName !== '') {
+            $o = $this->telnet->execute("onu description {$idx} {$descName} id 0", $pon, 5);
             if ($this->isErr($o)) $log[] = "WARN description → " . $this->flat($o);
-            else $log[] = "Nama diset: {$name}";
+            else $log[] = "Nama diset: {$descName}";
         }
 
         // VLAN + service WAN
@@ -198,7 +204,7 @@ class FiberhomeDriver implements OltDriverInterface
         $this->telnet->execute('exit', $this->configPrompt, 3);
 
         // Simpan ke flash
-        $this->telnet->execute('save', $this->configPrompt, 20);
+        $this->telnet->execute('save', $this->configPrompt, 30);
         $log[] = 'Konfigurasi disimpan (save)';
 
         return ['success' => true, 'log' => $log];
@@ -265,7 +271,7 @@ class FiberhomeDriver implements OltDriverInterface
         $this->telnet->execute("interface pon {$board}/{$slot}/{$port}", $pon, 5);
         $out = $this->telnet->execute("no whitelist {$onuIndex}", $pon, 10);
         $this->telnet->execute('exit', $this->configPrompt, 3);
-        $this->telnet->execute('save', $this->configPrompt, 20);
+        $this->telnet->execute('save', $this->configPrompt, 30);
 
         // "Deauth ONU X success." = sukses
         return stripos($out, 'success') !== false || !$this->isErr($out);
@@ -388,20 +394,23 @@ class FiberhomeDriver implements OltDriverInterface
         $this->telnet->execute("interface pon {$board}/{$slot}/{$port}", $pon, 5);
         $this->setService($onuIndex, $sn, $vlanAcs, $vlanInternet, $pppoeUser, $pppoePass, $pon, $log);
         $this->telnet->execute('exit', $this->configPrompt, 3);
-        $this->telnet->execute('save', $this->configPrompt, 20);
+        $this->telnet->execute('save', $this->configPrompt, 30);
         $log[] = 'VLAN service disimpan (save)';
         return ['success' => true, 'log' => $log];
     }
 
     // ── Profiles ──────────────────────────────────────────────────────
     // FH pakai DBA profile (setara TCONT ZTE). Parse dari show gpon-dba-profile.
+    // DBA/bandwidth profile FH (setara TCONT ZTE).
+    // Format tabular: "Index  Profile-Name  Type  Fix-BW  Ass-BW  Max-BW", baris data diawali angka.
     public function getTcontProfiles(): array
     {
         $out = $this->telnet->execute('show gpon-dba-profile', $this->configPrompt, 10);
         $profiles = [];
         foreach (explode("\n", $out) as $line) {
-            // TODO: sesuaikan dgn format aktual OLT (belum di-capture penuh)
-            if (preg_match('/^\s*(?:name|profile[- ]name)\s*[:=]?\s*(\S+)/i', trim($line), $m)) {
+            $line = trim($line);
+            // Baris data: <index> <profile-name> ...  (lewati header "Index..." dan separator "----")
+            if (preg_match('/^\d+\s+([A-Za-z0-9._\-]+)\s+/', $line, $m)) {
                 $profiles[] = $m[1];
             }
         }
@@ -415,6 +424,14 @@ class FiberhomeDriver implements OltDriverInterface
     private function flat(string $s): string
     {
         return trim(preg_replace('/\s+/', ' ', $s));
+    }
+
+    /** Nama aman untuk `onu description` FH: spasi→'-', buang char selain [A-Za-z0-9._-]. */
+    private function sanitizeDesc(string $name): string
+    {
+        $s = preg_replace('/\s+/', '-', trim($name));
+        $s = preg_replace('/[^A-Za-z0-9._\-]/', '', $s);
+        return trim($s, '-');
     }
 
     private function isErr(string $s): bool

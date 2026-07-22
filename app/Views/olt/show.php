@@ -669,11 +669,13 @@ function previewCli() {
     // ── Fiberhome AN6000 preview (diverifikasi di OLT) ──────────────
     if (IS_FH) {
         const isFhOnu = /^FH(TT|SC)/i.test(sn);
+        // FH tidak menerima spasi/char khusus di description (spasi → "% Unknown command")
+        const dname = (name || '').trim().replace(/\s+/g, '-').replace(/[^A-Za-z0-9._-]/g, '') || '<NAMA>';
         let f = `! ══ Fiberhome AN6000 CLI Preview ══\n`;
         f += `config\n`;
         f += `whitelist add phy-id ${sn} type ${type || '<TIPE_ONU>'} slot ${slot} pon ${port} onuid ${idx}\n`;
         f += `interface pon ${board}/${slot}/${port}\n`;
-        f += `  onu description ${idx} ${name} id 0\n`;
+        f += `  onu description ${idx} ${dname} id 0\n`;
         let ind = 1;
         if (vlanA) { f += `  onu wan-cfg ${idx} index ${ind} mode tr069 type route ${vlanA} 65535 nat disable qos disable dsp dhcp entries 0\n`; ind++; }
         if (vlanI) {
