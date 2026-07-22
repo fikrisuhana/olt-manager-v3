@@ -72,7 +72,12 @@
     </div>
     <div class="card-body p-0">
         <?php if (empty($onus)): ?>
-            <div class="text-center py-4 text-muted small">Belum ada ONU terdaftar.</div>
+            <div class="text-center py-4 text-muted small">
+                Belum ada ONU terdaftar di database.
+                <?php if ($cache_updated_at): ?>
+                    <br>Cache sudah ada — klik <strong>Import ke DB</strong> di atas untuk memuat ONU hasil <strong>Sync Cache</strong> ke daftar.
+                <?php endif; ?>
+            </div>
         <?php else: ?>
         <?php
             $onusByPort = [];
