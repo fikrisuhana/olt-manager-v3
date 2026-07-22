@@ -641,19 +641,29 @@ function loadSignal() {
             const s = data.signal;
             const qClass = { good: 'text-success', warn: 'text-warning', bad: 'text-danger' }[data.quality] ?? 'text-muted';
             const qIcon  = { good: 'bi-reception-4', warn: 'bi-reception-2', bad: 'bi-reception-0' }[data.quality] ?? 'bi-reception-4';
-            box.innerHTML = `
+            const head = `
                 <div class="d-flex align-items-center gap-3 mb-2">
                     <i class="bi ${qIcon} fs-3 ${qClass}"></i>
                     <div>
                         <div class="fw-semibold ${qClass}">${s.onu_rx ?? '?'} dBm</div>
                         <div class="small text-muted">ONU RX (sinyal di pelanggan)</div>
                     </div>
-                </div>
-                <table class="table table-sm mb-0">
-                    <tr><th class="text-muted" style="width:50%">OLT RX (dari pelanggan)</th><td class="font-monospace">${s.olt_rx ?? '?'} dBm</td></tr>
-                    <tr><th class="text-muted">ONU TX (kirim ke OLT)</th><td class="font-monospace">${s.onu_tx ?? '?'} dBm</td></tr>
-                    <tr><th class="text-muted">OLT TX (kirim ke pelanggan)</th><td class="font-monospace">${s.olt_tx ?? '?'} dBm</td></tr>
-                </table>`;
+                </div>`;
+            if (data.source === 'acs') {
+                // Fiberhome: RX dibaca dari ACS (TR-069). OLT-side RX/TX tidak tersedia.
+                box.innerHTML = head + `
+                    <table class="table table-sm mb-0">
+                        ${s.temperature ? `<tr><th class="text-muted" style="width:50%">Suhu Transceiver</th><td class="font-monospace">${s.temperature} &deg;C</td></tr>` : ''}
+                    </table>
+                    <div class="small text-muted mt-2"><i class="bi bi-cloud-check me-1"></i>Dari ACS/TR-069 (OLT Fiberhome).</div>`;
+            } else {
+                box.innerHTML = head + `
+                    <table class="table table-sm mb-0">
+                        <tr><th class="text-muted" style="width:50%">OLT RX (dari pelanggan)</th><td class="font-monospace">${s.olt_rx ?? '?'} dBm</td></tr>
+                        <tr><th class="text-muted">ONU TX (kirim ke OLT)</th><td class="font-monospace">${s.onu_tx ?? '?'} dBm</td></tr>
+                        <tr><th class="text-muted">OLT TX (kirim ke pelanggan)</th><td class="font-monospace">${s.olt_tx ?? '?'} dBm</td></tr>
+                    </table>`;
+            }
         })
         .catch(e => {
             if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Refresh'; }
