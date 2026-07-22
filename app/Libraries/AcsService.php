@@ -230,6 +230,12 @@ class AcsService
         $proj = implode(',', [
             '_id', '_deviceId', '_lastInform',
             'InternetGatewayDevice.WANDevice.1.WANConnectionDevice',
+            // VirtualParameters (didefinisikan di GenieACS ini) — normalisasi WAN lintas
+            // model & mode (PPPoE / DHCP-IPoE). AddressWanIP = IP nyata untuk kedua mode.
+            'VirtualParameters.pppoeUsername',
+            'VirtualParameters.pppoePassword',
+            'VirtualParameters.AddressWanIP',
+            'VirtualParameters.getpppuptime',
             $wifiBase . '.SSID',
             $wifiBase . '.Enable',
             $wifiBase . '.KeyPassphrase',
@@ -269,6 +275,15 @@ class AcsService
             }
         }
 
+        // Utamakan VirtualParameters (brand/mode-agnostic). Ini menangani ONU mode DHCP/IPoE
+        // (WANIPConnection, tanpa PPPoE) & model dgn index WCD/PPP berbeda — yang tak tertangkap
+        // iterasi WANPPPConnection di atas. Juga IP: PPPoConn kadang 0.0.0.0 padahal IP asli di WANIPConnection.
+        $vp     = $d['VirtualParameters'] ?? [];
+        $vpUser = trim((string)($vp['pppoeUsername']['_value'] ?? ''));
+        $vpPass = trim((string)($vp['pppoePassword']['_value'] ?? ''));
+        $vpIp   = trim((string)($vp['AddressWanIP']['_value']  ?? ''));
+        $pppIp  = $wanData['ExternalIPAddress']['_value'] ?? null;
+
         return [
             'device_id'   => $d['_id'],
             'last_inform' => $lastInf,
@@ -276,11 +291,12 @@ class AcsService
             'manufacturer'=> $d['_deviceId']['_Manufacturer'] ?? '',
             'model'       => $d['_deviceId']['_ProductClass'] ?? '',
             'wan' => [
-                'pppoe_user' => $wanData['Username']['_value'] ?? null,
-                'pppoe_pass' => $wanData['Password']['_value'] ?? null,
+                'pppoe_user' => $vpUser !== '' ? $vpUser : ($wanData['Username']['_value'] ?? null),
+                'pppoe_pass' => $vpPass !== '' ? $vpPass : ($wanData['Password']['_value'] ?? null),
                 'status'     => $wanData['ConnectionStatus']['_value'] ?? null,
-                'ip'         => $wanData['ExternalIPAddress']['_value'] ?? null,
-                'uptime'     => $wanData['Uptime']['_value'] ?? null,
+                'ip'         => ($vpIp !== '' && $vpIp !== '0.0.0.0') ? $vpIp
+                              : (($pppIp && $pppIp !== '0.0.0.0') ? $pppIp : null),
+                'uptime'     => $wanData['Uptime']['_value'] ?? ($vp['getpppuptime']['_value'] ?? null),
             ],
             'wifi' => [
                 'ssid'     => $wifi['SSID']['_value'] ?? null,
