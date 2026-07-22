@@ -161,8 +161,11 @@ class FiberhomeDriver implements OltDriverInterface
         $vlanAcs      = (int)($params['vlan_acs'] ?? 0);
         $force        = (bool)($params['force'] ?? false);
 
-        // 1) whitelist add — di config mode
-        $cmd = "whitelist add phy-id {$sn} type {$type} slot {$slot} pon {$port} onuid {$idx}";
+        // 1) whitelist add — di config mode.
+        // phy-id FH CASE-SENSITIVE (mis. ZTEGdce2cf07, bagian hex huruf kecil). App simpan SN uppercase,
+        // jadi resolve dulu case-asli dari OLT (discovery/authorization) sebelum whitelist add.
+        $phyId = $this->resolvePhyId($board, $slot, $port, $sn);
+        $cmd = "whitelist add phy-id {$phyId} type {$type} slot {$slot} pon {$port} onuid {$idx}";
         $out = $this->telnet->execute($cmd, $this->configPrompt, 10);
         $log[] = "whitelist add → " . $this->flat($out);
 
@@ -424,6 +427,27 @@ class FiberhomeDriver implements OltDriverInterface
     private function flat(string $s): string
     {
         return trim(preg_replace('/\s+/', ' ', $s));
+    }
+
+    /**
+     * Cari phy-id ONU dengan CASE ASLI (mis. ZTEGdce2cf07) yang cocok dengan $snUpper
+     * (case-insensitive). phy-id FH case-sensitive di `whitelist add`.
+     * Cek discovery (ONU baru) lalu authorization (ONU sudah terdaftar utk re-config).
+     * Fallback: kembalikan $snUpper apa adanya bila tidak ketemu.
+     */
+    private function resolvePhyId(string $b, string $s, string $p, string $snUpper): string
+    {
+        foreach (["show discovery {$b}/{$s}/{$p}", "show authorization {$b}/{$s}/{$p}"] as $cmd) {
+            $out = $this->telnet->execute($cmd, $this->configPrompt, 20);
+            foreach (explode("\n", $out) as $line) {
+                if (preg_match_all('/\b([A-Za-z]{3,5}[A-Za-z0-9]{6,17})\b/', $line, $mm)) {
+                    foreach ($mm[1] as $cand) {
+                        if (strcasecmp($cand, $snUpper) === 0) return $cand;
+                    }
+                }
+            }
+        }
+        return $snUpper;
     }
 
     /** Nama aman untuk `onu description` FH: spasi→'-', buang char selain [A-Za-z0-9._-]. */
