@@ -21,7 +21,7 @@
                         </div>
                         <div class="col-4">
                             <label class="form-label">Brand <span class="text-danger">*</span></label>
-                            <select name="brand" class="form-select">
+                            <select name="brand" id="oltBrand" class="form-select">
                                 <?php $brands = ['ZTE', 'Fiberhome', 'Huawei', 'Nokia', 'Calix']; ?>
                                 <?php foreach ($brands as $b): ?>
                                     <option value="<?= $b ?>" <?= ($olt['brand'] ?? 'ZTE') === $b ? 'selected' : '' ?>><?= $b ?></option>
@@ -33,9 +33,9 @@
                     <div class="row g-3 mb-4">
                         <div class="col-8">
                             <label class="form-label">Model</label>
-                            <input type="text" name="model" class="form-control"
+                            <input type="text" name="model" id="oltModel" class="form-control"
                                    value="<?= esc($olt['model'] ?? old('model', 'C320')) ?>"
-                                   placeholder="C320, C600, AN5516, MA5800 ...">
+                                   placeholder="C320, AN6000, MA5800 ...">
                         </div>
                         <div class="col-4">
                             <label class="form-label">Deskripsi</label>
@@ -236,6 +236,22 @@
 <?= $this->endSection() ?>
 <?= $this->section('scripts') ?>
 <script>
+// ── Model default mengikuti Brand ───────────────────────────────
+(function initBrandModel() {
+    const brand = document.getElementById('oltBrand');
+    const model = document.getElementById('oltModel');
+    if (!brand || !model) return;
+    const DEFAULTS = { 'ZTE':'C320', 'Fiberhome':'AN6000', 'Huawei':'MA5800', 'Nokia':'', 'Calix':'' };
+    // Nilai yang boleh ditimpa otomatis (default bawaan tiap brand) — biar input manual aman
+    const KNOWN = ['C320','AN6000','MA5800','AN5516'];
+    brand.addEventListener('change', () => {
+        const cur = model.value.trim();
+        if (cur === '' || KNOWN.includes(cur)) {
+            model.value = DEFAULTS[brand.value] ?? '';
+        }
+    });
+})();
+
 // ── TCONT + Traffic Profile tag-input ───────────────────────────
 (function initProfiles() {
     const tcont = `<?= esc($olt['tcont_profiles'] ?? '', 'js') ?>`.trim();
