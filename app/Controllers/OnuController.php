@@ -468,14 +468,20 @@ class OnuController extends Controller
 
         $oltModel  = new OltModel();
         $olt       = $oltModel->find($onu['olt_id']);
-        // Deteksi ONU ZTE dari SN prefix (ZTEG) — lebih reliable dari ONU type
-        // karena Fiberhome (FHTT) bisa saja di-register dengan type ZTE-F601
-        $isZteOnu  = strncasecmp($onu['sn'] ?? '', 'ZTEG', 4) === 0;
+        // PPPoE dipush via OLT (OMCI langsung) hanya bila brand OLT & ONU cocok:
+        //   OLT ZTE + ONU ZTE (ZTEG)  → pon-onu-mng
+        //   OLT FH  + ONU FH  (FHTT)  → onu wan-cfg
+        // Selain itu (brand ONU beda dari OLT) → PPPoE via ACS/TR-069.
+        $oltBrand    = strtoupper($olt['brand'] ?? 'ZTE');
+        $isZteOnu    = strncasecmp($onu['sn'] ?? '', 'ZTEG', 4) === 0;
+        $isFhOnu     = strncasecmp($onu['sn'] ?? '', 'FHTT', 4) === 0 || strncasecmp($onu['sn'] ?? '', 'FHSC', 4) === 0;
+        $pppoeViaOlt = ($oltBrand === 'ZTE' && $isZteOnu)
+                    || (($oltBrand === 'FIBERHOME' || $oltBrand === 'FH') && $isFhOnu);
 
         $action = $this->request->getPost('action'); // 'pppoe' | 'wifi' | 'reboot'
 
-        // ZTE ONU: push PPPoE via pon-onu-mng (OMCI) — set VLAN + PPPoE sekaligus
-        if ($action === 'pppoe' && $isZteOnu) {
+        // PPPoE via OLT (OMCI) — set VLAN + PPPoE sekaligus
+        if ($action === 'pppoe' && $pppoeViaOlt) {
             $pppoeUser    = trim($this->request->getPost('pppoe_user'));
             $pppoePass    = trim($this->request->getPost('pppoe_pass'));
             $vlanAcs      = (int)($onu['vlan_acs'] ?? 0);
@@ -499,14 +505,15 @@ class OnuController extends Controller
                     $onuModel->update($id, ['pppoe_user' => $pppoeUser, 'pppoe_pass' => $pppoePass ?: null]);
                 }
 
+                $oltMech = ($oltBrand === 'FIBERHOME' || $oltBrand === 'FH') ? 'onu wan-cfg' : 'pon-onu-mng';
                 $logModel = new ProvisionLogModel();
                 $logModel->log($this->userId, 'olt_pppoe', 'success',
-                    "pon-onu-mng PPPoE user={$pppoeUser} vlan_internet={$vlanInternet} vlan_acs={$vlanAcs}", $id, $onu['olt_id']);
+                    "{$oltMech} PPPoE user={$pppoeUser} vlan_internet={$vlanInternet} vlan_acs={$vlanAcs}", $id, $onu['olt_id']);
 
                 return $this->response->setJSON([
                     'success'  => true,
-                    'message'  => 'PPPoE berhasil dipush ke ONU via OLT (pon-onu-mng).',
-                    'wan_path' => 'OLT pon-onu-mng',
+                    'message'  => "PPPoE berhasil dipush ke ONU via OLT ({$oltMech}).",
+                    'wan_path' => "OLT {$oltMech}",
                     'log'      => $result['log'],
                 ]);
             } catch (\Exception $e) {

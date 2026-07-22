@@ -207,8 +207,15 @@
                     </div>
                 </div>
                 <div class="form-text">
-                    <?php if (strtoupper($onu['brand'] ?? '') === 'ZTE'): ?>
-                        <i class="bi bi-info-circle me-1"></i>ZTE OLT: PPPoE + VLAN dipush via <strong>OLT pon-onu-mng</strong> (OMCI).
+                    <?php
+                        $oltB     = strtoupper($onu['brand'] ?? '');
+                        $isFhOnu  = strncasecmp($onu['sn'] ?? '', 'FHTT', 4) === 0 || strncasecmp($onu['sn'] ?? '', 'FHSC', 4) === 0;
+                        $isZteOnu = strncasecmp($onu['sn'] ?? '', 'ZTEG', 4) === 0;
+                    ?>
+                    <?php if ($oltB === 'ZTE' && $isZteOnu): ?>
+                        <i class="bi bi-info-circle me-1"></i>ONU ZTE di OLT ZTE: PPPoE + VLAN dipush via <strong>OLT pon-onu-mng</strong> (OMCI).
+                    <?php elseif (($oltB === 'FIBERHOME' || $oltB === 'FH') && $isFhOnu): ?>
+                        <i class="bi bi-info-circle me-1"></i>ONU FiberHome di OLT FiberHome: PPPoE + VLAN dipush via <strong>OLT (onu wan-cfg)</strong>.
                     <?php else: ?>
                         <i class="bi bi-info-circle me-1"></i>PPPoE dipush via <strong>TR-069/GenieACS</strong>.
                     <?php endif; ?>
@@ -344,8 +351,8 @@
     </div>
 </div>
 
-<?php if (strncasecmp($onu['sn'], 'ZTEG', 4) === 0): ?>
-<!-- Konfigurasi OLT (ZTE) — dari Database, tidak perlu Telnet -->
+<?php if (strtoupper($onu['brand'] ?? '') === 'ZTE' && strncasecmp($onu['sn'], 'ZTEG', 4) === 0): ?>
+<!-- Konfigurasi OLT (ZTE) — dari Database, tidak perlu Telnet. Hanya ONU ZTE di OLT ZTE. -->
 <div class="row mt-4">
     <div class="col-12">
         <div class="card border-0 shadow-sm">
@@ -426,15 +433,24 @@
                 Set service mapping VLAN via OMCI langsung dari OLT:
             </p>
             <ul class="small mb-3">
-                <?php if ($onu['vlan_internet']): ?>
-                <li><code>service hsi gemport 1 vlan <?= $onu['vlan_internet'] ?></code></li>
+                <?php if (in_array(strtoupper($onu['brand'] ?? ''), ['FIBERHOME', 'FH'])): ?>
+                    <?php if ($onu['vlan_acs']): ?>
+                    <li><code>onu wan-cfg <?= $onu['onu_index'] ?> index 1 mode tr069 ... <?= $onu['vlan_acs'] ?> ... dsp dhcp</code></li>
+                    <?php endif; ?>
+                    <?php if ($onu['vlan_internet']): ?>
+                    <li><code>onu wan-cfg <?= $onu['onu_index'] ?> index 2 mode internet ... <?= $onu['vlan_internet'] ?> ...</code></li>
+                    <?php endif; ?>
+                <?php else: ?>
+                    <?php if ($onu['vlan_internet']): ?>
+                    <li><code>service hsi gemport 1 vlan <?= $onu['vlan_internet'] ?></code></li>
+                    <?php endif; ?>
+                    <?php if ($onu['vlan_acs']): ?>
+                    <li><code>service acs gemport 1 vlan <?= $onu['vlan_acs'] ?></code></li>
+                    <?php endif; ?>
+                    <li><code>vlan port veip_1 mode hybrid</code></li>
                 <?php endif; ?>
-                <?php if ($onu['vlan_acs']): ?>
-                <li><code>service acs gemport 1 vlan <?= $onu['vlan_acs'] ?></code></li>
-                <?php endif; ?>
-                <li><code>vlan port veip_1 mode hybrid</code></li>
             </ul>
-            <p class="small text-muted">Setelah ONU dapat IP management, PPPoE di-push via GenieACS dari halaman ini.</p>
+            <p class="small text-muted">Setelah ONU konek ACS, PPPoE bisa di-push (FH ONU: via OLT; brand lain: via GenieACS).</p>
             <div id="setAcsResult" class="mt-2 small" style="min-height:1.5rem"></div>
         </div>
         <div class="card-footer d-flex gap-2">
