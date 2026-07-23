@@ -696,6 +696,29 @@ class OnuController extends Controller
             $pppoeUser = $ponMng['pppoe_user'] ?? null;
             $pppoePass = $ponMng['pppoe_pass'] ?? null;
 
+            // Fallback PPPoE dari ACS bila OLT tak menyediakan. Di ZTE firmware v2.1 tidak ada
+            // command per-ONU untuk baca pon-onu-mng (`show running-config pon-onu-mng` invalid),
+            // jadi PPPoE diambil dari ACS (VirtualParameters.pppoeUsername) — robust lintas versi/brand.
+            $pppoeSource = $pppoeUser ? 'olt' : 'db';
+            if (!$pppoeUser) {
+                $acsModel = new AcsServerModel();
+                $acs = $acsModel->getDefault($this->userId);
+                if ($acs) {
+                    try {
+                        $acsService = new AcsService($acs);
+                        $device = $acsService->findDeviceBySn($onu['sn']);
+                        if ($device) {
+                            $info = $acsService->getDeviceInfo($device['_id'], $acsService->getDeviceBrand($device));
+                            if (!empty($info['wan']['pppoe_user'])) {
+                                $pppoeUser   = $info['wan']['pppoe_user'];
+                                $pppoePass   = $info['wan']['pppoe_pass'] ?: $pppoePass;
+                                $pppoeSource = 'acs';
+                            }
+                        }
+                    } catch (\Exception $e) { /* fallback gagal, biarkan kosong */ }
+                }
+            }
+
             // Simpan ke DB jika ditemukan dan DB masih kosong
             $dbUpdate = [];
             if ($pppoeUser && empty($onu['pppoe_user'])) $dbUpdate['pppoe_user'] = $pppoeUser;
@@ -703,12 +726,13 @@ class OnuController extends Controller
             if ($dbUpdate) $onuModel->update($id, $dbUpdate);
 
             return $this->response->setJSON([
-                'success'    => true,
-                'source'     => 'olt',
-                'config'     => $config,
-                'pon_mng'    => $ponMng,
-                'pppoe_user' => $pppoeUser,
-                'pppoe_pass' => $pppoePass,
+                'success'      => true,
+                'source'       => 'olt',
+                'config'       => $config,
+                'pon_mng'      => $ponMng,
+                'pppoe_user'   => $pppoeUser,
+                'pppoe_pass'   => $pppoePass,
+                'pppoe_source' => $pppoeSource,
             ]);
         } catch (\Exception $e) {
             return $this->response->setJSON(['success' => false, 'message' => $e->getMessage()]);
