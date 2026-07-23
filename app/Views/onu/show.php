@@ -434,11 +434,21 @@
             </p>
             <ul class="small mb-3">
                 <?php if (in_array(strtoupper($onu['brand'] ?? ''), ['FIBERHOME', 'FH'])): ?>
-                    <?php if ($onu['vlan_acs']): ?>
-                    <li><code>onu wan-cfg <?= $onu['onu_index'] ?> index 1 mode tr069 ... <?= $onu['vlan_acs'] ?> ... dsp dhcp</code></li>
-                    <?php endif; ?>
-                    <?php if ($onu['vlan_internet']): ?>
-                    <li><code>onu wan-cfg <?= $onu['onu_index'] ?> index 2 mode internet ... <?= $onu['vlan_internet'] ?> ...</code></li>
+                    <?php $isFhOnu = (bool)preg_match('/^FH(TT|SC)/i', $onu['sn'] ?? ''); ?>
+                    <?php if ($isFhOnu): // ONU FH: WAN penuh di OLT ?>
+                        <?php if ($onu['vlan_acs']): ?>
+                        <li><code>onu wan-cfg <?= $onu['onu_index'] ?> index 1 mode tr069 ... <?= $onu['vlan_acs'] ?> ... dsp dhcp</code></li>
+                        <?php endif; ?>
+                        <?php if ($onu['vlan_internet']): ?>
+                        <li><code>onu wan-cfg <?= $onu['onu_index'] ?> index 2 mode internet ... <?= $onu['vlan_internet'] ?> ...</code></li>
+                        <?php endif; ?>
+                    <?php else: // ONU non-FH: bridge VLAN ke veip (ONU pakai TR-069/PPPoE sendiri via ACS) ?>
+                        <?php if ($onu['vlan_acs']): ?>
+                        <li><code>onu veip <?= $onu['onu_index'] ?> cvlan-id <?= $onu['vlan_acs'] ?> cvlan-cos 65535 svlan-tpid 33024 svlan-vid <?= $onu['vlan_acs'] ?> svlan-cos 65535</code></li>
+                        <?php endif; ?>
+                        <?php if ($onu['vlan_internet']): ?>
+                        <li><code>onu veip <?= $onu['onu_index'] ?> cvlan-id <?= $onu['vlan_internet'] ?> ... svlan-vid <?= $onu['vlan_internet'] ?> ...</code></li>
+                        <?php endif; ?>
                     <?php endif; ?>
                 <?php else: ?>
                     <?php if ($onu['vlan_internet']): ?>

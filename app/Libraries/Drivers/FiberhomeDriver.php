@@ -235,44 +235,57 @@ class FiberhomeDriver implements OltDriverInterface
      *       [entries <n> <fe1-4|ssid1-8|10glan>...]
      *   pppoe: dsp pppoe pro <enable|disable> <user> <pass> <servname|null> <auto|payload|manual>
      *
-     * Strategi (keputusan user):
-     *   - Kanal 1 = tr069 (VLAN ACS, dhcp) → ONU selalu bisa konek GenieACS.
-     *   - ONU Fiberhome (SN FHTT/FHSC) → kanal 2 internet PPPoE full DI OLT (dsp pppoe). [verified]
-     *   - ONU non-FH (ZTE dll)          → internet diserahkan ACS/TR-069 (OMCI wan-cfg FH belum tentu
-     *                                       dihormati ONU non-FH; ACS authoritative).
+     * Strategi (keputusan user — TUJUAN APP: "tembus" lintas-merk, ONU apapun di OLT apapun jalan):
+     *   - ONU Fiberhome (SN FHTT/FHSC) → WAN dibuat penuh DI OLT via OMCI FH (onu wan-cfg):
+     *       kanal tr069 (VLAN ACS, dhcp) + kanal internet PPPoE (dsp pppoe). [verified]
+     *   - ONU non-FH (ZTE/Huawei/dll)  → OMCI wan-cfg FH TIDAK dihormati ONU non-FH (WAN routed
+     *       gagal nyampe ACS). Solusi TERVERIFIKASI di OLT 103: bridge tiap VLAN transparan ke
+     *       **veip** ONU (onu veip). ONU pakai agent TR-069 + PPPoE-nya SENDIRI (di-provision ACS),
+     *       ambil ACS URL via DHCP option-43. Analog `vlan port veip_1 mode hybrid` di OLT ZTE.
+     *       Bukti: :3 (ZTE F672Y, config veip) NYAMPE ACS; :4 (config wan-cfg routed) TIDAK.
      */
     private function setService(
         string $idx, string $sn, int $vlanAcs, int $vlanInternet,
         string $pppoeUser, string $pppoePass, array $ponPrompt, array &$log
     ): void {
         $isFH = strncasecmp($sn, 'FHTT', 4) === 0 || strncasecmp($sn, 'FHSC', 4) === 0;
-        $ind  = 1;
 
-        // Kanal management/ACS (semua brand)
-        if ($vlanAcs) {
-            $cmd = "onu wan-cfg {$idx} index {$ind} mode tr069 type route {$vlanAcs} 65535 nat disable qos disable dsp dhcp entries 0";
-            $o = $this->telnet->execute($cmd, $ponPrompt, 6);
-            $log[] = ($this->isErr($o) ? "WARN " : "") . "wan-cfg ACS(tr069) vlan {$vlanAcs} → " . $this->flat($o);
-            $ind++;
+        if ($isFH) {
+            // ── ONU Fiberhome: WAN penuh di OLT via wan-cfg (OMCI FH) ──
+            $ind = 1;
+            if ($vlanAcs) {
+                $cmd = "onu wan-cfg {$idx} index {$ind} mode tr069 type route {$vlanAcs} 65535 nat disable qos disable dsp dhcp entries 0";
+                $o = $this->telnet->execute($cmd, $ponPrompt, 6);
+                $log[] = ($this->isErr($o) ? "WARN " : "") . "wan-cfg ACS(tr069) vlan {$vlanAcs} → " . $this->flat($o);
+                $ind++;
+            }
+            if ($vlanInternet) {
+                if ($pppoeUser !== '' && $pppoePass !== '') {
+                    $cmd = "onu wan-cfg {$idx} index {$ind} mode internet type route {$vlanInternet} 65535 nat enable qos disable "
+                         . "dsp pppoe pro disable {$pppoeUser} {$pppoePass} null auto " . self::WAN_BIND;
+                    $o = $this->telnet->execute($cmd, $ponPrompt, 6);
+                    $log[] = ($this->isErr($o) ? "WARN " : "") . "wan-cfg internet PPPoE vlan {$vlanInternet} user={$pppoeUser} → " . $this->flat($o);
+                } else {
+                    $cmd = "onu wan-cfg {$idx} index {$ind} mode internet type route {$vlanInternet} 65535 nat enable qos disable dsp dhcp " . self::WAN_BIND;
+                    $o = $this->telnet->execute($cmd, $ponPrompt, 6);
+                    $log[] = ($this->isErr($o) ? "WARN " : "") . "wan-cfg internet DHCP vlan {$vlanInternet} → " . $this->flat($o);
+                }
+            }
+            return;
         }
 
-        if (!$vlanInternet) return;
-
-        if ($isFH && $pppoeUser !== '' && $pppoePass !== '') {
-            // ONU FH: PPPoE full di OLT (verified)
-            $cmd = "onu wan-cfg {$idx} index {$ind} mode internet type route {$vlanInternet} 65535 nat enable qos disable "
-                 . "dsp pppoe pro disable {$pppoeUser} {$pppoePass} null auto " . self::WAN_BIND;
+        // ── ONU non-FH: bridge VLAN transparan ke veip (ONU pakai agent/PPPoE sendiri via ACS) ──
+        // Grammar TERVERIFIKASI: onu veip <id> cvlan-id <v> cvlan-cos 65535 svlan-tpid 33024 svlan-vid <v> svlan-cos 65535
+        // (OLT auto-assign onuveip index per cvlan unik: ACS→onuveip 1, internet→onuveip 2)
+        foreach ([['ACS/mgmt', $vlanAcs], ['internet', $vlanInternet]] as [$label, $vlan]) {
+            if (!$vlan) continue;
+            // OLT nolak MODIF veip yang sudah ada → hapus dulu (harmless bila belum ada) lalu buat.
+            $this->telnet->execute("no onu veip {$idx} cvlan-id {$vlan}", $ponPrompt, 5);
+            $cmd = "onu veip {$idx} cvlan-id {$vlan} cvlan-cos 65535 svlan-tpid 33024 svlan-vid {$vlan} svlan-cos 65535";
             $o = $this->telnet->execute($cmd, $ponPrompt, 6);
-            $log[] = ($this->isErr($o) ? "WARN " : "") . "wan-cfg internet PPPoE vlan {$vlanInternet} user={$pppoeUser} → " . $this->flat($o);
-        } elseif ($isFH) {
-            // ONU FH tanpa kredensial: kanal internet DHCP (ACS bisa ambil alih)
-            $cmd = "onu wan-cfg {$idx} index {$ind} mode internet type route {$vlanInternet} 65535 nat enable qos disable dsp dhcp " . self::WAN_BIND;
-            $o = $this->telnet->execute($cmd, $ponPrompt, 6);
-            $log[] = ($this->isErr($o) ? "WARN " : "") . "wan-cfg internet DHCP vlan {$vlanInternet} → " . $this->flat($o);
-        } else {
-            // ONU non-FH: internet diurus ACS/TR-069, OLT tidak set kanal internet
-            $log[] = "non-FH ONU: internet vlan {$vlanInternet} diserahkan ACS (skip onu wan-cfg internet)";
+            $log[] = ($this->isErr($o) ? "WARN " : "") . "veip {$label} vlan {$vlan} (bridge→veip, svlan={$vlan}) → " . $this->flat($o);
         }
+        $log[] = "non-FH ONU: VLAN di-bridge ke veip; TR-069/PPPoE via agent ONU + ACS (OMCI wan-cfg FH di-skip)";
     }
 
     // ── Delete ONU (no whitelist) ✅ terverifikasi ─────────────────────
@@ -377,6 +390,12 @@ class FiberhomeDriver implements OltDriverInterface
             // onu wan-cfg <id> ind <k> mode inter[net] ty r <vlan> ...  → internet
             elseif (preg_match('/onu\s+wan-cfg\s+\d+\s+ind\s+\d+\s+mode\s+inter(?:net)?\s+ty\s+\S+\s+(\d+)/i', $line, $m)) {
                 $result['vlan_internet'] = (int)$m[1];
+            }
+            // onu veip <id> eth <e> onuveip <n> ... cvlan-id <vlan> ...  → non-FH (bridge ke veip)
+            // Urutan pembuatan driver: onuveip 1 = ACS/mgmt, onuveip 2 = internet.
+            elseif (preg_match('/onu\s+veip\s+\d+\s+eth\s+\d+\s+onuveip\s+(\d+)\s+.*?cvlan-id\s+(\d+)/i', $line, $m)) {
+                if ((int)$m[1] === 1)      $result['vlan_acs']      = (int)$m[2];
+                elseif ((int)$m[1] === 2)  $result['vlan_internet'] = (int)$m[2];
             }
             // onu description <id> <name> id 0
             if (preg_match('/onu\s+description\s+\d+\s+(.+?)\s+id\s+\d+/i', $line, $m)) {

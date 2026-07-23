@@ -107,12 +107,43 @@ onu wan-cfg <id> index <n> mode internet type route <vid> <cos> nat enable qos d
 Password otomatis DIENKRIPSI OLT saat disimpan (`testpass` → running-config `key:*9+*.=++`).
 → getOnuConfig hanya bisa baca username, bukan password (sama seperti ZTE).
 
-**Strategi gpon-manager (KEPUTUSAN FINAL user):**
-- Kanal `index 1 mode tr069 <VLAN-ACS> dsp dhcp` → ONU selalu konek GenieACS (semua brand).
-- **ONU Fiberhome (SN FHTT/FHSC)** → kanal `index 2 mode internet <VLAN-INTERNET> dsp pppoe <user> <pass>`
-  = **PPPoE FULL DI OLT** (kebalikan dari OLT ZTE). Verified.
-- **ONU non-FH (ZTE dll)** → **authorize + VLAN saja**, internet/PPPoE diserahkan **ACS/TR-069**
-  (OMCI wan-cfg FH belum tentu dihormati ONU non-FH). Sama pola seperti FH ONU di OLT ZTE.
+**Strategi gpon-manager (KEPUTUSAN FINAL user — TUJUAN APP: "tembus" lintas-merk):**
+- **ONU Fiberhome (SN FHTT/FHSC)** → `onu wan-cfg`: kanal `index 1 mode tr069 <VLAN-ACS> dsp dhcp`
+  (ACS) + kanal `index 2 mode internet <VLAN-INTERNET> dsp pppoe <user> <pass>` = **PPPoE FULL DI OLT**
+  (kebalikan dari OLT ZTE). Verified.
+- **ONU non-FH (ZTE/Huawei/dll)** → **BUKAN wan-cfg** (routed via OMCI FH TIDAK dihormati ONU non-FH →
+  tak nyampe ACS). Pakai **`onu veip`** (bridge VLAN transparan ke veip) — lihat section VEIP di bawah.
+
+## VEIP — bridge VLAN ke ONU non-FH  ✅ TERVERIFIKASI (kunci "tembus" lintas-merk)
+Masalah: ONU non-FH (ZTE) di OLT FH pakai `onu wan-cfg ... type route` (routed WAN via OMCI FH) **TIDAK
+nyampe ACS** — ONU non-FH gak bikin/gak pakai WAN routed FH itu buat agent TR-069-nya.
+Bukti live OLT 103 PON 2/16: `:3` (F672Y, config veip) NYAMPE ACS (inform ~22 mnt);
+`:4` (F6600P, config wan-cfg routed) TIDAK (inform 600+ mnt).
+
+Solusi = bridge tiap VLAN transparan ke **veip** ONU (analog `vlan port veip_1 mode hybrid` di OLT ZTE).
+ONU pakai router/agent TR-069 + PPPoE-nya SENDIRI (di-provision ACS), ambil ACS URL via DHCP option-43.
+
+**Grammar interaktif (di context `interface pon f/s/p`) — TERVERIFIKASI TULIS:**
+```
+onu veip <onuid> cvlan-id <VLAN> cvlan-cos 65535 svlan-tpid 33024 svlan-vid <VLAN> svlan-cos 65535
+```
+- cvlan-id = svlan-vid = VLAN service (single-tag: S=C). `svlan-vid` WAJIB lewat `svlan-tpid 33024` dulu
+  (kalau `svlan-vid` langsung → "% Unknown command"). cos 65535 = default/untagged-priority.
+- OLT **auto-assign** onuveip index per cvlan unik: kanal ACS dibuat dulu → onuveip 1, internet → onuveip 2.
+- Bentuk di running-config PANJANG (`onu veip 4 eth 1 onuveip 1 cvlan-tpid ... svlan-vid ...`) =
+  **bentuk simpan/reboot**, DITOLAK bila diketik ulang ("this command only used for reboot to write config").
+- OLT **nolak MODIF** veip existing → untuk re-config **hapus dulu**: `no onu veip <onuid> cvlan-id <VLAN>`.
+
+Contoh (ACS 100 + internet 210):
+```
+interface pon 1/2/16
+  no onu veip 4 cvlan-id 100
+  onu veip 4 cvlan-id 100 cvlan-cos 65535 svlan-tpid 33024 svlan-vid 100 svlan-cos 65535   ← ACS/mgmt
+  onu veip 4 cvlan-id 210 cvlan-cos 65535 svlan-tpid 33024 svlan-vid 210 svlan-cos 65535   ← internet
+exit
+save
+```
+Diimplement di `FiberhomeDriver::setService()` (cabang non-FH). getOnuConfig parse `onu veip` (onuveip 1=ACS, 2=internet).
 
 > ⚠️ ACS 136.1.1.8 punya backend custom (`auto-configure-fiberhome`) yang juga auto-create WAN FH.
 > Karena strategi = full di OLT untuk FH, pastikan device yang dikelola gpon-manager TIDAK dobel

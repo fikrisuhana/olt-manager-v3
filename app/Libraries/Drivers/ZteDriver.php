@@ -228,6 +228,7 @@ class ZteDriver implements OltDriverInterface
         $sn    = $params['sn'];
         $name  = $params['name'];
         $log   = [];
+        $warnings = [];   // perintah kritis yang gagal (tcont/gemport/service) → config incomplete
 
         // Parameter terstruktur
         $vlanInternet = (int)($params['vlan_internet'] ?? 0);
@@ -303,8 +304,15 @@ class ZteDriver implements OltDriverInterface
         $this->telnet->execute("name {$name}", $this->ifPrompt, 3);
         foreach ($ifCmds as $cmd) {
             $out = $this->telnet->execute($cmd, $this->ifPrompt, 5);
-            if (stripos($out, 'Error') !== false || stripos($out, 'Invalid') !== false) {
-                $log[] = "WARN: '{$cmd}' → " . trim(substr($out, -120));
+            if ($this->isCliError($out)) {
+                $msg = "'{$cmd}' → " . trim(preg_replace('/\s+/', ' ', substr($out, -140)));
+                $log[] = "WARN: {$msg}";
+                // tcont/gemport/service-port gagal = KRITIS: service acs/int downstream ikut gagal
+                // (mis. tcont profile kegedean → "Parameter exceeds range" → gemport tak terbentuk →
+                //  service acs gemport 1 gagal diam-diam → ONU tak dapat ACS). Jangan lapor sukses penuh.
+                if (preg_match('/^(tcont|gemport|service-port)\b/i', $cmd)) {
+                    $warnings[] = $msg;
+                }
             }
         }
 
@@ -325,14 +333,19 @@ class ZteDriver implements OltDriverInterface
             // ACS dulu baru internet — sesuai urutan service-port di gpon-onu interface
             if ($vlanAcs) {
                 $out = $this->telnet->execute("service acs gemport 1 vlan {$vlanAcs}", $this->mngPrompt, 5);
-                if (stripos($out, 'Error') !== false || stripos($out, 'Invalid') !== false) {
-                    $log[] = "WARN pon-onu-mng: service acs → " . trim(substr($out, -120));
+                if ($this->isCliError($out)) {
+                    $msg = "service acs gemport 1 vlan {$vlanAcs} → " . trim(preg_replace('/\s+/', ' ', substr($out, -140)));
+                    $log[] = "WARN pon-onu-mng: {$msg}";
+                    $warnings[] = $msg;
                 }
             }
             $isFiberhome = strncasecmp($sn, 'FHTT', 4) === 0;
             if ($vlanInternet) {
                 // ZTE ONU dengan PPPoE → service ppp, Fiberhome → service int
-                $this->applyServiceInternet($vlanInternet, $log, !$isFiberhome && !empty($pppoeUser));
+                $okInt = $this->applyServiceInternet($vlanInternet, $log, !$isFiberhome && !empty($pppoeUser));
+                if (!$okInt) {
+                    $warnings[] = "service internet (hsi/int/ppp) gemport 1 vlan {$vlanInternet} gagal";
+                }
             }
             $this->telnet->execute("vlan port veip_1 mode hybrid", $this->mngPrompt, 5);
 
@@ -370,7 +383,29 @@ class ZteDriver implements OltDriverInterface
         $this->telnet->execute('write', $this->rootPrompt, 20);
         $log[] = 'Configuration saved (write)';
 
-        return ['success' => true, 'log' => $log];
+        // Bila ada perintah kritis yang gagal, register TETAP tersimpan (ONU terdaftar) tapi
+        // config-nya TIDAK LENGKAP — jangan diam-diam lapor sukses penuh. Surface ke pemanggil.
+        $partial = !empty($warnings);
+        if ($partial) {
+            array_unshift($log, "⚠ KONFIGURASI TIDAK LENGKAP: " . count($warnings)
+                . " perintah gagal (ONU bisa tak dapat service/ACS). Cek profil TCONT/traffic. ["
+                . implode(' | ', $warnings) . "]");
+        }
+
+        return ['success' => true, 'log' => $log, 'warnings' => $warnings, 'partial' => $partial];
+    }
+
+    /**
+     * Deteksi error CLI ZTE secara luas. Bukan cuma "Error"/"Invalid" — ZTE juga balas
+     * "Parameter exceeds range", "Failure", "does not exist", "% ...", dll yang tadinya lolos
+     * diam-diam dan bikin perintah berikutnya (yang bergantung, mis. gemport→service) ikut gagal.
+     */
+    private function isCliError(string $out): bool
+    {
+        return (bool)preg_match(
+            '/(error|invalid|failure|failed|exceeds?\s|out of range|not exist|does not exist|cannot|conflict|duplicat|illegal|no such|unknown command|%\s)/i',
+            $out
+        );
     }
 
     /**
@@ -534,7 +569,7 @@ class ZteDriver implements OltDriverInterface
         }
     }
 
-    private function applyServiceInternet(int $vlan, array &$log, bool $forPppoe = false): void
+    private function applyServiceInternet(int $vlan, array &$log, bool $forPppoe = false): bool
     {
         // v1.x → service hsi
         // v2.x + PPPoE → service ppp
@@ -547,9 +582,9 @@ class ZteDriver implements OltDriverInterface
                 $kw = 'hsi';
             }
             $out = $this->telnet->execute("service {$kw} gemport 1 vlan {$vlan}", $this->mngPrompt, 5);
-            if (stripos($out, 'Error') === false && stripos($out, 'Invalid') === false) {
+            if (!$this->isCliError($out)) {
                 $log[] = "service {$kw} vlan {$vlan} OK (v{$ver})";
-                return;
+                return true;
             }
             $log[] = "WARN: service {$kw} gagal (v{$ver}), coba auto-detect";
         }
@@ -557,12 +592,13 @@ class ZteDriver implements OltDriverInterface
         $order = $forPppoe ? ['ppp', 'hsi', 'int'] : ['hsi', 'int', 'ppp'];
         foreach ($order as $kw) {
             $out = $this->telnet->execute("service {$kw} gemport 1 vlan {$vlan}", $this->mngPrompt, 5);
-            if (stripos($out, 'Error') === false && stripos($out, 'Invalid') === false) {
+            if (!$this->isCliError($out)) {
                 $log[] = "service {$kw} vlan {$vlan} OK";
-                return;
+                return true;
             }
         }
         $log[] = "WARN: service hsi/int/ppp semua gagal untuk vlan {$vlan}";
+        return false;
     }
 
     public function getSnAtIndex(string $board, string $slot, string $port, string $onuIndex): ?string

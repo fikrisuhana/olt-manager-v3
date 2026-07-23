@@ -327,7 +327,7 @@
                                 <?php if ($b === 'ZTE'): ?>
                                 <i class="bi bi-info-circle me-1"></i>ZTE: PPPoE dikonfigurasi langsung via <strong>OLT pon-onu-mng</strong> saat registrasi (ONU ZTE). ONU FiberHome → dipush via <strong>GenieACS/TR-069</strong>.
                                 <?php elseif ($b === 'FIBERHOME' || $b === 'FH'): ?>
-                                <i class="bi bi-info-circle me-1"></i>FiberHome: ONU FH → PPPoE dikonfigurasi langsung di <strong>OLT (onu wan-cfg)</strong>. ONU non-FH (ZTE, dll) → dipush via <strong>GenieACS/TR-069</strong>.
+                                <i class="bi bi-info-circle me-1"></i>FiberHome: ONU FH → PPPoE langsung di <strong>OLT (onu wan-cfg)</strong>. ONU non-FH (ZTE/Huawei/dll) → VLAN di-<strong>bridge ke veip (onu veip)</strong>, TR-069/PPPoE jalan via agent ONU + <strong>GenieACS</strong>.
                                 <?php else: ?>
                                 <i class="bi bi-info-circle me-1"></i>Jika diisi, PPPoE dikonfigurasi otomatis via <strong>GenieACS/TR-069</strong> setelah ONU muncul di ACS (~1–5 menit).
                                 <?php endif; ?>
@@ -676,20 +676,25 @@ function previewCli() {
         f += `whitelist add phy-id ${sn} type ${type || '<TIPE_ONU>'} slot ${slot} pon ${port} onuid ${idx}\n`;
         f += `interface pon ${board}/${slot}/${port}\n`;
         f += `  onu description ${idx} ${dname} id 0\n`;
-        let ind = 1;
-        if (vlanA) { f += `  onu wan-cfg ${idx} index ${ind} mode tr069 type route ${vlanA} 65535 nat disable qos disable dsp dhcp entries 0\n`; ind++; }
-        if (vlanI) {
-            if (isFhOnu && pppoeU && pppoeP) {
-                f += `  onu wan-cfg ${idx} index ${ind} mode internet type route ${vlanI} 65535 nat enable qos disable dsp pppoe pro disable ${pppoeU} ${pppoeP} null auto entries 6 fe1 fe2 fe3 fe4 ssid1 ssid5\n`;
-            } else if (isFhOnu) {
-                f += `  onu wan-cfg ${idx} index ${ind} mode internet type route ${vlanI} 65535 nat enable qos disable dsp dhcp entries 6 fe1 fe2 fe3 fe4 ssid1 ssid5\n`;
-            } else {
-                f += `  ! ONU non-FH: kanal internet vlan ${vlanI} diserahkan ke ACS/TR-069 (skip di OLT)\n`;
+        if (isFhOnu) {
+            // ONU FH: WAN dibuat penuh di OLT via wan-cfg (OMCI FH)
+            let ind = 1;
+            if (vlanA) { f += `  onu wan-cfg ${idx} index ${ind} mode tr069 type route ${vlanA} 65535 nat disable qos disable dsp dhcp entries 0\n`; ind++; }
+            if (vlanI) {
+                if (pppoeU && pppoeP) {
+                    f += `  onu wan-cfg ${idx} index ${ind} mode internet type route ${vlanI} 65535 nat enable qos disable dsp pppoe pro disable ${pppoeU} ${pppoeP} null auto entries 6 fe1 fe2 fe3 fe4 ssid1 ssid5\n`;
+                } else {
+                    f += `  onu wan-cfg ${idx} index ${ind} mode internet type route ${vlanI} 65535 nat enable qos disable dsp dhcp entries 6 fe1 fe2 fe3 fe4 ssid1 ssid5\n`;
+                }
             }
+        } else {
+            // ONU non-FH (ZTE/Huawei/dll): bridge VLAN transparan ke veip → ONU pakai TR-069/PPPoE sendiri via ACS
+            if (vlanA) f += `  onu veip ${idx} cvlan-id ${vlanA} cvlan-cos 65535 svlan-tpid 33024 svlan-vid ${vlanA} svlan-cos 65535\n`;
+            if (vlanI) f += `  onu veip ${idx} cvlan-id ${vlanI} cvlan-cos 65535 svlan-tpid 33024 svlan-vid ${vlanI} svlan-cos 65535\n`;
         }
         f += `exit\n`;
         f += `save\n`;
-        if (!isFhOnu && pppoeU) f += `\n! PPPoE "${pppoeU}" → dipush via GenieACS/TR-069 setelah ONU online`;
+        if (!isFhOnu) f += `\n! ONU non-FH: VLAN di-bridge ke veip; TR-069${pppoeU ? ` + PPPoE "${pppoeU}"` : ''} via agent ONU + GenieACS (ACS URL dari DHCP option-43)`;
         document.getElementById('registerLogLabel').textContent = 'Preview CLI (belum dikirim)';
         document.getElementById('registerLogContent').style.color = '#93c5fd';
         document.getElementById('registerLogContent').textContent = f;
@@ -754,6 +759,17 @@ document.getElementById('registerForm').addEventListener('submit', function(e) {
             logLabel.textContent = data.success ? 'Log OLT — Berhasil' : 'Log OLT — Gagal';
             logContent.textContent = data.log ? data.log.join('\n') : data.message;
 
+            if (data.success && data.partial) {
+                // Terdaftar TAPI config tidak lengkap (perintah kritis gagal) → peringatan amber, bukan hijau.
+                logEl.classList.remove('d-none');
+                logLabel.textContent = 'Log OLT — ⚠ TIDAK LENGKAP';
+                logContent.style.color = '#fcd34d';
+                logContent.textContent = '⚠ ' + data.message + '\n\n'
+                    + (data.warnings || []).map(w => '• ' + w).join('\n')
+                    + '\n\n──── log ────\n' + (data.log ? data.log.join('\n') : '');
+                setTimeout(() => location.reload(), 30000);
+                return;
+            }
             if (data.success) {
                 logContent.style.color = '#86efac';
                 const hasWarn = (data.log || []).some(l => l.includes('WARN') || l.includes('Error'));

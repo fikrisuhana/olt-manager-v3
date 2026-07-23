@@ -180,6 +180,11 @@ class OnuController extends Controller
                 throw new \Exception(implode("\n", $result['log'] ?? ['Registrasi gagal']));
             }
 
+            // Register bisa "sukses tapi tidak lengkap": ONU terdaftar namun ada perintah kritis
+            // (tcont/gemport/service) yang gagal → ONU bisa tak dapat service/ACS. Surface ke user.
+            $partial  = !empty($result['partial']);
+            $warnings = $result['warnings'] ?? [];
+
             // Update DB jika re-register, insert jika baru
             if ($existingOnu) {
                 $onuId = $existingOnu['id'];
@@ -223,7 +228,7 @@ class OnuController extends Controller
             $cache = new OnuCacheService();
             $cache->addOnu($oltId, $board, $slot, $port, $onuIndex, $sn, $onuType, $name, $result['state'] ?? 'working');
 
-            $logModel->log($this->userId, 'register', 'success',
+            $logModel->log($this->userId, 'register', $partial ? 'warning' : 'success',
                 implode(' | ', $result['log']), $onuId, $oltId);
 
             // Tentukan apakah PPPoE dipush via ACS (bukan di OLT) — tergantung kombinasi
@@ -237,7 +242,13 @@ class OnuController extends Controller
 
             return $this->response->setJSON([
                 'success'      => true,
-                'message'      => "ONU {$sn} berhasil didaftarkan (index {$onuIndex}).",
+                'partial'      => $partial,
+                'warnings'     => $warnings,
+                'message'      => $partial
+                    ? "ONU {$sn} terdaftar (index {$onuIndex}) TAPI KONFIGURASI TIDAK LENGKAP — "
+                        . count($warnings) . " perintah gagal (kemungkinan profil TCONT/traffic tak valid). "
+                        . "ONU bisa tak dapat service/ACS. Perbaiki profil lalu Set ACS / register ulang."
+                    : "ONU {$sn} berhasil didaftarkan (index {$onuIndex}).",
                 'log'          => $result['log'],
                 'onu_id'       => $onuId,
                 'sn'           => $sn,
