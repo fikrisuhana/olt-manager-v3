@@ -1011,8 +1011,14 @@ class OnuController extends Controller
             $deviceId    = $device['_id'];
             $deviceBrand = $acsService->getDeviceBrand($device);
 
-            // Push PPPoE credentials
-            $result = $acsService->provisionPppoe($deviceId, $pppoeUser, $pppoePass, $deviceBrand);
+            // VLAN internet ONU (WAJIB utk ZTE-on-FH: OLT bridge, ONU tag PPPoE sendiri via TR-069)
+            $onuRow       = (new OnuModel())->where('sn', $sn)->first();
+            $vlanInternet = (int)($onuRow['vlan_internet'] ?? 0);
+
+            // Push PPPoE credentials (+ VLAN internet)
+            $result = $acsService->provisionPppoe($deviceId, $pppoeUser, $pppoePass, $deviceBrand, [
+                'vlan_internet' => $vlanInternet,
+            ]);
 
             $logModel = new ProvisionLogModel();
             $logModel->log(

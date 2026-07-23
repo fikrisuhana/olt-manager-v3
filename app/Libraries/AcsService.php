@@ -117,15 +117,25 @@ class AcsService
             ];
         }
 
-        // Default: hanya set Username, Password, Enable
-        $task = [
-            'name'            => 'setParameterValues',
-            'parameterValues' => [
-                ["{$base}.Username", $pppoeUser, 'xsd:string'],
-                ["{$base}.Password", $pppoePass, 'xsd:string'],
-                ["{$base}.Enable",   true,        'xsd:boolean'],
-            ],
+        // Default (ZTE/Huawei/dll): set Username, Password, Enable.
+        // PLUS VLAN internet untuk kasus CROSS-BRAND (ONU non-FH di OLT FH): OLT FH cuma bridge
+        // VLAN transparan ke veip, jadi ONU HARUS nge-tag PPPoE-nya sendiri via TR-069. Tanpa ini,
+        // WANPPPConnection tetap "Unconfigured" (VLAN 0) → PPPoE gak pernah naik.
+        $vlanId = (int)($extra['vlan_internet'] ?? 0);
+        $paramValues = [
+            ["{$base}.Username", $pppoeUser, 'xsd:string'],
+            ["{$base}.Password", $pppoePass, 'xsd:string'],
+            ["{$base}.Enable",   true,        'xsd:boolean'],
+            ["{$base}.ConnectionType", 'IP_Routed', 'xsd:string'],
+            ["{$base}.NATEnabled",     true,        'xsd:boolean'],
         ];
+        // ZTE pakai param vendor X_ZTE-COM_* untuk tag VLAN + service (diverifikasi dari tree F670L di OLT FH).
+        if ($vlanId > 0 && $brand === 'zte') {
+            $paramValues[] = ["{$base}.X_ZTE-COM_ServiceList", 'INTERNET', 'xsd:string'];
+            $paramValues[] = ["{$base}.X_ZTE-COM_VLANEnable",  true,       'xsd:boolean'];
+            $paramValues[] = ["{$base}.X_ZTE-COM_VLANID",      $vlanId,    'xsd:unsignedInt'];
+        }
+        $task = ['name' => 'setParameterValues', 'parameterValues' => $paramValues];
 
         $response = $this->request('POST', "/devices/{$encodedId}/tasks?connection_request&timeout=8000", $task);
 
@@ -450,11 +460,21 @@ class AcsService
                 $params[] = ["{$base}.VLANID",     $vlanId, 'xsd:unsignedInt'];
             }
         } else {
+            // Default (ZTE/Huawei/dll). Untuk ZTE-on-FH: OLT cuma bridge VLAN → ONU harus tag PPPoE
+            // sendiri via TR-069, jadi VLAN internet WAJIB di-set (kalau tidak, WAN "Unconfigured").
+            $vlanId = (int)($extra['vlan_internet'] ?? 0);
             $params = [
                 ["{$base}.Username", $pppoeUser, 'xsd:string'],
                 ["{$base}.Password", $pppoePass, 'xsd:string'],
                 ["{$base}.Enable",   true,        'xsd:boolean'],
+                ["{$base}.ConnectionType", 'IP_Routed', 'xsd:string'],
+                ["{$base}.NATEnabled",     true,        'xsd:boolean'],
             ];
+            if ($vlanId > 0 && $brand === 'zte') {
+                $params[] = ["{$base}.X_ZTE-COM_ServiceList", 'INTERNET', 'xsd:string'];
+                $params[] = ["{$base}.X_ZTE-COM_VLANEnable",  true,       'xsd:boolean'];
+                $params[] = ["{$base}.X_ZTE-COM_VLANID",      $vlanId,    'xsd:unsignedInt'];
+            }
         }
 
         $response = $this->request('POST', "/devices/{$encodedId}/tasks", [
