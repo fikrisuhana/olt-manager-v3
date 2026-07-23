@@ -21,7 +21,8 @@ class ZteDriver implements OltDriverInterface
     private array $rootPrompt   = ['#'];
     private array $configPrompt = ['config)#'];
     private array $ifPrompt     = ['config-if)#'];
-    private array $mngPrompt    = ['config-pon-onu)#', 'config-if-pon)#'];
+    // v1.x: (config-pon-onu)# / (config-if-pon)#  ;  v2.x: (gpon-onu-mng B/S/P:I)#
+    private array $mngPrompt    = ['config-pon-onu)#', 'config-if-pon)#', 'onu-mng'];
     private array $anyPrompt    = ['#', 'config)#', 'config-if)#'];
 
     public function __construct(array $config)
