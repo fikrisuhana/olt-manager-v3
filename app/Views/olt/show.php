@@ -436,21 +436,12 @@ function loadOltState() {
                     }
                 }
 
-                // ACS status dari cache
+                // ACS: JANGAN tampilkan online/offline dari cache (bisa basi berjam-jam &
+                // menyesatkan). Tampilkan placeholder "cek…"; status LIVE diisi loadAcsStatus
+                // yang berjalan otomatis saat load. Model/tipe dari cache boleh ditampilkan.
                 if (acsCell) {
-                    if (acsInfo) {
-                        const online  = acsInfo.online;
-                        const lastInf = acsInfo.last_inform
-                            ? new Date(acsInfo.last_inform).toLocaleTimeString('id', {hour:'2-digit',minute:'2-digit'})
-                            : '?';
-                        const badge = online
-                            ? `<span class="badge bg-success"><i class="bi bi-wifi me-1"></i>Online</span>`
-                            : `<span class="badge bg-secondary"><i class="bi bi-wifi-off me-1"></i>Offline ${lastInf}</span>`;
-                        const model = acsInfo.model ? `<div class="small text-muted">${acsInfo.model}</div>` : '';
-                        acsCell.innerHTML = badge + model;
-                    } else if (hasAcsCache) {
-                        acsCell.innerHTML = '<span class="badge bg-light text-dark border small">Tidak di ACS</span>';
-                    }
+                    const model = acsInfo && acsInfo.model ? `<div class="small text-muted">${acsInfo.model}</div>` : '';
+                    acsCell.innerHTML = '<span class="text-muted small"><i class="bi bi-hourglass-split me-1"></i>cek…</span>' + model;
                 }
             });
 
