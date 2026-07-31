@@ -467,6 +467,7 @@ async function openExecuteModal() {
         progressPercent.textContent = `${currentPct}%`;
 
         const fd = new FormData();
+        fd.append('<?= csrf_token() ?>', '<?= csrf_hash() ?>');
         fd.append('sn', item.sn);
         fd.append('name', item.name);
         fd.append('board', item.board);
@@ -481,7 +482,7 @@ async function openExecuteModal() {
             const res = await fetch(`/olts/${currentOltId}/migration/execute-single`, { method: 'POST', body: fd });
             const data = await res.json();
 
-            if (data.success) {
+            if (data && data.success) {
                 successCount++;
                 execLog.innerHTML += `<div style="color:#81c995">▶ [${i+1}/${total}] ✔ SUKSES: ${item.sn} (${item.name}) terdaftar di ${item.board}/${item.slot}/${item.port}:${item.onu_index}</div>`;
                 const rowTr = document.querySelector(`tr[data-index="${item.idx}"]`);
@@ -490,7 +491,8 @@ async function openExecuteModal() {
                 }
             } else {
                 failCount++;
-                execLog.innerHTML += `<div style="color:#f87171">▶ [${i+1}/${total}] ✘ GAGAL: ${item.sn} → ${data.message}</div>`;
+                const errMsg = (data && data.message) ? data.message : 'Gagal registrasi / Ditolak server.';
+                execLog.innerHTML += `<div style="color:#f87171">▶ [${i+1}/${total}] ✘ GAGAL: ${item.sn} → ${errMsg}</div>`;
             }
         } catch (e) {
             failCount++;

@@ -396,7 +396,9 @@ class MigrationController extends BaseController
                 ]);
             }
         } catch (\Throwable $e) {
-            return $this->response->setJSON(['success' => false, 'sn' => $sn, 'message' => $e->getMessage()]);
+            $msg = $e->getMessage() ?: get_class($e);
+            log_message('error', "executeSingle error: " . $msg);
+            return $this->response->setJSON(['success' => false, 'sn' => $sn, 'message' => "Exception: " . $msg]);
         }
     }
 }
