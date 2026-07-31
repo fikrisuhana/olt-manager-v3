@@ -252,16 +252,32 @@ class ZteDriver implements OltDriverInterface
             }
             $log[] = "TCONT profile: {$tcont}";
         }
-        // ACS dulu (sp1), internet kedua (sp2) — sesuai konvensi OLT tgp
-        $spIdx = 1;
+        // ACS dulu (sp1), internet kedua (sp2) — sesuai konvensi OLT tgp.
+        // PENTING: satu ONU tak boleh punya 2 service-port dgn pasangan (user-vlan/vlan)
+        // identik → ZTE balas "%Code 66669: port service para conflicted". Pada deployment
+        // single-VLAN (mis. VLAN 155 dipakai bareng ACS+internet/PPPoE), cukup 1 service-port;
+        // gemport 1 sudah membawa service acs + service ppp di VLAN yg sama.
+        $spIdx   = 1;
+        $spVlans = [];   // pasangan vlan yg sudah dibuat, cegah duplikat service-port
         if ($vlanAcs) {
             $ifCmds[] = "service-port {$spIdx} vport 1 user-vlan {$vlanAcs} vlan {$vlanAcs}";
+            $spVlans[$vlanAcs] = true;
             $spIdx++;
             $log[] = "VLAN ACS: {$vlanAcs}";
         }
-        if ($vlanInternet) {
+        if ($vlanInternet && !isset($spVlans[$vlanInternet])) {
             $ifCmds[] = "service-port {$spIdx} vport 1 user-vlan {$vlanInternet} vlan {$vlanInternet}";
+            $spVlans[$vlanInternet] = true;
             $log[] = "VLAN internet: {$vlanInternet}";
+        } elseif ($vlanInternet) {
+            // VLAN ACS == VLAN internet: service-port kedua di-skip supaya tak bentrok
+            // (Code 66669). Tapi ini nyaris selalu SALAH INPUT — ACS mestinya di VLAN
+            // manajemen terpisah (mis. 100). Kalau sama, service acs & service ppp rebutan
+            // gemport/vlan yg sama di OMCI → ONU "Config state: fail". Warning-kan.
+            $log[] = "⚠ VLAN ACS = VLAN internet ({$vlanInternet}) — kemungkinan salah input. "
+                   . "ACS biasanya di VLAN manajemen terpisah. service-port & service acs bisa bentrok "
+                   . "(OMCI config-fail). Cek VLAN ACS.";
+            $warnings[] = "VLAN ACS = VLAN internet ({$vlanInternet}) — ACS mestinya VLAN mgmt terpisah";
         }
         foreach (explode("\n", $ifExtra) as $cmd) {
             $cmd = trim($cmd);
@@ -350,9 +366,9 @@ class ZteDriver implements OltDriverInterface
             $this->telnet->execute("vlan port veip_1 mode hybrid", $this->mngPrompt, 5);
 
             // DHCP management IP + ACS URL agar ZTE ONU konek ke TR-069/GenieACS
-            // ip-host 1 = management channel, tr069-mgmt 1 acs = ACS URL (diverifikasi di OLT v1+v2)
+            // ip-host 2 = management channel (agar tidak bentrok dengan host 1 PPPoE)
             if ($vlanAcs && !$isFiberhome) {
-                $this->applyWanIpDhcp(1, $log);
+                $this->applyWanIpDhcp(2, $log);
                 $acsUrl = trim($params['acs_url'] ?? $this->config['acs_url'] ?? '');
                 if ($acsUrl) {
                     $this->applyTr069Mgmt($acsUrl, $log);
@@ -360,17 +376,27 @@ class ZteDriver implements OltDriverInterface
             }
 
             // PPPoE WAN via pon-onu-mng — hanya ZTE ONU, Fiberhome pakai ACS/TR-069
-            if ($pppoeUser && $pppoePass && !$isFiberhome) {
-                $out = $this->telnet->execute(
-                    "wan-ip 1 mode pppoe username {$pppoeUser} password {$pppoePass} vlan-profile {$pppoeProfile} host 1",
-                    $this->mngPrompt, 5
-                );
+            if ($pppoeUser && !$isFiberhome) {
+                $cmdPppoe = $pppoeProfile
+                    ? "wan-ip 1 mode pppoe username {$pppoeUser} password {$pppoePass} vlan-profile {$pppoeProfile} host 1"
+                    : "wan-ip 1 mode pppoe username {$pppoeUser} password {$pppoePass} host 1";
+                $out = $this->telnet->execute($cmdPppoe, $this->mngPrompt, 5);
+
+                // Fallback jika vlan-profile ditolak atau tidak terdaftar di OLT
+                if ($pppoeProfile && (stripos($out, 'Error') !== false || stripos($out, 'Invalid') !== false || stripos($out, 'does not exist') !== false)) {
+                    $log[] = "WARN: wan-ip dengan vlan-profile '{$pppoeProfile}' gagal, mencoba tanpa vlan-profile...";
+                    $out = $this->telnet->execute(
+                        "wan-ip 1 mode pppoe username {$pppoeUser} password {$pppoePass} host 1",
+                        $this->mngPrompt, 5
+                    );
+                }
+
                 if (stripos($out, 'Error') !== false || stripos($out, 'Invalid') !== false) {
                     $log[] = "WARN pon-onu-mng: wan-ip pppoe → " . trim(substr($out, -120));
                 } else {
                     $this->telnet->execute("wan-ip 1 ping-response enable traceroute-response enable", $this->mngPrompt, 5);
                     $this->telnet->execute("security-mgmt 212 state enable mode forward protocol web", $this->mngPrompt, 5);
-                    $log[] = "pon-onu-mng PPPoE: {$pppoeUser} profile={$pppoeProfile}";
+                    $log[] = "pon-onu-mng PPPoE OK: user={$pppoeUser}";
                 }
             }
 
@@ -502,19 +528,28 @@ class ZteDriver implements OltDriverInterface
         }
         $this->telnet->execute("vlan port veip_1 mode hybrid", $this->mngPrompt, 5);
 
-        // ip-host 1 dhcp-enable + tr069-mgmt — diverifikasi di OLT v1 (136.1.1.200) dan v2 (136.1.1.210)
+        // ip-host 2 dhcp-enable + tr069-mgmt — ip-host 2 dipakai untuk ACS agar host 1 bebas untuk PPPoE
         if ($vlanAcs) {
-            $this->applyWanIpDhcp(1, $log);
+            $this->applyWanIpDhcp(2, $log);
             if ($acsUrl) {
                 $this->applyTr069Mgmt($acsUrl, $log);
             }
         }
 
-        if ($pppoeUser && $pppoePass) {
-            $out   = $this->telnet->execute(
-                "wan-ip 1 mode pppoe username {$pppoeUser} password {$pppoePass} vlan-profile {$pppoeProfile} host 1",
-                $this->mngPrompt, 5
-            );
+        if ($pppoeUser) {
+            $cmdPppoe = $pppoeProfile
+                ? "wan-ip 1 mode pppoe username {$pppoeUser} password {$pppoePass} vlan-profile {$pppoeProfile} host 1"
+                : "wan-ip 1 mode pppoe username {$pppoeUser} password {$pppoePass} host 1";
+            $out   = $this->telnet->execute($cmdPppoe, $this->mngPrompt, 5);
+
+            if ($pppoeProfile && (stripos($out, 'Error') !== false || stripos($out, 'Invalid') !== false || stripos($out, 'does not exist') !== false)) {
+                $log[] = "WARN: wan-ip dengan vlan-profile '{$pppoeProfile}' gagal, mencoba tanpa vlan-profile...";
+                $out = $this->telnet->execute(
+                    "wan-ip 1 mode pppoe username {$pppoeUser} password {$pppoePass} host 1",
+                    $this->mngPrompt, 5
+                );
+            }
+
             $log[] = "wan-ip pppoe {$pppoeUser} → " . trim(preg_replace('/\s+/', ' ', $out));
             if (stripos($out, 'Error') !== false || stripos($out, 'Invalid') !== false) {
                 $log[] = "WARN wan-ip pppoe gagal, lanjut tanpa PPPoE config";
@@ -769,7 +804,7 @@ class ZteDriver implements OltDriverInterface
             }
         }
 
-        // Konvensi registerOnu: sp1 = ACS, sp2 = internet
+        // Konvensi registerOnu: sp1 = ACS (VLAN mgmt), sp2 = internet (VLAN PPPoE)
         ksort($result['service_ports']);
         $spList = array_values($result['service_ports']);
         $result['vlan_acs']      = $spList[0] ?? 0;

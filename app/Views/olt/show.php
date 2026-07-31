@@ -2,80 +2,98 @@
 <?= $this->section('content') ?>
 
 <div class="d-flex align-items-center gap-3 mb-4">
-    <a href="/olts" class="btn btn-sm btn-light"><i class="bi bi-arrow-left"></i></a>
-    <div>
-        <span class="badge bg-primary"><?= esc($olt['brand']) ?></span>
-        <span class="badge bg-secondary"><?= esc($olt['model']) ?></span>
-        <span class="text-muted small ms-1"><?= esc($olt['ip']) ?>:<?= esc($olt['telnet_port']) ?></span>
+    <a href="/olts" class="btn btn-google-secondary py-1 px-3"><i class="bi bi-arrow-left"></i> Kembali</a>
+    <div class="d-flex align-items-center gap-2">
+        <span class="chip chip-info font-monospace"><?= esc($olt['brand']) ?></span>
+        <span class="chip chip-neutral"><?= esc($olt['model']) ?></span>
+        <span class="text-secondary small font-monospace"><i class="bi bi-diagram-2 me-1"></i><?= esc($olt['ip']) ?>:<?= esc($olt['telnet_port']) ?></span>
     </div>
+
     <div class="ms-auto d-flex align-items-center gap-2">
-        <span class="text-muted small" id="cacheTime">
+        <span class="text-secondary small me-2" id="cacheTime">
             <i class="bi bi-database me-1"></i>
             <?php if ($cache_updated_at): ?>
                 Cache: <?= date('d/m H:i', strtotime($cache_updated_at)) ?>
             <?php else: ?>
-                <span class="text-warning">Cache kosong</span>
+                <span class="chip chip-warning">Cache kosong</span>
             <?php endif; ?>
         </span>
-        <button class="btn btn-sm btn-outline-warning" id="btnRefreshCache" onclick="refreshCache()"
-                title="Sync ulang data ONU terdaftar dari OLT (berat, lakukan sekali / jika ada perubahan)">
-            <i class="bi bi-arrow-clockwise me-1"></i>Sync Cache
+
+        <!-- Tombol Kelola Profil OLT -->
+        <button class="btn btn-google-secondary" onclick="openOltProfilesModal()" title="Kelola TCONT, Traffic Limit & VLAN Profile">
+            <i class="bi bi-sliders me-1 text-primary"></i> Profil OLT
         </button>
+
+        <button class="btn btn-google-secondary" id="btnRefreshCache" onclick="refreshCache()"
+                title="Sync ulang data ONU terdaftar dari OLT">
+            <i class="bi bi-arrow-clockwise me-1 text-warning"></i> Sync Cache
+        </button>
+
         <?php if ($cache_updated_at): ?>
-        <button class="btn btn-sm btn-outline-info" id="btnImportCache" onclick="importFromCache()"
-                title="Import semua ONU dari cache ke database (ONU yang sudah ada di-skip)">
-            <i class="bi bi-download me-1"></i>Import ke DB
+        <button class="btn btn-google-secondary" id="btnImportCache" onclick="importFromCache()"
+                title="Import semua ONU dari cache ke database">
+            <i class="bi bi-download me-1 text-info"></i> Import ke DB
         </button>
         <?php endif; ?>
-        <a href="/olts/<?= $olt['id'] ?>/edit" class="btn btn-sm btn-outline-secondary">
-            <i class="bi bi-pencil me-1"></i>Edit
+
+        <a href="/olts/<?= $olt['id'] ?>/edit" class="btn btn-google-secondary">
+            <i class="bi bi-pencil me-1 text-secondary"></i> Edit OLT
         </a>
-        <button class="btn btn-sm btn-primary" id="btnScan" onclick="scanOnu()">
-            <i class="bi bi-search me-1"></i>Scan ONU Baru
+        <button class="btn btn-google-primary" id="btnScan" onclick="scanOnu()">
+            <i class="bi bi-search me-1"></i> Scan ONU Baru
         </button>
     </div>
 </div>
+
 <?php if (!$cache_updated_at): ?>
-<div class="alert alert-warning border-0 shadow-sm mb-3 py-2">
-    <i class="bi bi-exclamation-triangle me-1"></i>
-    <strong>Cache belum ada.</strong> Klik <strong>Sync Cache</strong> sekali untuk sinkronisasi data ONU dari OLT.
-    Setelah itu, "Scan ONU Baru" hanya kirim 1 perintah ke OLT (ringan).
+<div class="alert alert-info border-0 shadow-sm rounded-3 mb-4 py-2 px-3 d-flex align-items-center gap-2">
+    <i class="bi bi-info-circle-fill text-primary"></i>
+    <div>
+        <strong>Cache OLT belum di-sync.</strong> Klik <strong>Sync Cache</strong> sekali untuk menarik daftar ONU dari OLT, atau klik <strong>Scan ONU Baru</strong> untuk langsung mendaftarkan ONU baru.
+    </div>
 </div>
 <?php endif; ?>
 
 <!-- ONU Belum Dikonfigurasi -->
 <div class="card border-0 shadow-sm mb-4">
-    <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
-        <h6 class="mb-0 fw-semibold"><i class="bi bi-exclamation-circle me-1 text-warning"></i>ONU Belum Dikonfigurasi</h6>
-        <span class="badge bg-warning text-dark" id="uncfgCount">-</span>
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <div class="fw-bold d-flex align-items-center gap-2" style="font-family: 'Google Sans', sans-serif;">
+            <i class="bi bi-exclamation-circle text-warning fs-5"></i>
+            ONU Belum Dikonfigurasi
+        </div>
+        <span class="chip chip-warning fw-bold" id="uncfgCount">-</span>
     </div>
     <div id="scanWarning" class="d-none"></div>
     <div class="card-body p-0" id="uncfgContainer">
-        <div class="text-center py-4 text-muted" id="uncfgEmpty">
-            <i class="bi bi-search me-1"></i>Klik "Scan ONU Baru" untuk mulai.
+        <div class="text-center py-4 text-secondary" id="uncfgEmpty">
+            <i class="bi bi-search me-1"></i>Klik "Scan ONU Baru" untuk deteksi ONU yang baru dicolok.
         </div>
     </div>
 </div>
 
 <!-- ONU Sudah Terdaftar -->
 <div class="card border-0 shadow-sm">
-    <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center gap-2">
-        <h6 class="mb-0 fw-semibold"><i class="bi bi-check-circle me-1 text-success"></i>ONU Terdaftar di OLT Ini</h6>
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center gap-2">
+        <div class="fw-bold d-flex align-items-center gap-2" style="font-family: 'Google Sans', sans-serif;">
+            <i class="bi bi-check-circle text-success fs-5"></i>
+            ONU Terdaftar di OLT Ini
+        </div>
         <div class="d-flex align-items-center gap-2 flex-grow-1 justify-content-end">
-            <input type="search" id="onuSearch" class="form-control form-control-sm" style="max-width:200px"
+            <input type="search" id="onuSearch" class="form-control form-control-sm" style="max-width:240px"
                    placeholder="Cari SN / Nama..." oninput="filterOnu(this.value)">
-            <span class="badge bg-success"><?= count($onus) ?></span>
-            <button class="btn btn-sm btn-outline-info py-0" onclick="loadAcsStatus()" id="btnAcs" title="Cek status ACS/TR-069">
-                <i class="bi bi-cloud-check me-1"></i>Cek ACS
+            <span class="chip chip-success font-monospace fw-bold"><?= count($onus) ?></span>
+            <button class="btn btn-google-secondary py-1 px-3" onclick="loadAcsStatus()" id="btnAcs" title="Cek status ACS/TR-069">
+                <i class="bi bi-cloud-check me-1 text-info"></i> Cek ACS
             </button>
         </div>
     </div>
     <div class="card-body p-0">
         <?php if (empty($onus)): ?>
-            <div class="text-center py-4 text-muted small">
+            <div class="text-center py-5 text-secondary">
+                <i class="bi bi-inbox fs-2 text-muted mb-2 d-block"></i>
                 Belum ada ONU terdaftar di database.
                 <?php if ($cache_updated_at): ?>
-                    <br>Cache sudah ada — klik <strong>Import ke DB</strong> di atas untuk memuat ONU hasil <strong>Sync Cache</strong> ke daftar.
+                    <br>Cache sudah ada — klik <strong>Import ke DB</strong> di atas untuk memuat ONU hasil Sync Cache ke daftar.
                 <?php endif; ?>
             </div>
         <?php else: ?>
@@ -92,26 +110,26 @@
             <?php $portId = 'pon-' . str_replace('/', '-', $portKey); ?>
             <div class="accordion-item border-0 border-bottom">
                 <h2 class="accordion-header">
-                    <button class="accordion-button collapsed py-2 px-3" type="button"
+                    <button class="accordion-button collapsed py-3 px-4 bg-white" type="button"
                             data-bs-toggle="collapse" data-bs-target="#<?= $portId ?>">
-                        <span class="font-monospace fw-semibold me-2">PON <?= esc($portKey) ?></span>
-                        <span class="badge bg-secondary ms-1 pon-badge" data-port="<?= esc($portKey) ?>"><?= count($portOnus) ?></span>
+                        <span class="font-monospace fw-bold text-dark me-2">PON <?= esc($portKey) ?></span>
+                        <span class="chip chip-neutral font-monospace pon-badge" data-port="<?= esc($portKey) ?>"><?= count($portOnus) ?></span>
                     </button>
                 </h2>
                 <div id="<?= $portId ?>" class="accordion-collapse collapse">
                     <div class="accordion-body p-0">
                         <div class="table-responsive">
-                            <table class="table table-hover table-sm mb-0">
-                                <thead class="table-light">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead>
                                     <tr>
-                                        <th class="ps-3">SN</th>
-                                        <th>Nama</th>
-                                        <th style="width:3rem">Idx</th>
-                                        <th>Tipe</th>
+                                        <th class="ps-4">Serial Number</th>
+                                        <th>Nama Pelanggan</th>
+                                        <th class="text-center" style="width:3rem">Idx</th>
+                                        <th>Tipe ONU</th>
                                         <th>State OLT</th>
-                                        <th>ACS</th>
+                                        <th>Status ACS</th>
                                         <th>Sinyal</th>
-                                        <th></th>
+                                        <th class="pe-4 text-end">Aksi</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -121,41 +139,36 @@
                                         data-name="<?= esc(strtolower($onu['name'] ?? '')) ?>"
                                         data-pppoe="<?= esc($onu['pppoe_user'] ?? '') ?>"
                                         data-port="<?= esc($portKey) ?>">
-                                        <td class="font-monospace small ps-3">
-                                            <a href="/onus/<?= $onu['id'] ?>" class="text-decoration-none"><?= esc($onu['sn']) ?></a>
+                                        <td class="font-monospace small ps-4 fw-bold">
+                                            <a href="/onus/<?= $onu['id'] ?>" class="text-decoration-none text-primary"><?= esc($onu['sn']) ?></a>
                                         </td>
-                                        <td><?= esc($onu['name'] ?? '-') ?></td>
-                                        <td class="small text-muted text-center"><?= $onu['onu_index'] ?></td>
-                                        <td><span class="badge bg-light text-dark border"><?= esc($onu['onu_type'] ?? '-') ?></span></td>
+                                        <td class="fw-medium"><?= esc($onu['name'] ?? '-') ?></td>
+                                        <td class="small text-secondary text-center font-monospace"><?= $onu['onu_index'] ?></td>
+                                        <td><span class="chip chip-neutral"><?= esc($onu['onu_type'] ?? '-') ?></span></td>
                                         <td class="olt-state-cell"><span class="text-muted small">—</span></td>
                                         <td class="acs-cell"><span class="text-muted small">—</span></td>
-                                        <td class="text-nowrap">
-                                            <button class="btn btn-sm btn-outline-secondary py-0"
-                                                    onclick="getSignal(<?= $onu['id'] ?>, this)" title="Cek sinyal RX/TX">
+                                        <td>
+                                            <button class="btn btn-sm btn-google-secondary py-0 px-2"
+                                                    onclick="getSignal(<?= $onu['id'] ?>, this)">
                                                 <i class="bi bi-reception-4"></i>
                                             </button>
-                                            <?php if (in_array(strtoupper($olt['brand'] ?? ''), ['FIBERHOME', 'FH'])): ?>
-                                            <button class="btn btn-sm btn-outline-secondary py-0 ms-1"
-                                                    onclick="checkDhcp(<?= $onu['id'] ?>, this)" title="Cek status WAN/DHCP (dapat IP?)">
-                                                <i class="bi bi-hdd-network"></i>
-                                            </button>
-                                            <?php endif; ?>
                                         </td>
-                                        <td class="text-nowrap">
+                                        <td class="text-nowrap pe-4 text-end">
                                             <?php $pk = explode('/', $portKey); ?>
-                                            <button class="btn btn-sm btn-outline-warning py-0 me-1"
-                                                    title="Konfigurasi ulang interface OLT (tcont/gemport/vlan)"
+                                            <button class="btn btn-sm btn-google-secondary py-0 px-2 me-1"
+                                                    title="Konfigurasi ulang ONU (VLAN / TCONT / PPPoE)"
                                                     onclick="openRegister('<?= esc($onu['sn'], 'js') ?>','<?= $pk[0] ?>','<?= $pk[1] ?>','<?= $pk[2] ?>',<?= $onu['onu_index'] ?>,true,'<?= esc($onu['onu_type'] ?? '', 'js') ?>')">
-                                                <i class="bi bi-arrow-repeat"></i>
+                                                <i class="bi bi-arrow-repeat text-warning"></i>
                                             </button>
-                                            <button class="btn btn-sm btn-outline-success py-0 me-1"
-                                                    title="Push PPPoE ke ACS"
+                                            <button class="btn btn-sm btn-google-secondary py-0 px-2 me-1"
+                                                    title="Push PPPoE ke ONU"
                                                     onclick="openAcsPush(<?= $onu['id'] ?>, '<?= esc($onu['sn'], 'js') ?>', '<?= esc($onu['pppoe_user'] ?? '', 'js') ?>')">
-                                                <i class="bi bi-cloud-arrow-up"></i>
+                                                <i class="bi bi-cloud-arrow-up text-success"></i>
                                             </button>
-                                            <button class="btn btn-sm btn-outline-danger py-0"
+                                            <button class="btn btn-sm btn-google-secondary py-0 px-2"
+                                                    title="Hapus ONU dari OLT"
                                                     onclick="deleteOnu(<?= $onu['id'] ?>, '<?= esc($onu['sn'], 'js') ?>', this)">
-                                                <i class="bi bi-trash"></i>
+                                                <i class="bi bi-trash text-danger"></i>
                                             </button>
                                         </td>
                                     </tr>
@@ -172,30 +185,110 @@
     </div>
 </div>
 
+<!-- Modal Kelola Profil OLT (TCONT, Traffic Limit & VLAN Profile) -->
+<div class="modal fade" id="oltProfilesModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold" style="font-family:'Google Sans',sans-serif;">
+                    <i class="bi bi-sliders text-primary me-2"></i>Manajemen Profil OLT (<?= esc($olt['name']) ?>)
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="d-flex align-items-center justify-content-between mb-3 bg-light p-3 rounded-3">
+                    <div class="small text-secondary">
+                        <i class="bi bi-info-circle me-1"></i>Profil ini digunakan saat registrasi ONU & setting service-port di OLT.
+                    </div>
+                    <button class="btn btn-google-primary py-1 px-3" id="btnSyncProfiles" onclick="syncProfilesFromOlt()">
+                        <i class="bi bi-cloud-download me-1"></i> Tarik dari OLT
+                    </button>
+                </div>
+
+                <ul class="nav nav-tabs nav-fill mb-3" id="profileTabs">
+                    <li class="nav-item">
+                        <button class="nav-link active fw-bold" data-bs-toggle="tab" data-bs-target="#tabTcont">
+                            <i class="bi bi-speedometer2 me-1"></i> TCONT Profiles
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link fw-bold" data-bs-toggle="tab" data-bs-target="#tabTraffic">
+                            <i class="bi bi-lightning-charge me-1"></i> Traffic Limit Profiles
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link fw-bold" data-bs-toggle="tab" data-bs-target="#tabVlan">
+                            <i class="bi bi-diagram-3 me-1"></i> VLAN Profiles (PPPoE)
+                        </button>
+                    </li>
+                </ul>
+
+                <div class="tab-content" id="profileTabContents">
+                    <!-- Tab TCONT -->
+                    <div class="tab-pane fade show active" id="tabTcont">
+                        <label class="form-label small fw-bold">Daftar TCONT Profiles (Satu per baris)</label>
+                        <textarea id="txtTcontProfiles" class="form-control font-monospace" rows="6"
+                                  placeholder="250M&#10;100M&#10;50M"><?= esc($olt['tcont_profiles'] ?? '') ?></textarea>
+                        <div class="form-text">Contoh profil DBA di OLT: <code>250M</code>, <code>100M</code>, <code>1G</code></div>
+                    </div>
+
+                    <!-- Tab Traffic Limit -->
+                    <div class="tab-pane fade" id="tabTraffic">
+                        <label class="form-label small fw-bold">Daftar Traffic Limit Profiles (Satu per baris)</label>
+                        <textarea id="txtTrafficProfiles" class="form-control font-monospace" rows="6"
+                                  placeholder="50M&#10;100M&#10;250M"><?= esc($olt['traffic_profiles'] ?? '') ?></textarea>
+                        <div class="form-text">Profil batas kecepatan Upstream/Downstream gemport.</div>
+                    </div>
+
+                    <!-- Tab VLAN Profile -->
+                    <div class="tab-pane fade" id="tabVlan">
+                        <label class="form-label small fw-bold">Daftar ONU VLAN Profiles (Format: <code>nama_profile — VLAN ID</code> atau <code>nama_profile:VLAN</code>)</label>
+                        <textarea id="txtVlanProfiles" class="form-control font-monospace" rows="6"
+                                  placeholder="ppp-155 — VLAN 155&#10;ppp-160 — VLAN 160&#10;PPPOE — VLAN 100"><?= esc($olt['vlan_profiles'] ?? '') ?></textarea>
+                        <div class="form-text">Profil VLAN yang dipakai saat registrasi PPPoE (mis. <code>ppp-155 — VLAN 155</code>).</div>
+                    </div>
+                </div>
+
+                <div id="profileLog" class="d-none mt-3">
+                    <div class="alert alert-info py-2 px-3 small" id="profileLogMsg"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-google-secondary" data-bs-dismiss="modal">Batal</button>
+                <button type="button" class="btn btn-google-primary" id="btnSaveProfiles" onclick="saveOltProfiles()">
+                    <i class="bi bi-check-circle me-1"></i> Simpan Profil
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Modal Push ACS -->
 <div class="modal fade" id="acsPushModal" tabindex="-1">
     <div class="modal-dialog modal-sm">
         <div class="modal-content">
-            <div class="modal-header py-2">
-                <h6 class="modal-title fw-semibold"><i class="bi bi-cloud-arrow-up me-1"></i>Push PPPoE ke ACS</h6>
+            <div class="modal-header py-3">
+                <h6 class="modal-title fw-bold" style="font-family:'Google Sans',sans-serif;">
+                    <i class="bi bi-cloud-arrow-up text-success me-1"></i> Push PPPoE ke ACS
+                </h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <p class="small text-muted mb-2" id="acsPushSn"></p>
-                <div class="mb-2">
-                    <label class="form-label small fw-medium">Username PPPoE</label>
-                    <input type="text" id="acsPushUser" class="form-control form-control-sm" placeholder="user@isp">
+                <p class="small text-secondary mb-3" id="acsPushSn"></p>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Username PPPoE</label>
+                    <input type="text" id="acsPushUser" class="form-control" placeholder="user@isp">
                 </div>
-                <div class="mb-2">
-                    <label class="form-label small fw-medium">Password PPPoE</label>
-                    <input type="text" id="acsPushPass" class="form-control form-control-sm" placeholder="password">
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Password PPPoE</label>
+                    <input type="text" id="acsPushPass" class="form-control" placeholder="password">
                 </div>
                 <div id="acsPushResult" class="d-none small mt-2"></div>
             </div>
             <div class="modal-footer py-2">
-                <button type="button" class="btn btn-light btn-sm" data-bs-dismiss="modal">Batal</button>
-                <button type="button" class="btn btn-success btn-sm" id="btnAcsPush" onclick="doAcsPush()">
-                    <i class="bi bi-cloud-arrow-up me-1"></i>Push
+                <button type="button" class="btn btn-google-secondary btn-sm" data-bs-dismiss="modal">Batal</button>
+                <button type="button" class="btn btn-google-primary btn-sm" id="btnAcsPush" onclick="doAcsPush()">
+                    <i class="bi bi-cloud-arrow-up me-1"></i> Push
                 </button>
             </div>
         </div>
@@ -207,12 +300,13 @@
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title fw-semibold"><i class="bi bi-plus-circle me-1"></i>Register ONU</h5>
+                <h5 class="modal-title fw-bold" style="font-family:'Google Sans',sans-serif;">
+                    <i class="bi bi-plus-circle text-primary me-2"></i>Register ONU
+                </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form id="registerForm">
                 <?= csrf_field() ?>
-                <?php $isFhOlt = in_array(strtoupper($olt['brand'] ?? ''), ['FIBERHOME', 'FH']); ?>
                 <div class="modal-body">
                     <input type="hidden" id="r_board" name="board">
                     <input type="hidden" id="r_slot" name="slot">
@@ -223,15 +317,15 @@
                     <!-- SN + Info -->
                     <div class="row g-3 mb-3">
                         <div class="col-5">
-                            <label class="form-label small fw-medium">Serial Number</label>
-                            <input type="text" id="r_sn" name="sn" class="form-control font-monospace" readonly>
+                            <label class="form-label small fw-bold">Serial Number</label>
+                            <input type="text" id="r_sn" name="sn" class="form-control font-monospace bg-light" readonly>
                         </div>
                         <div class="col-4">
-                            <label class="form-label small fw-medium">Nama Pelanggan <span class="text-danger">*</span></label>
+                            <label class="form-label small fw-bold">Nama Pelanggan <span class="text-danger">*</span></label>
                             <input type="text" name="name" class="form-control" placeholder="PELANGGAN-001" required>
                         </div>
                         <div class="col-3">
-                            <label class="form-label small fw-medium">Tipe ONU <span class="text-danger">*</span></label>
+                            <label class="form-label small fw-bold">Tipe ONU <span class="text-danger">*</span></label>
                             <input type="text" name="onu_type" id="r_onu_type" class="form-control"
                                    placeholder="ALL-ONT" list="onuTypeList" required>
                             <datalist id="onuTypeList">
@@ -242,94 +336,69 @@
                         </div>
                     </div>
 
-                    <!-- VLAN + TCONT -->
-                    <div class="border rounded p-3 mb-3" style="background:#f8fafc">
-                        <div class="small fw-semibold text-muted mb-2">
-                            <i class="bi bi-diagram-3 me-1"></i><?= $isFhOlt ? 'Konfigurasi VLAN (onu wan-cfg)' : 'Konfigurasi Service Port (gpon-onu interface)' ?>
+                    <!-- VLAN + TCONT + Traffic Limit -->
+                    <div class="border rounded-3 p-3 mb-3" style="background:#f8fafc">
+                        <div class="small fw-bold text-secondary mb-2">
+                            <i class="bi bi-diagram-3 me-1"></i> Konfigurasi Service Port (gpon-onu interface)
                         </div>
                         <div class="row g-3">
                             <div class="col-4">
-                                <label class="form-label small fw-medium">VLAN Internet (PPPoE)</label>
+                                <label class="form-label small fw-bold">VLAN Internet (PPPoE)</label>
                                 <?php if (strtoupper($olt['brand'] ?? '') === 'ZTE'): ?>
                                 <select name="vlan_internet" id="vlanInternetSelect" class="form-select form-select-sm">
-                                    <option value="">-- Memuat profile... --</option>
+                                    <option value="">-- Pilih VLAN PPPoE --</option>
                                 </select>
                                 <input type="hidden" name="pppoe_vlan_profile" id="pppoeVlanProfile">
                                 <?php else: ?>
                                 <input type="number" name="vlan_internet" class="form-control form-control-sm"
-                                       placeholder="100" min="1" max="4094">
+                                       placeholder="155" min="1" max="4094">
                                 <?php endif; ?>
-                                <div class="form-text"><?= $isFhOlt ? 'kanal internet (wan-cfg index)' : 'service-port 1 vport 1' ?></div>
+                                <div class="form-text">service-port 2 vport 1</div>
                             </div>
                             <div class="col-4">
-                                <label class="form-label small fw-medium">VLAN ACS/Mgmt</label>
+                                <label class="form-label small fw-bold">VLAN ACS/Mgmt</label>
                                 <input type="number" name="vlan_acs" class="form-control form-control-sm"
                                        placeholder="155" min="1" max="4094">
-                                <div class="form-text"><?= $isFhOlt ? 'kanal ACS/tr069 (wan-cfg index)' : 'service-port 2 vport 1' ?></div>
+                                <div class="form-text">service-port 1 vport 1</div>
                             </div>
-                            <?php
-                                $isFhOlt        = in_array(strtoupper($olt['brand'] ?? ''), ['FIBERHOME', 'FH']);
-                                $tcontOptions   = array_filter(array_map('trim', explode("\n", $olt['tcont_profiles'] ?? '')));
-                                $trafficOptions = array_filter(array_map('trim', explode("\n", $olt['traffic_profiles'] ?? '')));
-                            ?>
-                            <?php if (!$isFhOlt): // TCONT/Traffic profile tidak dipakai di Fiberhome ?>
-                            <div class="col-3">
-                                <label class="form-label small fw-medium">TCONT Profile</label>
-                                <?php if (!empty($tcontOptions)): ?>
-                                <select name="tcont_profile" class="form-select form-select-sm">
-                                    <option value="">-- Pilih --</option>
-                                    <?php foreach ($tcontOptions as $opt): ?>
-                                        <option value="<?= esc($opt) ?>"><?= esc($opt) ?></option>
+                            <div class="col-4">
+                                <label class="form-label small fw-bold">TCONT Profile</label>
+                                <select name="tcont_profile" id="tcontSelect" class="form-select form-select-sm">
+                                    <option value="">-- Pilih TCONT --</option>
+                                    <?php
+                                    $tconts = array_values(array_filter(array_map('trim', explode("\n", $olt['tcont_profiles'] ?? ''))));
+                                    foreach ($tconts as $tc):
+                                    ?>
+                                        <option value="<?= esc($tc) ?>"><?= esc($tc) ?></option>
                                     <?php endforeach; ?>
                                 </select>
-                                <?php else: ?>
-                                <input type="text" name="tcont_profile" class="form-control form-control-sm" placeholder="250M">
-                                <div class="form-text text-warning small"><i class="bi bi-exclamation-triangle me-1"></i><a href="/olts/<?= $olt['id'] ?>/edit">Sync Cache</a> dulu</div>
-                                <?php endif; ?>
                             </div>
-                            <div class="col-3">
-                                <label class="form-label small fw-medium">Traffic Limit</label>
-                                <?php if (!empty($trafficOptions)): ?>
-                                <select name="traffic_profile" class="form-select form-select-sm">
-                                    <option value="">-- Tidak ada --</option>
-                                    <?php foreach ($trafficOptions as $opt): ?>
-                                        <option value="<?= esc($opt) ?>"><?= esc($opt) ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                                <?php else: ?>
-                                <input type="text" name="traffic_profile" class="form-control form-control-sm" placeholder="200M (opsional)">
-                                <?php endif; ?>
-                            </div>
-                            <?php endif; ?>
                         </div>
                     </div>
 
-                    <!-- PPPoE -->
-                    <div class="border rounded p-3 mb-3" style="background:#f0fdf4">
-                        <div class="small fw-semibold text-muted mb-2">
-                            <i class="bi bi-key me-1"></i>PPPoE Credentials
+                    <!-- PPPoE Credentials -->
+                    <div class="border rounded-3 p-3 mb-3" style="background:#f0fdf4; border-color:#bbf7d0 !important">
+                        <div class="small fw-bold text-success mb-2">
+                            <i class="bi bi-shield-lock me-1"></i> PPPoE Credentials
                         </div>
                         <div class="row g-3">
                             <div class="col-6">
-                                <label class="form-label small fw-medium">Username PPPoE</label>
+                                <label class="form-label small fw-bold">Username PPPoE</label>
                                 <input type="text" name="pppoe_user" class="form-control form-control-sm"
                                        placeholder="user@isp">
                             </div>
                             <div class="col-6">
-                                <label class="form-label small fw-medium">Password PPPoE</label>
+                                <label class="form-label small fw-bold">Password PPPoE</label>
                                 <input type="text" name="pppoe_pass" class="form-control form-control-sm"
                                        placeholder="password">
                             </div>
                         </div>
                         <div class="mt-2">
-                            <div class="form-text">
-                                <?php $b = strtoupper($olt['brand'] ?? ''); ?>
-                                <?php if ($b === 'ZTE'): ?>
-                                <i class="bi bi-info-circle me-1"></i>ZTE: PPPoE dikonfigurasi langsung via <strong>OLT pon-onu-mng</strong> saat registrasi (ONU ZTE). ONU FiberHome → dipush via <strong>GenieACS/TR-069</strong>.
-                                <?php elseif ($b === 'FIBERHOME' || $b === 'FH'): ?>
-                                <i class="bi bi-info-circle me-1"></i>FiberHome: ONU FH → PPPoE langsung di <strong>OLT (onu wan-cfg)</strong>. ONU non-FH (ZTE/Huawei/dll) → VLAN di-<strong>bridge ke veip (onu veip)</strong>, TR-069/PPPoE jalan via agent ONU + <strong>GenieACS</strong>.
+                            <div class="form-text text-success">
+                                <?php if (strtoupper($olt['brand'] ?? '') === 'ZTE'): ?>
+                                <i class="bi bi-info-circle me-1"></i>ZTE: PPPoE dikonfigurasi langsung via <strong>OLT pon-onu-mng (OMCI)</strong> saat registrasi.
                                 <?php else: ?>
-                                <i class="bi bi-info-circle me-1"></i>Jika diisi, PPPoE dikonfigurasi otomatis via <strong>GenieACS/TR-069</strong> setelah ONU muncul di ACS (~1–5 menit).
+                                <i class="bi bi-info-circle me-1"></i>Jika diisi, PPPoE dikonfigurasi via <strong>GenieACS/TR-069</strong>.
                                 <?php endif; ?>
                             </div>
                         </div>
@@ -337,7 +406,7 @@
 
                     <!-- Template tambahan -->
                     <div class="mb-3">
-                        <label class="form-label small fw-medium">Template Script Tambahan <span class="text-muted fw-normal">(opsional)</span></label>
+                        <label class="form-label small fw-bold">Template Script Tambahan <span class="text-muted fw-normal">(opsional)</span></label>
                         <select name="template_id" class="form-select form-select-sm">
                             <option value="">-- Tidak ada --</option>
                             <?php
@@ -348,25 +417,24 @@
                                 <option value="<?= $t['id'] ?>"><?= esc($t['name']) ?></option>
                             <?php endforeach; ?>
                         </select>
-                        <div class="form-text">Script dari template dieksekusi setelah konfigurasi VLAN/TCONT di atas.</div>
                     </div>
 
-                    <div id="registerLog" class="d-none">
+                    <div id="registerLog" class="d-none mt-3">
                         <div class="d-flex justify-content-between align-items-center mb-1">
-                            <small class="text-muted" id="registerLogLabel">Preview CLI</small>
+                            <small class="text-secondary fw-bold" id="registerLogLabel">Preview CLI</small>
                             <button type="button" class="btn-close btn-sm" onclick="document.getElementById('registerLog').classList.add('d-none')"></button>
                         </div>
                         <pre class="cli-output" id="registerLogContent"></pre>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-outline-secondary me-auto" onclick="previewCli()"
+                    <button type="button" class="btn btn-google-secondary me-auto" onclick="previewCli()"
                             title="Lihat perintah CLI yang akan dikirim ke OLT">
-                        <i class="bi bi-terminal me-1"></i>Preview CLI
+                        <i class="bi bi-terminal me-1"></i> Preview CLI
                     </button>
-                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Batal</button>
-                    <button type="submit" class="btn btn-primary" id="btnRegister">
-                        <i class="bi bi-check-circle me-1"></i>Register
+                    <button type="button" class="btn btn-google-secondary" data-bs-dismiss="modal">Batal</button>
+                    <button type="submit" class="btn btn-google-primary" id="btnRegister">
+                        <i class="bi bi-check-circle me-1"></i> Register
                     </button>
                 </div>
             </form>
@@ -375,19 +443,19 @@
 </div>
 
 <!-- Floating ACS Watcher -->
-<div id="acsWatcher" class="d-none position-fixed" style="bottom:1.5rem;right:1.5rem;z-index:1055;min-width:290px;max-width:350px">
-    <div class="card shadow-lg border-0">
-        <div class="card-header py-2 px-3 d-flex align-items-center gap-2" style="background:#1e293b;color:#e2e8f0">
+<div id="acsWatcher" class="d-none position-fixed" style="bottom:1.5rem;right:1.5rem;z-index:1055;min-width:300px;max-width:360px">
+    <div class="card shadow-lg border-0 rounded-4 overflow-hidden">
+        <div class="card-header py-2 px-3 d-flex align-items-center gap-2" style="background:#202124;color:#fff">
             <span class="spinner-border spinner-border-sm text-primary flex-shrink-0" id="acsWatchSpinner"></span>
-            <span class="small fw-semibold flex-grow-1">Konfigurasi ACS</span>
+            <span class="small fw-bold flex-grow-1">Konfigurasi ACS</span>
             <button type="button" class="btn-close btn-close-white" style="font-size:.65rem" onclick="stopAcsWatch()"></button>
         </div>
-        <div class="card-body py-2 px-3">
-            <div class="font-monospace small fw-semibold text-dark" id="acsWatchSn"></div>
-            <div class="small text-muted mt-1" id="acsWatchMsg">Memulai pemantauan...</div>
+        <div class="card-body py-3 px-3">
+            <div class="font-monospace small fw-bold text-dark" id="acsWatchSn"></div>
+            <div class="small text-secondary mt-1" id="acsWatchMsg">Memulai pemantauan...</div>
             <div class="mt-2 d-none" id="acsWatchActions">
-                <button class="btn btn-sm btn-outline-primary" onclick="retryAcsPush()">
-                    <i class="bi bi-arrow-repeat me-1"></i>Push Ulang
+                <button class="btn btn-sm btn-google-primary" onclick="retryAcsPush()">
+                    <i class="bi bi-arrow-repeat me-1"></i> Push Ulang
                 </button>
             </div>
         </div>
@@ -398,8 +466,7 @@
 <?= $this->section('scripts') ?>
 <script>
 const OLT_ID = <?= $olt['id'] ?>;
-const OLT_BRAND = '<?= strtoupper($olt['brand'] ?? 'ZTE') ?>';
-const IS_FH = (OLT_BRAND === 'FIBERHOME' || OLT_BRAND === 'FH');
+const IS_FH  = <?= strtoupper($olt['brand'] ?? '') === 'FIBERHOME' ? 'true' : 'false' ?>;
 
 // Auto-load OLT state dari cache saat halaman dibuka
 document.addEventListener('DOMContentLoaded', () => {
@@ -425,29 +492,36 @@ function loadOltState() {
                 // OLT state
                 if (oltCell) {
                     if (!info) {
-                        oltCell.innerHTML = '<span class="badge bg-warning text-dark small">Tidak di cache</span>';
+                        oltCell.innerHTML = '<span class="chip chip-warning">Tidak di cache</span>';
                     } else {
                         const st  = (info.status || '').toLowerCase();
-                        const cls = ['working','ready','up','online'].includes(st) ? 'bg-success'
-                                  : ['los','dn','offline'].includes(st)            ? 'bg-danger'
-                                  : st === 'lofi'                                   ? 'bg-warning text-dark'
-                                  : 'bg-secondary';
-                        oltCell.innerHTML = `<span class="badge ${cls} small">${info.status || st || 'unknown'}</span>`;
+                        const cls = st === 'working' ? 'chip-success'
+                                  : st === 'los'     ? 'chip-danger'
+                                  : st === 'lofi'    ? 'chip-warning'
+                                  : 'chip-neutral';
+                        oltCell.innerHTML = `<span class="chip ${cls}">${info.status || st}</span>`;
                     }
                 }
 
-                // ACS: JANGAN tampilkan online/offline dari cache (bisa basi berjam-jam &
-                // menyesatkan). Tampilkan placeholder "cek…"; status LIVE diisi loadAcsStatus
-                // yang berjalan otomatis saat load. Model/tipe dari cache boleh ditampilkan.
+                // ACS status dari cache
                 if (acsCell) {
-                    const model = acsInfo && acsInfo.model ? `<div class="small text-muted">${acsInfo.model}</div>` : '';
-                    acsCell.innerHTML = '<span class="text-muted small"><i class="bi bi-hourglass-split me-1"></i>cek…</span>' + model;
+                    if (acsInfo) {
+                        const online  = acsInfo.online;
+                        const lastInf = acsInfo.last_inform
+                            ? new Date(acsInfo.last_inform).toLocaleTimeString('id', {hour:'2-digit',minute:'2-digit'})
+                            : '?';
+                        const badge = online
+                            ? `<span class="chip chip-success"><i class="bi bi-wifi me-1"></i>Online</span>`
+                            : `<span class="chip chip-neutral"><i class="bi bi-wifi-off me-1"></i>Offline ${lastInf}</span>`;
+                        const model = acsInfo.model ? `<div class="small text-muted">${acsInfo.model}</div>` : '';
+                        acsCell.innerHTML = badge + model;
+                    } else if (hasAcsCache) {
+                        acsCell.innerHTML = '<span class="chip chip-neutral">Tidak di ACS</span>';
+                    }
                 }
             });
 
-            // Update info ACS di header jika ada
             if (hasAcsCache && data.acs_updated_at) {
-                const ts = new Date(data.acs_updated_at.replace(' ', 'T'));
                 const ct = document.getElementById('cacheTime');
                 if (ct) ct.title = `OLT: ${data.updated_at} | ACS: ${data.acs_updated_at}`;
             }
@@ -457,7 +531,7 @@ function loadOltState() {
 
 function refreshCache() {
     const btn = document.getElementById('btnRefreshCache');
-    if (!confirm('Sync cache dari OLT?\n\nProses ini akan kirim beberapa perintah ke OLT (1 per port aktif).\nLakukan hanya jika perlu — jangan terlalu sering!')) return;
+    if (!confirm('Sync cache dari OLT?\n\nProses ini akan kirim beberapa perintah ke OLT (1 per port aktif).')) return;
 
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Sync...';
@@ -466,7 +540,7 @@ function refreshCache() {
         .then(r => r.json())
         .then(data => {
             btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Sync Cache';
+            btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1 text-warning"></i> Sync Cache';
 
             if (!data.success) {
                 alert('Gagal: ' + data.message);
@@ -477,17 +551,14 @@ function refreshCache() {
             const now = new Date().toLocaleTimeString('id', {hour:'2-digit',minute:'2-digit'});
             ct.innerHTML = `<i class="bi bi-database me-1"></i>Cache: ${now} (${data.count} ONU)`;
 
-            // Hapus banner peringatan jika ada
             document.querySelector('.alert-warning')?.remove();
-
-            // Refresh tampilan state OLT
             loadOltState();
 
             alert(data.message || `Cache berhasil diperbarui. ${data.count} ONU.`);
         })
         .catch(e => {
             btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Sync Cache';
+            btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1 text-warning"></i> Sync Cache';
             alert('Error: ' + e.message);
         });
 }
@@ -506,7 +577,7 @@ function importFromCache() {
         .then(r => r.json())
         .then(data => {
             btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-download me-1"></i>Import ke DB';
+            btn.innerHTML = '<i class="bi bi-download me-1 text-info"></i> Import ke DB';
             if (data.success) {
                 alert(data.message);
                 if (data.imported > 0) location.reload();
@@ -516,8 +587,88 @@ function importFromCache() {
         })
         .catch(e => {
             btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-download me-1"></i>Import ke DB';
+            btn.innerHTML = '<i class="bi bi-download me-1 text-info"></i> Import ke DB';
             alert('Error: ' + e.message);
+        });
+}
+
+// ── Kelola Profil OLT ──────────────────────────────────────────
+function openOltProfilesModal() {
+    document.getElementById('profileLog').classList.add('d-none');
+    new bootstrap.Modal(document.getElementById('oltProfilesModal')).show();
+}
+
+function syncProfilesFromOlt() {
+    const btn = document.getElementById('btnSyncProfiles');
+    const log = document.getElementById('profileLog');
+    const msg = document.getElementById('profileLogMsg');
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Menarik dari OLT...';
+
+    const fd = new FormData();
+    fd.append('<?= csrf_token() ?>', '<?= csrf_hash() ?>');
+
+    fetch(`/olts/${OLT_ID}/sync-profiles`, { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(data => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-cloud-download me-1"></i> Tarik dari OLT';
+
+            log.classList.remove('d-none');
+            if (data.success) {
+                msg.className = 'alert alert-success py-2 px-3 small';
+                msg.textContent = data.message;
+                if (data.tcont_profiles)   document.getElementById('txtTcontProfiles').value   = data.tcont_profiles.join('\n');
+                if (data.traffic_profiles) document.getElementById('txtTrafficProfiles').value = data.traffic_profiles.join('\n');
+                if (data.vlan_profiles)    document.getElementById('txtVlanProfiles').value    = data.vlan_profiles.join('\n');
+                _vlanProfiles = null; // reset cache vlan
+            } else {
+                msg.className = 'alert alert-danger py-2 px-3 small';
+                msg.textContent = 'Gagal: ' + data.message;
+            }
+        })
+        .catch(e => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-cloud-download me-1"></i> Tarik dari OLT';
+            log.classList.remove('d-none');
+            msg.className = 'alert alert-danger py-2 px-3 small';
+            msg.textContent = 'Error: ' + e.message;
+        });
+}
+
+function saveOltProfiles() {
+    const btn = document.getElementById('btnSaveProfiles');
+    const log = document.getElementById('profileLog');
+    const msg = document.getElementById('profileLogMsg');
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Menyimpan...';
+
+    const fd = new FormData();
+    fd.append('tcont_profiles',   document.getElementById('txtTcontProfiles').value);
+    fd.append('traffic_profiles', document.getElementById('txtTrafficProfiles').value);
+    fd.append('vlan_profiles',    document.getElementById('txtVlanProfiles').value);
+    fd.append('<?= csrf_token() ?>', '<?= csrf_hash() ?>');
+
+    fetch(`/olts/${OLT_ID}/save-profiles`, { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(data => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-check-circle me-1"></i> Simpan Profil';
+
+            log.classList.remove('d-none');
+            msg.className = 'alert alert-success py-2 px-3 small';
+            msg.textContent = data.message;
+            _vlanProfiles = null;
+            setTimeout(() => bootstrap.Modal.getInstance(document.getElementById('oltProfilesModal'))?.hide(), 1200);
+        })
+        .catch(e => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-check-circle me-1"></i> Simpan Profil';
+            log.classList.remove('d-none');
+            msg.className = 'alert alert-danger py-2 px-3 small';
+            msg.textContent = 'Error: ' + e.message;
         });
 }
 
@@ -528,37 +679,34 @@ function scanOnu() {
 
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Scanning...';
-    container.innerHTML = '<div class="text-center py-4 text-muted">Menghubungi OLT, mohon tunggu...</div>';
+    container.innerHTML = '<div class="text-center py-4 text-secondary"><span class="spinner-border spinner-border-sm me-2"></span>Menghubungi OLT, mohon tunggu...</div>';
 
     fetch(`/olts/${OLT_ID}/scan`)
         .then(r => r.json())
         .then(data => {
             btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-search me-1"></i>Scan ONU Baru';
+            btn.innerHTML = '<i class="bi bi-search me-1"></i> Scan ONU Baru';
 
             if (!data.success) {
-                container.innerHTML = `<div class="alert alert-danger m-3">${data.message}</div>`;
+                container.innerHTML = `<div class="alert alert-danger rounded-3 m-3">${data.message}</div>`;
                 countBadge.textContent = '!';
                 return;
             }
 
             countBadge.textContent = data.count;
 
-            // Update cache timestamp
             if (data.cache_updated_at) {
                 const ts = new Date(data.cache_updated_at.replace(' ', 'T'));
                 const ct = document.getElementById('cacheTime');
                 if (ct) ct.innerHTML = `<i class="bi bi-clock me-1"></i>Cache: ${ts.toLocaleTimeString('id', {hour:'2-digit',minute:'2-digit'})}`;
             }
 
-            // Refresh OLT state dari cache yang baru diupdate
             loadOltState();
 
-            // Tampilkan info jika OLT baru / cache belum pernah disync
             const warnEl = document.getElementById('scanWarning');
             if (data.no_cache_warning) {
                 warnEl.className = '';
-                warnEl.innerHTML = `<div class="alert alert-info rounded-0 border-0 border-bottom py-2 px-3 mb-0 small">
+                warnEl.innerHTML = `<div class="alert alert-info border-0 rounded-0 border-bottom py-2 px-3 mb-0 small">
                     <i class="bi bi-info-circle-fill me-1"></i><strong>Cache OLT belum di-sync.</strong>
                     Index ONU otomatis ditentukan dari database. Disarankan klik <strong>Sync Cache</strong> jika OLT ini sudah memiliki ONU aktif sebelum aplikasi ini dipasang.
                 </div>`;
@@ -568,7 +716,7 @@ function scanOnu() {
             }
 
             if (data.count === 0) {
-                container.innerHTML = '<div class="text-center py-4 text-muted small">Tidak ada ONU baru yang belum dikonfigurasi.</div>';
+                container.innerHTML = '<div class="text-center py-4 text-secondary small">Tidak ada ONU baru yang belum dikonfigurasi.</div>';
                 return;
             }
 
@@ -577,32 +725,32 @@ function scanOnu() {
                 const nextIdx   = o.next_index ?? 1;
                 const badge = o.already_registered
                     ? `<div class="d-flex gap-1 align-items-center">
-                         <span class="badge bg-secondary">Sudah di DB</span>
-                         ${o.existing_id ? `<a href="/onus/${o.existing_id}" class="btn btn-sm btn-outline-secondary py-0 px-1" title="Lihat ONU"><i class="bi bi-eye"></i></a>` : ''}
-                         <button class="btn btn-sm btn-outline-warning py-0 px-1" title="Konfigurasi ulang ke OLT"
+                         <span class="chip chip-neutral">Sudah di DB</span>
+                         ${o.existing_id ? `<a href="/onus/${o.existing_id}" class="btn btn-sm btn-google-secondary py-0 px-2" title="Lihat ONU"><i class="bi bi-eye"></i></a>` : ''}
+                         <button class="btn btn-sm btn-google-secondary py-0 px-2" title="Konfigurasi ulang ke OLT"
                              onclick="openRegister('${o.sn}','${o.board}','${o.slot}','${o.port}',${nextIdx},true,'${o.onu_type||''}')">
-                             <i class="bi bi-arrow-repeat me-1"></i>Konfigurasi Ulang
+                             <i class="bi bi-arrow-repeat text-warning me-1"></i>Konfigurasi Ulang
                          </button>
                        </div>`
-                    : `<button class="btn btn-sm btn-success" onclick="openRegister('${o.sn}','${o.board}','${o.slot}','${o.port}',${nextIdx},false,'${o.onu_type||''}')">
+                    : `<button class="btn btn-sm btn-google-primary py-1 px-3" onclick="openRegister('${o.sn}','${o.board}','${o.slot}','${o.port}',${nextIdx},false,'${o.onu_type||''}')">
                          <i class="bi bi-plus me-1"></i>Register (idx ${nextIdx})
                        </button>`;
                 const typeCell = o.onu_type
-                    ? `<span class="badge bg-light text-dark border">${o.onu_type}</span>`
+                    ? `<span class="chip chip-neutral">${o.onu_type}</span>`
                     : '<span class="text-muted small">-</span>';
                 return `<tr>
-                    <td class="font-monospace small">${o.sn}</td>
-                    <td class="small text-muted">${portLabel}</td>
+                    <td class="font-monospace small fw-bold">${o.sn}</td>
+                    <td class="small text-secondary font-monospace">${portLabel}</td>
                     <td>${typeCell}</td>
-                    <td><span class="badge bg-warning text-dark">${o.state ?? '-'}</span></td>
+                    <td><span class="chip chip-warning">${o.state ?? '-'}</span></td>
                     <td>${badge}</td>
                 </tr>`;
             }).join('');
 
             container.innerHTML = `<div class="table-responsive">
-                <table class="table table-hover mb-0">
-                    <thead class="table-light">
-                        <tr><th>Serial Number</th><th>Port</th><th>Tipe</th><th>State</th><th></th></tr>
+                <table class="table table-hover align-middle mb-0">
+                    <thead>
+                        <tr><th class="ps-4">Serial Number</th><th>Port</th><th>Tipe</th><th>State</th><th>Aksi</th></tr>
                     </thead>
                     <tbody>${rows}</tbody>
                 </table>
@@ -610,7 +758,7 @@ function scanOnu() {
         })
         .catch(e => {
             btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-search me-1"></i>Scan ONU Baru';
+            btn.innerHTML = '<i class="bi bi-search me-1"></i> Scan ONU Baru';
             container.innerHTML = `<div class="alert alert-danger m-3">Error: ${e.message}</div>`;
         });
 }
@@ -625,19 +773,16 @@ function openRegister(sn, board, slot, port, idx, force = false, onuType = '') {
     document.getElementById('registerLog').classList.add('d-none');
     document.getElementById('registerLogContent').textContent = '';
 
-    // Ubah judul modal jika re-register
     const title = document.querySelector('#registerModal .modal-title');
     title.innerHTML = force
-        ? '<i class="bi bi-arrow-repeat me-1"></i>Konfigurasi Ulang ONU'
-        : '<i class="bi bi-plus-circle me-1"></i>Register ONU';
+        ? '<i class="bi bi-arrow-repeat me-1 text-warning"></i>Konfigurasi Ulang ONU'
+        : '<i class="bi bi-plus-circle me-1 text-primary"></i>Register ONU';
 
-    // Reset form
     document.querySelector('[name="name"]').value          = '';
-    // Tipe ONU: FH wajib tipe spesifik (dari scan), ZTE default ALL-ONT
     document.querySelector('[name="onu_type"]').value      = onuType || (IS_FH ? '' : 'ALL-ONT');
     const vlanEl = document.querySelector('[name="vlan_internet"]');
     if (vlanEl) vlanEl.value = '';
-    document.querySelector('[name="vlan_acs"]').value      = '';
+    document.querySelector('[name="vlan_acs"]').value      = '155';
     const tcontEl = document.querySelector('[name="tcont_profile"]');
     if (tcontEl) tcontEl.value = '';
     document.querySelector('[name="pppoe_user"]').value    = '';
@@ -661,10 +806,8 @@ function previewCli() {
     const pppoeU = document.querySelector('[name="pppoe_user"]').value.trim();
     const pppoeP = document.querySelector('[name="pppoe_pass"]').value.trim();
 
-    // ── Fiberhome AN6000 preview (diverifikasi di OLT) ──────────────
     if (IS_FH) {
         const isFhOnu = /^FH(TT|SC)/i.test(sn);
-        // FH tidak menerima spasi/char khusus di description (spasi → "% Unknown command")
         const dname = (name || '').trim().replace(/\s+/g, '-').replace(/[^A-Za-z0-9._-]/g, '') || '<NAMA>';
         let f = `! ══ Fiberhome AN6000 CLI Preview ══\n`;
         f += `config\n`;
@@ -672,7 +815,6 @@ function previewCli() {
         f += `interface pon ${board}/${slot}/${port}\n`;
         f += `  onu description ${idx} ${dname} id 0\n`;
         if (isFhOnu) {
-            // ONU FH: WAN dibuat penuh di OLT via wan-cfg (OMCI FH)
             let ind = 1;
             if (vlanA) { f += `  onu wan-cfg ${idx} index ${ind} mode tr069 type route ${vlanA} 65535 nat disable qos disable dsp dhcp entries 0\n`; ind++; }
             if (vlanI) {
@@ -683,13 +825,11 @@ function previewCli() {
                 }
             }
         } else {
-            // ONU non-FH (ZTE/Huawei/dll): bridge VLAN transparan ke veip → ONU pakai TR-069/PPPoE sendiri via ACS
             if (vlanA) f += `  onu veip ${idx} cvlan-id ${vlanA} cvlan-cos 65535 svlan-tpid 33024 svlan-vid ${vlanA} svlan-cos 65535\n`;
             if (vlanI) f += `  onu veip ${idx} cvlan-id ${vlanI} cvlan-cos 65535 svlan-tpid 33024 svlan-vid ${vlanI} svlan-cos 65535\n`;
         }
         f += `exit\n`;
         f += `save\n`;
-        if (!isFhOnu) f += `\n! ONU non-FH: VLAN di-bridge ke veip; TR-069${pppoeU ? ` + PPPoE "${pppoeU}"` : ''} via agent ONU + GenieACS (ACS URL dari DHCP option-43)`;
         document.getElementById('registerLogLabel').textContent = 'Preview CLI (belum dikirim)';
         document.getElementById('registerLogContent').style.color = '#93c5fd';
         document.getElementById('registerLogContent').textContent = f;
@@ -697,7 +837,6 @@ function previewCli() {
         return;
     }
 
-    // Format diverifikasi dari ZTE C320 v1.2 (show running-config interface gpon-onu_*)
     let cli = `! ══ ZTE C320 CLI Preview ══\n`;
     cli += `conf t\n`;
     cli += `interface gpon-olt_${board}/${slot}/${port}\n`;
@@ -711,22 +850,30 @@ function previewCli() {
         cli += `  gemport 1 name gemport tcont 1\n`;
     }
     let spIdx = 1;
-    if (vlanI) {
-        cli += `  service-port ${spIdx} vport 1 user-vlan ${vlanI} vlan ${vlanI}\n`;
-        spIdx++;
-    }
     if (vlanA) {
         cli += `  service-port ${spIdx} vport 1 user-vlan ${vlanA} vlan ${vlanA}\n`;
+        spIdx++;
+    }
+    if (vlanI) {
+        cli += `  service-port ${spIdx} vport 1 user-vlan ${vlanI} vlan ${vlanI}\n`;
+    }
+    cli += `exit\n`;
+    cli += `pon-onu-mng gpon-onu_${board}/${slot}/${port}:${idx}\n`;
+    if (vlanA) {
+        cli += `  service acs gemport 1 vlan ${vlanA}\n`;
+        cli += `  ip-host 2 dhcp-enable enable\n`;
+    }
+    if (vlanI) {
+        cli += `  service ppp gemport 1 vlan ${vlanI}\n`;
+    }
+    if (pppoeU) {
+        cli += `  wan-ip 1 mode pppoe username ${pppoeU} password ${pppoeP || 'xxx'} host 1\n`;
     }
     cli += `exit\n`;
     cli += `write\n`;
 
-    if (pppoeU) {
-        cli += `\n! PPPoE "${pppoeU}" disimpan ke DB — push via GenieACS/TR-069 setelah ONU online`;
-    }
-
     document.getElementById('registerLogLabel').textContent = 'Preview CLI (belum dikirim)';
-    document.getElementById('registerLogContent').style.color = '#93c5fd';
+    document.getElementById('registerLogContent').style.color = '#81c995';
     document.getElementById('registerLogContent').textContent = cli;
     document.getElementById('registerLog').classList.remove('d-none');
 }
@@ -755,7 +902,6 @@ document.getElementById('registerForm').addEventListener('submit', function(e) {
             logContent.textContent = data.log ? data.log.join('\n') : data.message;
 
             if (data.success && data.partial) {
-                // Terdaftar TAPI config tidak lengkap (perintah kritis gagal) → peringatan amber, bukan hijau.
                 logEl.classList.remove('d-none');
                 logLabel.textContent = 'Log OLT — ⚠ TIDAK LENGKAP';
                 logContent.style.color = '#fcd34d';
@@ -766,20 +912,13 @@ document.getElementById('registerForm').addEventListener('submit', function(e) {
                 return;
             }
             if (data.success) {
-                logContent.style.color = '#86efac';
+                logContent.style.color = '#81c995';
                 const hasWarn = (data.log || []).some(l => l.includes('WARN') || l.includes('Error'));
-                const delay = 15000;
+                const delay = 3000;
                 if (hasWarn) logContent.textContent += '\n\n⚠ Ada peringatan — cek log di atas.';
-                if (data.watch_acs && data.onu_id && pppoePass) {
-                    setTimeout(() => {
-                        bootstrap.Modal.getInstance(document.getElementById('registerModal'))?.hide();
-                        startAcsWatch(data.onu_id, data.sn, pppoeUser, pppoePass, data.push_via_acs !== false);
-                    }, delay);
-                } else {
-                    setTimeout(() => location.reload(), delay);
-                }
+                setTimeout(() => location.reload(), delay);
             } else {
-                logContent.style.color = '#fca5a5';
+                logContent.style.color = '#f87171';
             }
         })
         .catch(e => {
@@ -792,7 +931,7 @@ document.getElementById('registerForm').addEventListener('submit', function(e) {
 // ── ACS Watcher ─────────────────────────────────────────────────
 const _csrf = { name: '<?= csrf_token() ?>', hash: '<?= csrf_hash() ?>' };
 let _acsWatch = { interval: null, attempt: 0, onuId: 0, sn: '', user: '', pass: '' };
-const ACS_MAX_ATTEMPT = 20; // 5 menit × 15 detik
+const ACS_MAX_ATTEMPT = 20;
 
 function startAcsWatch(onuId, sn, user, pass, pushViaAcs = true) {
     if (_acsWatch.interval) clearInterval(_acsWatch.interval);
@@ -804,7 +943,7 @@ function startAcsWatch(onuId, sn, user, pass, pushViaAcs = true) {
     document.getElementById('acsWatchActions').classList.add('d-none');
     document.getElementById('acsWatcher').classList.remove('d-none');
 
-    _pollAcs(); // cek langsung sekali
+    _pollAcs();
     _acsWatch.interval = setInterval(_pollAcs, 15000);
 }
 
@@ -884,16 +1023,16 @@ function stopAcsWatch() {
 function _setWatchMsg(msg, isSuccess) {
     const el = document.getElementById('acsWatchMsg');
     el.textContent = msg;
-    el.className   = 'small mt-1 ' + (isSuccess ? 'text-success' : 'text-muted');
+    el.className   = 'small mt-1 ' + (isSuccess ? 'text-success' : 'text-secondary');
 }
 
-// ── VLAN Profile Dropdown (ZTE) ────────────────────────────────
-let _vlanProfiles = null; // cache per page load
+// ── VLAN Profile Dropdown (ZTE & Dynamic Profiles) ─────────────
+let _vlanProfiles = null;
 
 function loadVlanProfiles() {
     const sel = document.getElementById('vlanInternetSelect');
-    if (!sel) return; // non-ZTE: pakai input biasa
-    if (_vlanProfiles) { _populateVlanSelect(_vlanProfiles); return; } // sudah dicache
+    if (!sel) return;
+    if (_vlanProfiles) { _populateVlanSelect(_vlanProfiles); return; }
 
     sel.innerHTML = '<option value="">Memuat dari OLT...</option>';
     fetch(`/olts/${OLT_ID}/vlan-profiles`)
@@ -903,9 +1042,25 @@ function loadVlanProfiles() {
                 _vlanProfiles = data.profiles;
                 _populateVlanSelect(data.profiles);
             } else {
-                sel.innerHTML = '<option value="">-- Gagal fetch, isi manual --</option>';
-                // fallback ke input text
-                sel.outerHTML = '<input type="number" name="vlan_internet" id="vlanInternetFallback" class="form-control form-control-sm" placeholder="155" min="1" max="4094">';
+                // Fallback ke vlan_profiles yang tersimpan di DB
+                const dbVlans = `<?= esc($olt['vlan_profiles'] ?? '') ?>`;
+                if (dbVlans) {
+                    const parsed = [];
+                    dbVlans.split('\n').forEach(line => {
+                        line = line.trim();
+                        if (line) {
+                            const parts = line.split(/—|:|-/);
+                            const pName = parts[0]?.trim() || line;
+                            const vId   = parseInt((line.match(/\d+/) || [155])[0]);
+                            parsed.push({ name: pName, vlan: vId });
+                        }
+                    });
+                    _vlanProfiles = parsed;
+                    _populateVlanSelect(parsed);
+                } else {
+                    sel.innerHTML = '<option value="">-- Isi manual --</option>';
+                    sel.outerHTML = '<input type="number" name="vlan_internet" id="vlanInternetFallback" class="form-control form-control-sm" placeholder="155" min="1" max="4094">';
+                }
             }
         })
         .catch(() => {
@@ -954,44 +1109,22 @@ function getSignal(onuId, btn) {
         });
 }
 
-function checkDhcp(onuId, btn) {
-    const orig = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
-    fetch(`/onus/${onuId}/wan-info`)
-        .then(r => r.json())
-        .then(data => {
-            btn.disabled = false;
-            btn.innerHTML = orig;
-            if (!data.success) { alert('Cek DHCP: ' + (data.message || 'gagal')); return; }
-            const i = data.info || {};
-            let msg;
-            if (!i.online)      msg = '⚠ ONU offline (belum sync ke OLT).';
-            else if (!i.has_wan) msg = 'ONU online, tapi belum ada WAN dikonfigurasi.';
-            else if (i.ip)      msg = '✅ Dapat IP: ' + i.ip;
-            else                msg = 'WAN ada tapi belum dapat IP (DHCP belum jalan).';
-            alert('Status WAN/DHCP:\n\n' + msg + '\n\n--- raw ---\n' + (i.raw || ''));
-        })
-        .catch(e => { btn.disabled = false; btn.innerHTML = orig; alert('Error: ' + e.message); });
-}
-
 function loadAcsStatus() {
     const btn = document.getElementById('btnAcs');
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Memuat...';
 
     fetch(`/olts/${OLT_ID}/acs-status`)
         .then(r => r.json())
         .then(data => {
             btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-cloud-check me-1"></i>Cek ACS';
+            btn.innerHTML = '<i class="bi bi-cloud-check me-1 text-info"></i> Cek ACS';
 
             if (!data.success) {
                 alert('ACS: ' + data.message);
                 return;
             }
 
-            // Update setiap baris ONU dengan status ACS
             document.querySelectorAll('tr[data-sn]').forEach(row => {
                 const sn   = row.dataset.sn;
                 const cell = row.querySelector('.acs-cell');
@@ -1000,46 +1133,25 @@ function loadAcsStatus() {
                 if (!cell) return;
 
                 if (!info) {
-                    cell.innerHTML = '<span class="badge bg-light text-dark border">Tidak di ACS</span>';
+                    cell.innerHTML = '<span class="chip chip-neutral">Tidak di ACS</span>';
                     return;
                 }
 
                 const online  = info.online;
                 const lastInf = info.last_inform ? new Date(info.last_inform).toLocaleTimeString('id', {hour:'2-digit',minute:'2-digit'}) : '?';
                 const badge   = online
-                    ? `<span class="badge bg-success"><i class="bi bi-wifi me-1"></i>Online</span>`
-                    : `<span class="badge bg-secondary"><i class="bi bi-wifi-off me-1"></i>Offline ${lastInf}</span>`;
+                    ? `<span class="chip chip-success"><i class="bi bi-wifi me-1"></i>Online</span>`
+                    : `<span class="chip chip-neutral"><i class="bi bi-wifi-off me-1"></i>Offline ${lastInf}</span>`;
                 const model = info.model ? `<div class="small text-muted">${info.model}</div>` : '';
                 cell.innerHTML = badge + model;
             });
         })
         .catch(e => {
             btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-cloud-check me-1"></i>Cek ACS';
+            btn.innerHTML = '<i class="bi bi-cloud-check me-1 text-info"></i> Cek ACS';
             alert('Error: ' + e.message);
         });
 }
-
-// Auto-refresh ACS status setiap 60 detik, hanya saat tab aktif
-(function startAcsAutoRefresh() {
-    let timer = null;
-    function schedule() {
-        timer = setTimeout(() => {
-            if (!document.hidden) loadAcsStatus();
-            schedule();
-        }, 60000);
-    }
-    document.addEventListener('visibilitychange', () => {
-        if (!document.hidden) {
-            clearTimeout(timer);
-            loadAcsStatus();
-            schedule();
-        }
-    });
-    // Pertama kali load: langsung cek ACS
-    loadAcsStatus();
-    schedule();
-})();
 
 function filterOnu(q) {
     q = q.toLowerCase();
@@ -1049,7 +1161,6 @@ function filterOnu(q) {
         row.style.display = (!q || sn.includes(q) || name.includes(q)) ? '' : 'none';
     });
 
-    // Expand accordion panels yang ada hasil, collapse yang kosong
     document.querySelectorAll('#accordionPon .accordion-item').forEach(item => {
         const collapse = item.querySelector('.accordion-collapse');
         const btn      = item.querySelector('.accordion-button');
@@ -1105,13 +1216,13 @@ function doAcsPush() {
         .then(r => r.json())
         .then(data => {
             btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-cloud-arrow-up me-1"></i>Push';
+            btn.innerHTML = '<i class="bi bi-cloud-arrow-up me-1"></i> Push';
             res.className = 'small mt-2 ' + (data.success ? 'text-success' : 'text-danger');
             res.textContent = data.success ? 'PPPoE berhasil dipush ke ONU.' : (data.message || 'Gagal.');
         })
         .catch(e => {
             btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-cloud-arrow-up me-1"></i>Push';
+            btn.innerHTML = '<i class="bi bi-cloud-arrow-up me-1"></i> Push';
             res.className = 'small mt-2 text-danger';
             res.textContent = 'Error: ' + e.message;
         });

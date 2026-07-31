@@ -619,6 +619,80 @@ class OltController extends Controller
         }
     }
 
+    /**
+     * AJAX: Sync semua profil OLT (TCONT, Traffic Limit, VLAN profile) langsung dari OLT via Telnet.
+     * POST /olts/{id}/sync-profiles
+     */
+    public function syncProfiles(int $id)
+    {
+        $this->response->setContentType('application/json');
+        $oltModel = new OltModel();
+        $olt = $oltModel->getByUserAndId($this->userId, $id);
+        if (!$olt) {
+            return $this->response->setJSON(['success' => false, 'message' => 'OLT tidak ditemukan.']);
+        }
+
+        try {
+            $driver = OltDriverFactory::make($olt);
+            $driver->connect();
+            $tcontProfiles   = $driver->getTcontProfiles();
+            $trafficProfiles = $driver->getTrafficProfiles();
+            $vlanProfiles    = $driver->getVlanProfiles();
+            $driver->disconnect();
+
+            $vlanProfilesFormatted = array_map(function($p) {
+                return "{$p['name']} — VLAN {$p['vlan']}";
+            }, $vlanProfiles);
+
+            $updateData = [
+                'tcont_profiles'   => implode("\n", $tcontProfiles),
+                'traffic_profiles' => implode("\n", $trafficProfiles),
+                'vlan_profiles'    => implode("\n", $vlanProfilesFormatted),
+            ];
+
+            $oltModel->update($id, $updateData);
+
+            return $this->response->setJSON([
+                'success'          => true,
+                'tcont_profiles'   => $tcontProfiles,
+                'traffic_profiles' => $trafficProfiles,
+                'vlan_profiles'    => $vlanProfilesFormatted,
+                'message'          => 'Semua profil OLT (TCONT, Traffic Limit, VLAN) berhasil ditarik dari OLT dan disimpan.',
+            ]);
+        } catch (\Exception $e) {
+            return $this->response->setJSON(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * AJAX: Simpan profil OLT manual (TCONT, Traffic Limit, VLAN profile).
+     * POST /olts/{id}/save-profiles
+     */
+    public function saveProfiles(int $id)
+    {
+        $this->response->setContentType('application/json');
+        $oltModel = new OltModel();
+        $olt = $oltModel->getByUserAndId($this->userId, $id);
+        if (!$olt) {
+            return $this->response->setJSON(['success' => false, 'message' => 'OLT tidak ditemukan.']);
+        }
+
+        $tcont   = trim($this->request->getPost('tcont_profiles') ?? '');
+        $traffic = trim($this->request->getPost('traffic_profiles') ?? '');
+        $vlan    = trim($this->request->getPost('vlan_profiles') ?? '');
+
+        $oltModel->update($id, [
+            'tcont_profiles'   => $tcont ?: null,
+            'traffic_profiles' => $traffic ?: null,
+            'vlan_profiles'    => $vlan ?: null,
+        ]);
+
+        return $this->response->setJSON([
+            'success' => true,
+            'message' => 'Profil OLT berhasil disimpan.',
+        ]);
+    }
+
     private function getFormData(): array
     {
         return [
