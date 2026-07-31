@@ -52,8 +52,13 @@ class OltController extends Controller
     {
         try {
             $db = \Config\Database::connect();
-            if ($db->tableExists('olts') && !$db->fieldExists('vlan_profiles', 'olts')) {
-                $db->query("ALTER TABLE olts ADD COLUMN vlan_profiles TEXT NULL AFTER traffic_profiles");
+            if ($db->tableExists('olts')) {
+                if (!$db->fieldExists('vlan_profiles', 'olts')) {
+                    $db->query("ALTER TABLE olts ADD COLUMN vlan_profiles TEXT NULL AFTER traffic_profiles");
+                }
+                if (!$db->fieldExists('use_acs', 'olts')) {
+                    $db->query("ALTER TABLE olts ADD COLUMN use_acs TINYINT(1) NOT NULL DEFAULT 1 AFTER acs_url");
+                }
             }
         } catch (\Throwable $e) {
             // Ignore error if column exists
@@ -845,6 +850,7 @@ class OltController extends Controller
             'snmp_community'  => $this->request->getPost('snmp_community') ?: 'public',
             'snmp_port'       => (int)($this->request->getPost('snmp_port') ?: 161),
             'acs_url'          => $this->request->getPost('acs_url') ?: null,
+            'use_acs'          => (int)($this->request->getPost('use_acs') ?? 1),
             'pppoe_vlan_profile' => $this->request->getPost('pppoe_vlan_profile') ?: null,
             'firmware_version' => $this->request->getPost('firmware_version') ?: null,
             'tcont_profiles'   => $this->request->getPost('tcont_profiles') ?: null,

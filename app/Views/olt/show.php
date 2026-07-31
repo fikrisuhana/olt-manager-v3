@@ -6,6 +6,11 @@
     <div class="d-flex align-items-center gap-2">
         <span class="chip chip-info font-monospace"><?= esc($olt['brand']) ?></span>
         <span class="chip chip-neutral"><?= esc($olt['model']) ?></span>
+        <?php if (($olt['use_acs'] ?? 1) == 1): ?>
+            <span class="chip chip-success" title="OLT terhubung dengan ACS/TR-069"><i class="bi bi-wifi me-1"></i>ACS Aktif</span>
+        <?php else: ?>
+            <span class="chip chip-neutral" title="OLT Standalone / Pure OMCI tanpa ACS"><i class="bi bi-hdd me-1"></i>ACS Off (Pure OMCI)</span>
+        <?php endif; ?>
         <span class="text-secondary small font-monospace"><i class="bi bi-diagram-2 me-1"></i><?= esc($olt['ip']) ?>:<?= esc($olt['telnet_port']) ?></span>
     </div>
 
@@ -549,8 +554,9 @@
 <?= $this->endSection() ?>
 <?= $this->section('scripts') ?>
 <script>
-const OLT_ID = <?= $olt['id'] ?>;
-const IS_FH  = <?= strtoupper($olt['brand'] ?? '') === 'FIBERHOME' ? 'true' : 'false' ?>;
+const OLT_ID  = <?= $olt['id'] ?>;
+const IS_FH   = <?= strtoupper($olt['brand'] ?? '') === 'FIBERHOME' ? 'true' : 'false' ?>;
+const USE_ACS = <?= ($olt['use_acs'] ?? 1) == 1 ? 'true' : 'false' ?>;
 
 // Auto-load OLT state dari cache saat halaman dibuka
 document.addEventListener('DOMContentLoaded', () => {
@@ -1011,7 +1017,7 @@ function previewCli() {
         return;
     }
 
-    let cli = `! ══ ZTE C320 CLI Preview ══\n`;
+    let cli = `! ══ ZTE C320 CLI Preview (${USE_ACS ? 'ACS TR-069 Mode' : 'Standalone / Pure OMCI Mode'}) ══\n`;
     cli += `conf t\n`;
     cli += `interface gpon-olt_${board}/${slot}/${port}\n`;
     cli += `  onu ${idx} type ${type} sn ${sn}\n`;
@@ -1024,7 +1030,7 @@ function previewCli() {
         cli += `  gemport 1 name gemport tcont 1\n`;
     }
     let spIdx = 1;
-    if (vlanA) {
+    if (vlanA && USE_ACS) {
         cli += `  service-port ${spIdx} vport 1 user-vlan ${vlanA} vlan ${vlanA}\n`;
         spIdx++;
     }
@@ -1033,7 +1039,7 @@ function previewCli() {
     }
     cli += `exit\n`;
     cli += `pon-onu-mng gpon-onu_${board}/${slot}/${port}:${idx}\n`;
-    if (vlanA) {
+    if (vlanA && USE_ACS) {
         cli += `  service acs gemport 1 vlan ${vlanA}\n`;
         cli += `  ip-host 2 dhcp-enable enable\n`;
     }
@@ -1045,6 +1051,10 @@ function previewCli() {
     }
     cli += `exit\n`;
     cli += `write\n`;
+
+    if (!USE_ACS) {
+        cli += `\n! ACS / TR-069 Non-Aktif di OLT ini — registrasi murni OMCI PPPoE tanpa TR-069.`;
+    }
 
     document.getElementById('registerLogLabel').textContent = 'Preview CLI (belum dikirim)';
     document.getElementById('registerLogContent').style.color = '#81c995';

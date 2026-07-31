@@ -113,8 +113,23 @@
                     </div>
 
                     <h6 class="fw-semibold mb-3 text-muted text-uppercase" style="font-size:.75rem;letter-spacing:.05em">
-                        ACS / GenieACS
+                        Mode Pengoperasian &amp; ACS (TR-069)
                     </h6>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-12">
+                            <label class="form-label fw-bold">Gunakan ACS / TR-069 di OLT Ini?</label>
+                            <select name="use_acs" id="useAcsSelect" class="form-select">
+                                <option value="1" <?= ($olt['use_acs'] ?? 1) == 1 ? 'selected' : '' ?>>
+                                    ✅ Ya — Gunakan GenieACS / TR-069 (Auto-push ACS &amp; DHCP Mgmt)
+                                </option>
+                                <option value="0" <?= ($olt['use_acs'] ?? 1) == 0 ? 'selected' : '' ?>>
+                                    🚫 Tidak — Standalone OLT / Pure OMCI (Tanpa GenieACS)
+                                </option>
+                            </select>
+                            <div class="form-text">Jika <strong>Tidak</strong>, registrasi ONU akan murni mengonfigurasi OMCI PPPoE tanpa perintah ACS TR-069.</div>
+                        </div>
+                    </div>
 
                     <div class="row g-3 mb-3">
                         <div class="col-12">

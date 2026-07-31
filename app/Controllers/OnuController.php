@@ -171,6 +171,7 @@ class OnuController extends Controller
                 'pppoe_pass'         => $pppoePass,
                 'pppoe_vlan_profile' => $pppoeVlanProfile,
                 'acs_url'            => trim($olt['acs_url'] ?? ''),
+                'use_acs'            => (bool)($olt['use_acs'] ?? 1),
                 'force'           => $force,
             ]);
 
