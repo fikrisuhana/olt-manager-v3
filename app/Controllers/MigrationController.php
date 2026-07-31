@@ -53,93 +53,68 @@ class MigrationController extends BaseController
     {
         $this->response->setContentType('application/json');
 
-        $oltModel = new OltModel();
-        $olt = $oltModel->getByUserAndId($this->userId, $oltId);
-        if (!$olt) {
-            return $this->response->setJSON(['success' => false, 'message' => 'OLT tidak ditemukan.']);
+        $oltController = new OltController();
+        // Menggunakan OltController::scan() yang sudah terbukti 100% bekerja di halaman OLT
+        $res = $oltController->scan($oltId);
+        $raw = $res->getBody();
+        $data = is_string($raw) ? json_decode($raw, true) : null;
+
+        if (!$data || !($data['success'] ?? false)) {
+            return $res;
         }
 
         $scheme   = $this->request->getGet('name_scheme') ?? 'scheme_1';
         $prefix   = trim($this->request->getGet('custom_prefix') ?? 'User');
-        $onuModel = new OnuModel();
-        $cache    = new OnuCacheService();
+        $cleanPrefix = preg_replace('/[^A-Za-z0-9_]/', '_', $prefix ?: 'Migrasi');
 
-        try {
-            $driver = OltDriverFactory::make($olt);
-            $driver->connect();
-            $uncfgOnus = $driver->getUnconfiguredOnus();
-            $driver->disconnect();
+        $counter = 1;
+        $result  = [];
 
-            $cacheData      = $cache->load($oltId);
-            $noCacheWarning = ($cacheData['updated_at'] === null);
+        foreach (($data['onus'] ?? []) as $onu) {
+            $sn     = strtoupper($onu['sn']);
+            $board  = (string)$onu['board'];
+            $slot   = (string)$onu['slot'];
+            $port   = (string)$onu['port'];
+            $index  = (int)($onu['next_index'] ?? $onu['onu_index'] ?? 1);
 
-            if ($noCacheWarning) {
-                $cache->save($oltId, []);
-                $cacheData = $cache->load($oltId);
+            $vendor = 'Generic';
+            if (strncasecmp($sn, 'HWTC', 4) === 0 || strncasecmp($sn, 'HWTS', 4) === 0 || strncasecmp($sn, 'HWTE', 4) === 0) {
+                $vendor = 'Huawei';
+            } elseif (strncasecmp($sn, 'ZTE', 3) === 0) {
+                $vendor = 'ZTE';
+            } elseif (strncasecmp($sn, 'FHTT', 4) === 0 || strncasecmp($sn, 'FHSC', 4) === 0) {
+                $vendor = 'Fiberhome';
+            } elseif (strncasecmp($sn, 'ALCL', 4) === 0) {
+                $vendor = 'Nokia';
             }
 
-            $counter = 1;
-            $result = [];
+            $autoName = match ($scheme) {
+                'scheme_1' => sprintf('Pelanggan_%s_%s_%s_%02d', $board, $slot, $port, $index),
+                'scheme_2' => sprintf('Pelanggan_%03d', $counter),
+                'scheme_3' => sprintf('%s_%s_%02d', $cleanPrefix, strtoupper(substr($vendor, 0, 2)), $counter),
+                default    => sprintf('Pelanggan_%s_%s_%s_%02d', $board, $slot, $port, $index),
+            };
 
-            foreach ($uncfgOnus as $onu) {
-                $sn     = strtoupper($onu['sn']);
-                $board  = (string)$onu['board'];
-                $slot   = (string)$onu['slot'];
-                $port   = (string)$onu['port'];
-                $index  = $cache->nextIndex($oltId, $board, $slot, $port);
+            $result[] = [
+                'sn'                 => $sn,
+                'vendor'             => $vendor,
+                'board'              => $board,
+                'slot'               => $slot,
+                'port'               => $port,
+                'onu_index'          => $index,
+                'auto_name'          => $autoName,
+                'already_registered' => $onu['already_registered'] ?? false,
+                'existing_id'        => $onu['existing_id'] ?? null,
+            ];
 
-                // Deteksi vendor berdasarkan SN
-                $vendor = 'Generic';
-                if (strncasecmp($sn, 'HWTC', 4) === 0 || strncasecmp($sn, 'HWTS', 4) === 0 || strncasecmp($sn, 'HWTE', 4) === 0) {
-                    $vendor = 'Huawei';
-                } elseif (strncasecmp($sn, 'ZTE', 3) === 0) {
-                    $vendor = 'ZTE';
-                } elseif (strncasecmp($sn, 'FHTT', 4) === 0 || strncasecmp($sn, 'FHSC', 4) === 0) {
-                    $vendor = 'Fiberhome';
-                } elseif (strncasecmp($sn, 'ALCL', 4) === 0) {
-                    $vendor = 'Nokia';
-                }
-
-                // Auto-generate name berdasarkan skema terpilih (hanya karakter A-Z, 0-9, dan underscore _)
-                $cleanPrefix = preg_replace('/[^A-Za-z0-9_]/', '_', $prefix ?: 'Migrasi');
-                $autoName = match ($scheme) {
-                    'scheme_1' => sprintf('Pelanggan_%s_%s_%s_%02d', $board, $slot, $port, $index),
-                    'scheme_2' => sprintf('Pelanggan_%03d', $counter),
-                    'scheme_3' => sprintf('%s_%s_%02d', $cleanPrefix, strtoupper(substr($vendor, 0, 2)), $counter),
-                    default    => sprintf('Pelanggan_%s_%s_%s_%02d', $board, $slot, $port, $index),
-                };
-
-                $existing = $onuModel->getByOltAndSn($oltId, $sn);
-
-                $result[] = [
-                    'sn'                 => $sn,
-                    'vendor'             => $vendor,
-                    'board'              => $board,
-                    'slot'               => $slot,
-                    'port'               => $port,
-                    'onu_index'          => $index,
-                    'auto_name'          => $autoName,
-                    'already_registered' => $existing !== null,
-                    'existing_id'        => $existing['id'] ?? null,
-                ];
-
-                $counter++;
-            }
-
-            return $this->response->setJSON([
-                'success'          => true,
-                'onus'             => $result,
-                'count'            => count($result),
-                'cache_updated_at' => $cacheData['updated_at'],
-            ]);
-        } catch (\Throwable $e) {
-            $msg = $e->getMessage() ?: get_class($e);
-            log_message('error', "Migration scan error OLT {$oltId}: {$msg}");
-            return $this->response->setJSON([
-                'success' => false,
-                'message' => "Telnet OLT Error: " . $msg
-            ]);
+            $counter++;
         }
+
+        return $this->response->setJSON([
+            'success' => true,
+            'onus'    => $result,
+            'count'   => count($result),
+        ]);
     }
 
     /**
