@@ -80,6 +80,7 @@ $routes->group('', ['filter' => 'auth'], static function ($routes) {
     $routes->get('olts/(:num)/migration',             'MigrationController::index/$1');
     $routes->get('olts/(:num)/migration/scan',        'MigrationController::scan/$1');
     $routes->post('olts/(:num)/migration/execute',     'MigrationController::execute/$1');
+    $routes->post('olts/(:num)/migration/execute-single', 'MigrationController::executeSingle/$1');
 
     // ACS
     $routes->get('acs',                     'AcsController::index');

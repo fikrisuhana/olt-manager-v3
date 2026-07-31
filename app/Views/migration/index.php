@@ -73,6 +73,17 @@
                     </select>
                 </div>
 
+                <!-- Jeda Antar ONU (Safety Delay) -->
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold">Jeda Antar ONU (Prevent OLT Load)</label>
+                    <select id="delaySelect" class="form-select form-select-sm shadow-none">
+                        <option value="1000" selected>1 Detik (Standar)</option>
+                        <option value="2000">2 Detik (Rekomendasi Aman)</option>
+                        <option value="3000">3 Detik (Sangat Aman)</option>
+                        <option value="0">0 Detik (Tanpa Jeda)</option>
+                    </select>
+                </div>
+
                 <!-- Custom Prefix (Hidden default) -->
                 <div class="col-md-3 d-none" id="customPrefixBox">
                     <label class="form-label small fw-bold">Custom Prefix Text</label>
@@ -323,6 +334,24 @@ function openExecuteModal() {
         return;
     }
 
+async function openExecuteModal() {
+    const selectedRows = document.querySelectorAll('.row-check:checked');
+    if (selectedRows.length === 0) {
+        alert('Pilih minimal satu ONU untuk diregistrasi!');
+        return;
+    }
+
+    const vlanSelect = document.getElementById('vlanInternetSelect');
+    const vlanInput  = document.getElementById('vlanInternetInput');
+    const vlanVal    = vlanSelect ? vlanSelect.value : (vlanInput ? vlanInput.value : '');
+    const tcontVal   = document.getElementById('tcontSelect').value;
+    const delayMs    = parseInt(document.getElementById('delaySelect').value) || 1000;
+
+    if (!vlanVal) {
+        alert('Pilih VLAN Internet Target terlebih dahulu!');
+        return;
+    }
+
     const modal = new bootstrap.Modal(document.getElementById('execModal'));
     modal.show();
 
@@ -332,13 +361,12 @@ function openExecuteModal() {
     const execLog = document.getElementById('execLogContent');
     const btnClose = document.getElementById('btnCloseExecModal');
 
-    progressBar.style.width = '10%';
-    progressPercent.textContent = '10%';
-    progressText.textContent = `Menyiapkan registrasi ${selectedRows.length} ONU...`;
-    execLog.innerHTML = `<div>! Menyiapkan registrasi massal (${selectedRows.length} ONU) ke OLT...</div>`;
+    progressBar.style.width = '0%';
+    progressPercent.textContent = '0%';
+    progressText.textContent = `Menyiapkan registrasi sekuensial (${selectedRows.length} ONU)...`;
+    execLog.innerHTML = `<div>! Memulai registrasi sekuensial (Total ${selectedRows.length} ONU | Jeda: ${delayMs/1000}s per ONU)...</div>`;
     btnClose.disabled = true;
 
-    // Kumpulkan payload
     const items = [];
     selectedRows.forEach(chk => {
         const idx = chk.dataset.idx;
@@ -347,6 +375,7 @@ function openExecuteModal() {
         const nameVal   = nameInput ? nameInput.value.trim() : o.auto_name;
 
         items.push({
+            idx: idx,
             sn: o.sn,
             name: nameVal,
             board: o.board,
@@ -357,59 +386,63 @@ function openExecuteModal() {
         });
     });
 
-    const tcontVal = document.getElementById('tcontSelect').value;
-    const fd = new FormData();
-    fd.append('vlan_internet', vlanVal);
-    fd.append('tcont_profile', tcontVal);
+    let successCount = 0;
+    let failCount = 0;
+    const total = items.length;
 
-    items.forEach((item, i) => {
-        fd.append(`items[${i}][sn]`, item.sn);
-        fd.append(`items[${i}][name]`, item.name);
-        fd.append(`items[${i}][board]`, item.board);
-        fd.append(`items[${i}][slot]`, item.slot);
-        fd.append(`items[${i}][port]`, item.port);
-        fd.append(`items[${i}][onu_index]`, item.onu_index);
-        fd.append(`items[${i}][onu_type]`, item.onu_type);
-    });
+    for (let i = 0; i < total; i++) {
+        const item = items[i];
+        const currentPct = Math.round(((i + 1) / total) * 100);
+        
+        progressText.textContent = `[${i + 1}/${total}] Memproses ${item.sn} (${item.name})...`;
+        progressBar.style.width = `${currentPct}%`;
+        progressPercent.textContent = `${currentPct}%`;
 
-    progressBar.style.width = '30%';
-    progressPercent.textContent = '30%';
-    progressText.textContent = 'Mengirim perintah CLI ke OLT...';
+        const fd = new FormData();
+        fd.append('sn', item.sn);
+        fd.append('name', item.name);
+        fd.append('board', item.board);
+        fd.append('slot', item.slot);
+        fd.append('port', item.port);
+        fd.append('onu_index', item.onu_index);
+        fd.append('onu_type', item.onu_type);
+        fd.append('vlan_internet', vlanVal);
+        fd.append('tcont_profile', tcontVal);
 
-    fetch(`/olts/${currentOltId}/migration/execute`, { method: 'POST', body: fd })
-        .then(r => r.json())
-        .then(data => {
-            progressBar.style.width = '100%';
-            progressPercent.textContent = '100%';
-            btnClose.disabled = false;
+        try {
+            const res = await fetch(`/olts/${currentOltId}/migration/execute-single`, { method: 'POST', body: fd });
+            const data = await res.json();
 
-            if (!data.success) {
-                progressText.textContent = 'Proses Gagal!';
-                progressBar.classList.remove('bg-primary');
-                progressBar.classList.add('bg-danger');
-                execLog.innerHTML += `<div class="text-danger mt-2">❌ ERROR: ${data.message}</div>`;
-                return;
+            if (data.success) {
+                successCount++;
+                execLog.innerHTML += `<div style="color:#81c995">▶ [${i+1}/${total}] ✔ SUKSES: ${item.sn} (${item.name}) terdaftar di ${item.board}/${item.slot}/${item.port}:${item.onu_index}</div>`;
+                const rowTr = document.querySelector(`tr[data-index="${item.idx}"]`);
+                if (rowTr) {
+                    rowTr.querySelector('.pe-4').innerHTML = '<span class="chip chip-success">Registered</span>';
+                }
+            } else {
+                failCount++;
+                execLog.innerHTML += `<div style="color:#f87171">▶ [${i+1}/${total}] ✘ GAGAL: ${item.sn} → ${data.message}</div>`;
             }
+        } catch (e) {
+            failCount++;
+            execLog.innerHTML += `<div style="color:#f87171">▶ [${i+1}/${total}] ❌ ERROR: ${item.sn} → ${e.message}</div>`;
+        }
 
-            progressText.textContent = data.message;
-            progressBar.classList.remove('bg-primary');
-            progressBar.classList.add('bg-success');
+        execLog.scrollTop = execLog.scrollHeight;
 
-            let logHtml = `<div class="text-success fw-bold mb-2">✔ ${data.message}</div>`;
-            (data.logs || []).forEach(l => {
-                const color = l.includes('SUKSES') ? '#81c995' : (l.includes('GAGAL') ? '#f87171' : '#38bdf8');
-                logHtml += `<div style="color:${color}">${l}</div>`;
-            });
-            execLog.innerHTML = logHtml;
-        })
-        .catch(e => {
-            progressBar.style.width = '100%';
-            progressPercent.textContent = '100%';
-            progressBar.classList.add('bg-danger');
-            progressText.textContent = 'Terjadi kesalahan sistem';
-            execLog.innerHTML += `<div class="text-danger mt-2">❌ Exception Error: ${e.message}</div>`;
-            btnClose.disabled = false;
-        });
+        if (i < total - 1 && delayMs > 0) {
+            await new Promise(r => setTimeout(r, delayMs));
+        }
+    }
+
+    progressBar.style.width = '100%';
+    progressPercent.textContent = '100%';
+    progressText.textContent = `Selesai! (${successCount} Sukses, ${failCount} Gagal)`;
+    progressBar.classList.remove('bg-primary');
+    progressBar.classList.add(failCount > 0 ? 'bg-warning' : 'bg-success');
+    execLog.innerHTML += `<div class="text-success fw-bold mt-2">✔ Selesai memproses ${total} ONU (${successCount} Sukses, ${failCount} Gagal).</div>`;
+    btnClose.disabled = false;
 }
 </script>
 <?= $this->endSection() ?>

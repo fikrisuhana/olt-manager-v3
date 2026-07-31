@@ -274,4 +274,126 @@ class MigrationController extends BaseController
             return $this->response->setJSON(['success' => false, 'message' => $e->getMessage(), 'logs' => $logs]);
         }
     }
+
+    /**
+     * AJAX: Eksekusi registrasi 1 ONU per request (Sequential Batch & Jeda untuk Keamanan OLT)
+     * POST /olts/{id}/migration/execute-single
+     */
+    public function executeSingle(int $oltId)
+    {
+        $this->response->setContentType('application/json');
+
+        $oltModel = new OltModel();
+        $olt = $oltModel->getByUserAndId($this->userId, $oltId);
+        if (!$olt) {
+            return $this->response->setJSON(['success' => false, 'message' => 'OLT tidak ditemukan.']);
+        }
+
+        $sn       = strtoupper(trim($this->request->getPost('sn') ?? ''));
+        $rawName  = trim($this->request->getPost('name') ?? $sn);
+        $name     = preg_replace('/[^A-Za-z0-9_]/', '_', $rawName);
+        $name     = preg_replace('/_+/', '_', trim($name, '_'));
+        if (empty($name)) $name = $sn;
+
+        $board        = (string)($this->request->getPost('board') ?? '1');
+        $slot         = (string)($this->request->getPost('slot') ?? '1');
+        $port         = (string)($this->request->getPost('port') ?? '1');
+        $onuIndex     = (int)($this->request->getPost('onu_index') ?? 1);
+        $onuType      = trim($this->request->getPost('onu_type') ?? 'ALL-ONT');
+        $vlanInternet = (int) $this->request->getPost('vlan_internet');
+        $vlanAcs      = (int) $this->request->getPost('vlan_acs');
+        $tcontProfile = trim($this->request->getPost('tcont_profile') ?? '');
+
+        if (empty($sn) || !$vlanInternet) {
+            return $this->response->setJSON(['success' => false, 'message' => 'SN & VLAN Internet wajib diisi.']);
+        }
+
+        $onuModel = new OnuModel();
+        $logModel = new ProvisionLogModel();
+        $cache    = new OnuCacheService();
+
+        try {
+            $driver = OltDriverFactory::make($olt);
+            $driver->connect();
+
+            $result = $driver->registerOnu([
+                'board'           => $board,
+                'slot'            => $slot,
+                'port'            => $port,
+                'onu_index'       => (string)$onuIndex,
+                'onu_type'        => $onuType,
+                'sn'              => $sn,
+                'name'            => $name,
+                'vlan_internet'   => $vlanInternet,
+                'vlan_acs'        => $vlanAcs,
+                'tcont_profile'   => $tcontProfile,
+                'pppoe_user'      => '',
+                'pppoe_pass'      => '',
+                'use_acs'         => (bool)($olt['use_acs'] ?? 1),
+                'force'           => true,
+            ]);
+
+            $driver->disconnect();
+
+            if ($result['success']) {
+                $existing = $onuModel->getAnyByOltAndSn($oltId, $sn);
+                if ($existing) {
+                    $onuId = (int)$existing['id'];
+                    $onuModel->update($onuId, [
+                        'name'          => $name,
+                        'board'         => $board,
+                        'slot'          => $slot,
+                        'port'          => $port,
+                        'onu_index'     => $onuIndex,
+                        'onu_type'      => $onuType,
+                        'vlan_internet' => $vlanInternet,
+                        'vlan_acs'      => $vlanAcs ?: null,
+                        'tcont_profile' => $tcontProfile ?: null,
+                        'status'        => 'registered',
+                        'registered_at' => date('Y-m-d H:i:s'),
+                    ]);
+                } else {
+                    $insertedId = $onuModel->insert([
+                        'olt_id'        => $oltId,
+                        'sn'            => $sn,
+                        'name'          => $name,
+                        'board'         => $board,
+                        'slot'          => $slot,
+                        'port'          => $port,
+                        'onu_index'     => $onuIndex,
+                        'onu_type'      => $onuType,
+                        'vlan_internet' => $vlanInternet,
+                        'vlan_acs'      => $vlanAcs ?: null,
+                        'tcont_profile' => $tcontProfile ?: null,
+                        'status'        => 'registered',
+                        'registered_at' => date('Y-m-d H:i:s'),
+                    ]);
+                    $onuId = (int)$insertedId;
+                }
+
+                $cache->addOnu($oltId, $board, $slot, $port, $onuIndex, $sn, $onuType, $name, $result['state'] ?? 'working');
+                $logModel->log($this->userId, 'mass_register', 'success', "Mass register {$sn} ({$name})", $onuId, $oltId);
+
+                return $this->response->setJSON([
+                    'success' => true,
+                    'sn'      => $sn,
+                    'name'    => $name,
+                    'log'     => $result['log'] ?? [],
+                    'message' => "SUKSES: {$sn} ({$name}) terdaftar di {$board}/{$slot}/{$port}:{$onuIndex}",
+                ]);
+            } else {
+                $logMsg = implode(' | ', $result['log'] ?? ['Gagal']);
+                $logModel->log($this->userId, 'mass_register', 'failed', "Mass register gagal {$sn}: {$logMsg}", null, $oltId);
+                return $this->response->setJSON([
+                    'success' => false,
+                    'sn'      => $sn,
+                    'name'    => $name,
+                    'message' => "GAGAL: {$sn} → {$logMsg}",
+                    'log'     => $result['log'] ?? [],
+                ]);
+            }
+        } catch (\Exception $e) {
+            return $this->response->setJSON(['success' => false, 'sn' => $sn, 'message' => $e->getMessage()]);
+        }
+    }
 }

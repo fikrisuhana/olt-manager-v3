@@ -217,6 +217,8 @@ class OltController extends Controller
             $onuModel = new OnuModel();
             foreach ($registeredOnus as $ro) {
                 $sn = strtoupper($ro['sn']);
+                $onuIndex = (string)($ro['onu_index'] ?? $ro['index'] ?? '1');
+                $onuType  = $ro['onu_type'] ?? $ro['type'] ?? 'ALL-ONT';
                 $existing = $onuModel->getAnyByOltAndSn($id, $sn);
                 if (!$existing) {
                     $onuModel->insert([
@@ -226,8 +228,8 @@ class OltController extends Controller
                         'board'         => (string)$ro['board'],
                         'slot'          => (string)$ro['slot'],
                         'port'          => (string)$ro['port'],
-                        'onu_index'     => (string)$ro['index'],
-                        'onu_type'      => $ro['type'] ?? 'ALL-ONT',
+                        'onu_index'     => $onuIndex,
+                        'onu_type'      => $onuType,
                         'status'        => 'registered',
                         'registered_at' => date('Y-m-d H:i:s'),
                     ]);
@@ -237,7 +239,7 @@ class OltController extends Controller
                         'board'         => (string)$ro['board'],
                         'slot'          => (string)$ro['slot'],
                         'port'          => (string)$ro['port'],
-                        'onu_index'     => (string)$ro['index'],
+                        'onu_index'     => $onuIndex,
                         'registered_at' => date('Y-m-d H:i:s'),
                     ]);
                 }
