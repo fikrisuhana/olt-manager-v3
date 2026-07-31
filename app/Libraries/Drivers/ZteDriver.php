@@ -885,12 +885,30 @@ class ZteDriver implements OltDriverInterface
     public function addTcontProfile(string $name, int $maxBwKbps = 102400): array
     {
         $this->telnet->execute('conf t', $this->configPrompt, 5);
-        $out = $this->telnet->execute("gpon profile tcont {$name} type 4 max {$maxBwKbps}", $this->configPrompt, 5);
+
+        $cmds = [
+            "gpon profile tcont {$name} type 4 max {$maxBwKbps}",
+            "profile tcont {$name} type 4 max {$maxBwKbps}",
+            "tcont profile {$name} type 4 max {$maxBwKbps}",
+        ];
+
+        $lastOut = '';
+        $success = false;
+
+        foreach ($cmds as $cmd) {
+            $out = $this->telnet->execute($cmd, $this->configPrompt, 5);
+            if (!$this->isCliError($out)) {
+                $success = true;
+                break;
+            }
+            $lastOut = $out;
+        }
+
         $this->telnet->execute('exit', $this->rootPrompt, 3);
         $this->telnet->execute('write', $this->rootPrompt, 20);
 
-        if ($this->isCliError($out)) {
-            return ['success' => false, 'message' => "Gagal buat TCONT profile '{$name}': " . trim(preg_replace('/\s+/', ' ', $out))];
+        if (!$success) {
+            return ['success' => false, 'message' => "Gagal buat TCONT profile '{$name}': " . trim(preg_replace('/\s+/', ' ', $lastOut))];
         }
         return ['success' => true, 'message' => "TCONT profile '{$name}' berhasil dibuat di OLT."];
     }
@@ -898,12 +916,30 @@ class ZteDriver implements OltDriverInterface
     public function deleteTcontProfile(string $name): array
     {
         $this->telnet->execute('conf t', $this->configPrompt, 5);
-        $out = $this->telnet->execute("no gpon profile tcont {$name}", $this->configPrompt, 5);
+
+        $cmds = [
+            "no gpon profile tcont {$name}",
+            "no profile tcont {$name}",
+            "no tcont profile {$name}",
+        ];
+
+        $lastOut = '';
+        $success = false;
+
+        foreach ($cmds as $cmd) {
+            $out = $this->telnet->execute($cmd, $this->configPrompt, 5);
+            if (!$this->isCliError($out)) {
+                $success = true;
+                break;
+            }
+            $lastOut = $out;
+        }
+
         $this->telnet->execute('exit', $this->rootPrompt, 3);
         $this->telnet->execute('write', $this->rootPrompt, 20);
 
-        if ($this->isCliError($out)) {
-            return ['success' => false, 'message' => "Gagal hapus TCONT profile '{$name}': " . trim(preg_replace('/\s+/', ' ', $out))];
+        if (!$success) {
+            return ['success' => false, 'message' => "Gagal hapus TCONT profile '{$name}': " . trim(preg_replace('/\s+/', ' ', $lastOut))];
         }
         return ['success' => true, 'message' => "TCONT profile '{$name}' berhasil dihapus dari OLT."];
     }
@@ -911,12 +947,30 @@ class ZteDriver implements OltDriverInterface
     public function addTrafficProfile(string $name, int $sirKbps = 102400, int $pirKbps = 102400): array
     {
         $this->telnet->execute('conf t', $this->configPrompt, 5);
-        $out = $this->telnet->execute("gpon profile traffic {$name} sir {$sirKbps} pir {$pirKbps}", $this->configPrompt, 5);
+
+        $cmds = [
+            "gpon profile traffic {$name} sir {$sirKbps} pir {$pirKbps}",
+            "profile traffic {$name} sir {$sirKbps} pir {$pirKbps}",
+            "gpon profile traffic {$name} pir {$pirKbps}",
+        ];
+
+        $lastOut = '';
+        $success = false;
+
+        foreach ($cmds as $cmd) {
+            $out = $this->telnet->execute($cmd, $this->configPrompt, 5);
+            if (!$this->isCliError($out)) {
+                $success = true;
+                break;
+            }
+            $lastOut = $out;
+        }
+
         $this->telnet->execute('exit', $this->rootPrompt, 3);
         $this->telnet->execute('write', $this->rootPrompt, 20);
 
-        if ($this->isCliError($out)) {
-            return ['success' => false, 'message' => "Gagal buat Traffic profile '{$name}': " . trim(preg_replace('/\s+/', ' ', $out))];
+        if (!$success) {
+            return ['success' => false, 'message' => "Gagal buat Traffic profile '{$name}': " . trim(preg_replace('/\s+/', ' ', $lastOut))];
         }
         return ['success' => true, 'message' => "Traffic profile '{$name}' berhasil dibuat di OLT."];
     }
@@ -924,12 +978,29 @@ class ZteDriver implements OltDriverInterface
     public function deleteTrafficProfile(string $name): array
     {
         $this->telnet->execute('conf t', $this->configPrompt, 5);
-        $out = $this->telnet->execute("no gpon profile traffic {$name}", $this->configPrompt, 5);
+
+        $cmds = [
+            "no gpon profile traffic {$name}",
+            "no profile traffic {$name}",
+        ];
+
+        $lastOut = '';
+        $success = false;
+
+        foreach ($cmds as $cmd) {
+            $out = $this->telnet->execute($cmd, $this->configPrompt, 5);
+            if (!$this->isCliError($out)) {
+                $success = true;
+                break;
+            }
+            $lastOut = $out;
+        }
+
         $this->telnet->execute('exit', $this->rootPrompt, 3);
         $this->telnet->execute('write', $this->rootPrompt, 20);
 
-        if ($this->isCliError($out)) {
-            return ['success' => false, 'message' => "Gagal hapus Traffic profile '{$name}': " . trim(preg_replace('/\s+/', ' ', $out))];
+        if (!$success) {
+            return ['success' => false, 'message' => "Gagal hapus Traffic profile '{$name}': " . trim(preg_replace('/\s+/', ' ', $lastOut))];
         }
         return ['success' => true, 'message' => "Traffic profile '{$name}' berhasil dihapus dari OLT."];
     }
@@ -937,12 +1008,61 @@ class ZteDriver implements OltDriverInterface
     public function addVlanProfile(string $name, int $vlanId): array
     {
         $this->telnet->execute('conf t', $this->configPrompt, 5);
-        $out = $this->telnet->execute("onu profile vlan {$name} tag-mode tag cvlan {$vlanId} pri 7", $this->configPrompt, 5);
+
+        // Daftar variasi syntax CLI ZTE per versi firmware (v1.2, v2.1, C600, dll)
+        $singleCmds = [
+            "gpon onu profile vlan {$name} tag-mode tag cvlan {$vlanId} pri 7",
+            "gpon onu profile vlan {$name} tag-mode tag cvlan {$vlanId}",
+            "onu profile vlan {$name} tag-mode tag cvlan {$vlanId} pri 7",
+            "onu profile vlan {$name} tag-mode tag cvlan {$vlanId}",
+            "onu-profile vlan {$name} tag-mode tag cvlan {$vlanId}",
+        ];
+
+        $lastOut = '';
+        $success = false;
+
+        foreach ($singleCmds as $cmd) {
+            $out = $this->telnet->execute($cmd, $this->configPrompt, 5);
+            if (!$this->isCliError($out)) {
+                $success = true;
+                break;
+            }
+            $lastOut = $out;
+        }
+
+        // Jika single-line tidak didukung, coba mode block "onu-profile vlan <name>"
+        if (!$success) {
+            $out1 = $this->telnet->execute("onu-profile vlan {$name}", $this->configPrompt, 5);
+            if (!$this->isCliError($out1)) {
+                $out2 = $this->telnet->execute("tag-mode tag cvlan {$vlanId}", $this->configPrompt, 5);
+                $this->telnet->execute('exit', $this->configPrompt, 3);
+                if (!$this->isCliError($out2)) {
+                    $success = true;
+                } else {
+                    $lastOut = $out2;
+                }
+            } else {
+                $lastOut = $out1;
+            }
+        }
+
+        // Jika masih belum berhasil, coba via mode "gpon"
+        if (!$success) {
+            $this->telnet->execute('gpon', $this->configPrompt, 5);
+            $out1 = $this->telnet->execute("onu profile vlan {$name} tag-mode tag cvlan {$vlanId}", $this->configPrompt, 5);
+            $this->telnet->execute('exit', $this->configPrompt, 3);
+            if (!$this->isCliError($out1)) {
+                $success = true;
+            } else {
+                $lastOut = $out1;
+            }
+        }
+
         $this->telnet->execute('exit', $this->rootPrompt, 3);
         $this->telnet->execute('write', $this->rootPrompt, 20);
 
-        if ($this->isCliError($out)) {
-            return ['success' => false, 'message' => "Gagal buat VLAN profile '{$name}': " . trim(preg_replace('/\s+/', ' ', $out))];
+        if (!$success) {
+            return ['success' => false, 'message' => "Gagal buat VLAN profile '{$name}': " . trim(preg_replace('/\s+/', ' ', $lastOut))];
         }
         return ['success' => true, 'message' => "ONU VLAN profile '{$name}' (VLAN {$vlanId}) berhasil dibuat di OLT."];
     }
@@ -950,12 +1070,42 @@ class ZteDriver implements OltDriverInterface
     public function deleteVlanProfile(string $name): array
     {
         $this->telnet->execute('conf t', $this->configPrompt, 5);
-        $out = $this->telnet->execute("no onu profile vlan {$name}", $this->configPrompt, 5);
+
+        $cmds = [
+            "no gpon onu profile vlan {$name}",
+            "no onu profile vlan {$name}",
+            "no onu-profile vlan {$name}",
+        ];
+
+        $lastOut = '';
+        $success = false;
+
+        foreach ($cmds as $cmd) {
+            $out = $this->telnet->execute($cmd, $this->configPrompt, 5);
+            if (!$this->isCliError($out)) {
+                $success = true;
+                break;
+            }
+            $lastOut = $out;
+        }
+
+        // Fallback via mode gpon
+        if (!$success) {
+            $this->telnet->execute('gpon', $this->configPrompt, 5);
+            $out1 = $this->telnet->execute("no onu profile vlan {$name}", $this->configPrompt, 5);
+            $this->telnet->execute('exit', $this->configPrompt, 3);
+            if (!$this->isCliError($out1)) {
+                $success = true;
+            } else {
+                $lastOut = $out1;
+            }
+        }
+
         $this->telnet->execute('exit', $this->rootPrompt, 3);
         $this->telnet->execute('write', $this->rootPrompt, 20);
 
-        if ($this->isCliError($out)) {
-            return ['success' => false, 'message' => "Gagal hapus VLAN profile '{$name}': " . trim(preg_replace('/\s+/', ' ', $out))];
+        if (!$success) {
+            return ['success' => false, 'message' => "Gagal hapus VLAN profile '{$name}': " . trim(preg_replace('/\s+/', ' ', $lastOut))];
         }
         return ['success' => true, 'message' => "ONU VLAN profile '{$name}' berhasil dihapus dari OLT."];
     }
