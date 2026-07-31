@@ -1017,7 +1017,8 @@ function previewCli() {
         return;
     }
 
-    let cli = `! ══ ZTE C320 CLI Preview (${USE_ACS ? 'ACS TR-069 Mode' : 'Standalone / Pure OMCI Mode'}) ══\n`;
+    const isZteOnu = /^ZTE/i.test(sn);
+    let cli = `! ══ ZTE C320 CLI Preview (${isZteOnu ? 'ONU ZTE Native' : 'ONU Non-ZTE / Huawei Bridge'} | ${USE_ACS ? 'ACS Active' : 'Pure OMCI'}) ══\n`;
     cli += `conf t\n`;
     cli += `interface gpon-olt_${board}/${slot}/${port}\n`;
     cli += `  onu ${idx} type ${type} sn ${sn}\n`;
@@ -1039,15 +1040,27 @@ function previewCli() {
     }
     cli += `exit\n`;
     cli += `pon-onu-mng gpon-onu_${board}/${slot}/${port}:${idx}\n`;
-    if (vlanA && USE_ACS) {
-        cli += `  service acs gemport 1 vlan ${vlanA}\n`;
-        cli += `  ip-host 2 dhcp-enable enable\n`;
-    }
-    if (vlanI) {
-        cli += `  service ppp gemport 1 vlan ${vlanI}\n`;
-    }
-    if (pppoeU) {
-        cli += `  wan-ip 1 mode pppoe username ${pppoeU} password ${pppoeP || 'xxx'} host 1\n`;
+    if (isZteOnu) {
+        if (vlanA && USE_ACS) {
+            cli += `  service acs gemport 1 vlan ${vlanA}\n`;
+            cli += `  ip-host 2 dhcp-enable enable\n`;
+        }
+        if (vlanI) {
+            cli += `  service ppp gemport 1 vlan ${vlanI}\n`;
+        }
+        if (pppoeU) {
+            cli += `  wan-ip 1 mode pppoe username ${pppoeU} password ${pppoeP || 'xxx'} host 1\n`;
+        }
+        cli += `  vlan port veip_1 mode hybrid\n`;
+    } else {
+        if (vlanI) {
+            cli += `  service 1 gemport 1 vlan ${vlanI}\n`;
+        }
+        if (vlanA && USE_ACS) {
+            cli += `  service acs gemport 1 vlan ${vlanA}\n`;
+        }
+        cli += `  vlan port veip_1 mode transparent\n`;
+        cli += `  vlan port eth_0/1 mode transparent\n`;
     }
     cli += `exit\n`;
     cli += `write\n`;

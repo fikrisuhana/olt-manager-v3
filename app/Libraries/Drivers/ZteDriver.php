@@ -344,64 +344,90 @@ class ZteDriver implements OltDriverInterface
         if ($vlanInternet || $vlanAcs) {
             $pppoeUser = trim($params['pppoe_user'] ?? '');
             $pppoePass = trim($params['pppoe_pass'] ?? '');
+            $useAcs    = (bool)($params['use_acs'] ?? $this->config['use_acs'] ?? true);
+            $isZteOnu  = $this->isZteVendor($sn);
 
             $this->telnet->execute("pon-onu-mng gpon-onu_{$board}/{$slot}/{$port}:{$idx}", $this->mngPrompt, 5);
-            // ACS dulu baru internet — sesuai urutan service-port di gpon-onu interface
-            if ($vlanAcs) {
-                $out = $this->telnet->execute("service acs gemport 1 vlan {$vlanAcs}", $this->mngPrompt, 5);
-                if ($this->isCliError($out)) {
-                    $msg = "service acs gemport 1 vlan {$vlanAcs} → " . trim(preg_replace('/\s+/', ' ', substr($out, -140)));
-                    $log[] = "WARN pon-onu-mng: {$msg}";
-                    $warnings[] = $msg;
-                }
-            }
-            $isFiberhome = strncasecmp($sn, 'FHTT', 4) === 0;
-            if ($vlanInternet) {
-                // ZTE ONU dengan PPPoE → service ppp, Fiberhome → service int
-                $okInt = $this->applyServiceInternet($vlanInternet, $log, !$isFiberhome && !empty($pppoeUser));
-                if (!$okInt) {
-                    $warnings[] = "service internet (hsi/int/ppp) gemport 1 vlan {$vlanInternet} gagal";
-                }
-            }
-            $this->telnet->execute("vlan port veip_1 mode hybrid", $this->mngPrompt, 5);
 
-            // DHCP management IP + ACS URL agar ZTE ONU konek ke TR-069/GenieACS
-            // ip-host 2 = management channel (agar tidak bentrok dengan host 1 PPPoE)
-            if ($vlanAcs && !$isFiberhome) {
-                $this->applyWanIpDhcp(2, $log);
-                $acsUrl = trim($params['acs_url'] ?? $this->config['acs_url'] ?? '');
-                if ($acsUrl) {
-                    $this->applyTr069Mgmt($acsUrl, $log);
+            if ($isZteOnu) {
+                // ── ONU Merk ZTE: OMCI native ZTE (service acs/ppp, wan-ip pppoe) ──
+                if ($vlanAcs && $useAcs) {
+                    $out = $this->telnet->execute("service acs gemport 1 vlan {$vlanAcs}", $this->mngPrompt, 5);
+                    if ($this->isCliError($out)) {
+                        $msg = "service acs gemport 1 vlan {$vlanAcs} → " . trim(preg_replace('/\s+/', ' ', substr($out, -140)));
+                        $log[] = "WARN pon-onu-mng: {$msg}";
+                        $warnings[] = $msg;
+                    }
                 }
-            }
+                if ($vlanInternet) {
+                    $okInt = $this->applyServiceInternet($vlanInternet, $log, !empty($pppoeUser));
+                    if (!$okInt) {
+                        $warnings[] = "service internet gemport 1 vlan {$vlanInternet} gagal";
+                    }
+                }
+                $this->telnet->execute("vlan port veip_1 mode hybrid", $this->mngPrompt, 5);
 
-            // PPPoE WAN via pon-onu-mng — hanya ZTE ONU, Fiberhome pakai ACS/TR-069
-            if ($pppoeUser && !$isFiberhome) {
-                $cmdPppoe = $pppoeProfile
-                    ? "wan-ip 1 mode pppoe username {$pppoeUser} password {$pppoePass} vlan-profile {$pppoeProfile} host 1"
-                    : "wan-ip 1 mode pppoe username {$pppoeUser} password {$pppoePass} host 1";
-                $out = $this->telnet->execute($cmdPppoe, $this->mngPrompt, 5);
-
-                // Fallback jika vlan-profile ditolak atau tidak terdaftar di OLT
-                if ($pppoeProfile && (stripos($out, 'Error') !== false || stripos($out, 'Invalid') !== false || stripos($out, 'does not exist') !== false)) {
-                    $log[] = "WARN: wan-ip dengan vlan-profile '{$pppoeProfile}' gagal, mencoba tanpa vlan-profile...";
-                    $out = $this->telnet->execute(
-                        "wan-ip 1 mode pppoe username {$pppoeUser} password {$pppoePass} host 1",
-                        $this->mngPrompt, 5
-                    );
+                if ($vlanAcs && $useAcs) {
+                    $this->applyWanIpDhcp(2, $log);
+                    $acsUrl = trim($params['acs_url'] ?? $this->config['acs_url'] ?? '');
+                    if ($acsUrl) {
+                        $this->applyTr069Mgmt($acsUrl, $log);
+                    }
                 }
 
-                if (stripos($out, 'Error') !== false || stripos($out, 'Invalid') !== false) {
-                    $log[] = "WARN pon-onu-mng: wan-ip pppoe → " . trim(substr($out, -120));
+                if ($pppoeUser) {
+                    $cmdPppoe = $pppoeProfile
+                        ? "wan-ip 1 mode pppoe username {$pppoeUser} password {$pppoePass} vlan-profile {$pppoeProfile} host 1"
+                        : "wan-ip 1 mode pppoe username {$pppoeUser} password {$pppoePass} host 1";
+                    $out = $this->telnet->execute($cmdPppoe, $this->mngPrompt, 5);
+
+                    if ($pppoeProfile && (stripos($out, 'Error') !== false || stripos($out, 'Invalid') !== false || stripos($out, 'does not exist') !== false)) {
+                        $log[] = "WARN: wan-ip dengan vlan-profile '{$pppoeProfile}' gagal, mencoba tanpa vlan-profile...";
+                        $out = $this->telnet->execute(
+                            "wan-ip 1 mode pppoe username {$pppoeUser} password {$pppoePass} host 1",
+                            $this->mngPrompt, 5
+                        );
+                    }
+
+                    if (stripos($out, 'Error') !== false || stripos($out, 'Invalid') !== false) {
+                        $log[] = "WARN pon-onu-mng: wan-ip pppoe → " . trim(substr($out, -120));
+                    } else {
+                        $this->telnet->execute("wan-ip 1 ping-response enable traceroute-response enable", $this->mngPrompt, 5);
+                        $this->telnet->execute("security-mgmt 212 state enable mode forward protocol web", $this->mngPrompt, 5);
+                        $log[] = "pon-onu-mng PPPoE OK: user={$pppoeUser}";
+                    }
+                }
+            } else {
+                // ── ONU Merk Non-ZTE (Huawei, Fiberhome, Nokia, China Generic, dll) ──
+                // Kunci utama dial: service 1 gemport 1 vlan X + vlan port veip_1 transparent + eth_0/1 transparent
+                if ($vlanInternet) {
+                    $out1 = $this->telnet->execute("service 1 gemport 1 vlan {$vlanInternet}", $this->mngPrompt, 5);
+                    if ($this->isCliError($out1)) {
+                        $this->applyServiceInternet($vlanInternet, $log, false);
+                    } else {
+                        $log[] = "service 1 gemport 1 vlan {$vlanInternet} OK (Non-ZTE / Huawei ONU)";
+                    }
+                }
+                if ($vlanAcs && $useAcs) {
+                    $this->telnet->execute("service acs gemport 1 vlan {$vlanAcs}", $this->mngPrompt, 5);
+                }
+
+                $o1 = $this->telnet->execute("vlan port veip_1 mode transparent", $this->mngPrompt, 5);
+                if ($this->isCliError($o1)) {
+                    $this->telnet->execute("vlan port veip_1 mode hybrid", $this->mngPrompt, 5);
+                    $log[] = "vlan port veip_1 mode hybrid (fallback)";
                 } else {
-                    $this->telnet->execute("wan-ip 1 ping-response enable traceroute-response enable", $this->mngPrompt, 5);
-                    $this->telnet->execute("security-mgmt 212 state enable mode forward protocol web", $this->mngPrompt, 5);
-                    $log[] = "pon-onu-mng PPPoE OK: user={$pppoeUser}";
+                    $log[] = "vlan port veip_1 mode transparent OK";
+                }
+
+                $o2 = $this->telnet->execute("vlan port eth_0/1 mode transparent", $this->mngPrompt, 5);
+                if (!$this->isCliError($o2)) {
+                    $log[] = "vlan port eth_0/1 mode transparent OK";
                 }
             }
 
             $this->telnet->execute('exit', $this->configPrompt, 3);
-            $log[] = "pon-onu-mng: hsi={$vlanInternet} acs={$vlanAcs} veip_1 hybrid";
+            $log[] = "pon-onu-mng: hsi={$vlanInternet} acs={$vlanAcs} (vendor=" . ($isZteOnu ? 'ZTE' : 'Non-ZTE/Huawei') . ")";
         }
 
         // Keluar config mode dan simpan
