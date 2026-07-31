@@ -257,9 +257,15 @@ class OnuController extends Controller
                 'watch_acs'    => !empty($pppoeUser) && $pppoeViaAcs,
                 'push_via_acs' => !empty($pppoeUser) && $pppoeViaAcs,
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $logModel->log($this->userId, 'register', 'failed', $e->getMessage(), null, $oltId);
-            return $this->response->setJSON(['success' => false, 'message' => $e->getMessage()]);
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'log'     => [
+                    "❌ REGISTRASI GAGAL: " . $e->getMessage()
+                ]
+            ]);
         }
     }
 

@@ -233,7 +233,12 @@ class ZteDriver implements OltDriverInterface
         // Parameter terstruktur
         $vlanInternet = (int)($params['vlan_internet'] ?? 0);
         $vlanAcs      = (int)($params['vlan_acs'] ?? 0);
-        $tcont        = trim($params['tcont_profile'] ?? '');
+        $tcont = trim($params['tcont_profile'] ?? '');
+        if (!$tcont) {
+            $tcontList = array_values(array_filter(array_map('trim', explode("\n", $this->config['tcont_profiles'] ?? ''))));
+            $tcont = $tcontList[0] ?? 'default';
+            $log[] = "TCONT profile tidak dipilih — menggunakan default: '{$tcont}'";
+        }
 
         // Script tambahan dari template (opsional)
         $ifExtra = trim($params['gpon_onu_script'] ?? '');
@@ -243,15 +248,14 @@ class ZteDriver implements OltDriverInterface
         $ifCmds = [];
         $ifCmds[] = 'sn-bind enable sn';
         $trafficProfile = trim($params['traffic_profile'] ?? '');
-        if ($tcont) {
-            $ifCmds[] = "tcont 1 name tcont profile {$tcont}";
-            $ifCmds[] = "gemport 1 name gemport tcont 1";
-            if ($trafficProfile) {
-                $ifCmds[] = "gemport 1 traffic-limit upstream {$trafficProfile} downstream {$trafficProfile}";
-                $log[] = "Traffic limit: {$trafficProfile}";
-            }
-            $log[] = "TCONT profile: {$tcont}";
+
+        $ifCmds[] = "tcont 1 name tcont profile {$tcont}";
+        $ifCmds[] = "gemport 1 name gemport tcont 1";
+        if ($trafficProfile) {
+            $ifCmds[] = "gemport 1 traffic-limit upstream {$trafficProfile} downstream {$trafficProfile}";
+            $log[] = "Traffic limit: {$trafficProfile}";
         }
+        $log[] = "TCONT profile: {$tcont}";
         // ACS dulu (sp1), internet kedua (sp2) — sesuai konvensi OLT tgp.
         // PENTING: satu ONU tak boleh punya 2 service-port dgn pasangan (user-vlan/vlan)
         // identik → ZTE balas "%Code 66669: port service para conflicted". Pada deployment
