@@ -45,6 +45,8 @@ $routes->group('', ['filter' => 'auth'], static function ($routes) {
     $routes->post('olts/(:num)/import-cache', 'OltController::importFromCache/$1'); // AJAX — import cache ke DB
     $routes->post('olts/(:num)/sync-profiles', 'OltController::syncProfiles/$1'); // AJAX — sync semua profile OLT
     $routes->post('olts/(:num)/save-profiles', 'OltController::saveProfiles/$1'); // AJAX — simpan manual profiles
+    $routes->post('olts/(:num)/add-profile',   'OltController::addProfile/$1');   // AJAX — push buat profile di OLT
+    $routes->post('olts/(:num)/delete-profile','OltController::deleteProfile/$1');// AJAX — push hapus profile di OLT
     $routes->get('olts/(:num)/acs-status',   'OltController::acsStatus/$1');     // AJAX
     $routes->get('olts/(:num)/cache-data',   'OltController::cacheData/$1');     // AJAX
 

@@ -226,37 +226,121 @@
                 <div class="tab-content" id="profileTabContents">
                     <!-- Tab TCONT -->
                     <div class="tab-pane fade show active" id="tabTcont">
-                        <label class="form-label small fw-bold">Daftar TCONT Profiles (Satu per baris)</label>
-                        <textarea id="txtTcontProfiles" class="form-control font-monospace" rows="6"
+                        <!-- Form Tambah ke OLT -->
+                        <div class="border rounded-3 p-3 mb-3 bg-light">
+                            <div class="small fw-bold text-dark mb-2"><i class="bi bi-plus-circle text-primary me-1"></i> Tambah TCONT Profile Baru ke OLT (CLI)</div>
+                            <div class="row g-2 align-items-end">
+                                <div class="col-5">
+                                    <label class="form-label small text-secondary mb-1">Nama Profile</label>
+                                    <input type="text" id="newTcontName" class="form-control form-control-sm" placeholder="500M">
+                                </div>
+                                <div class="col-4">
+                                    <label class="form-label small text-secondary mb-1">Max BW (Kbps)</label>
+                                    <input type="number" id="newTcontBw" class="form-control form-control-sm" placeholder="512000" value="512000">
+                                </div>
+                                <div class="col-3">
+                                    <button class="btn btn-google-primary btn-sm w-100" onclick="pushAddProfile('tcont')">
+                                        <i class="bi bi-cloud-arrow-up me-1"></i> Push OLT
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <label class="form-label small fw-bold">Daftar TCONT Profiles di Database/OLT (Satu per baris)</label>
+                        <textarea id="txtTcontProfiles" class="form-control font-monospace" rows="5"
                                   placeholder="250M&#10;100M&#10;50M"><?= esc($olt['tcont_profiles'] ?? '') ?></textarea>
-                        <div class="form-text">Contoh profil DBA di OLT: <code>250M</code>, <code>100M</code>, <code>1G</code></div>
+                        <div class="d-flex justify-content-between align-items-center mt-2">
+                            <div class="form-text">Profil DBA di OLT. Hapus profile dari OLT via CLI:</div>
+                            <div class="d-flex gap-2 align-items-center">
+                                <input type="text" id="delTcontName" class="form-control form-control-sm" style="width:140px" placeholder="Nama Profile">
+                                <button class="btn btn-google-secondary btn-sm text-danger" onclick="pushDeleteProfile('tcont')">
+                                    <i class="bi bi-trash me-1"></i> Hapus dari OLT
+                                </button>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Tab Traffic Limit -->
                     <div class="tab-pane fade" id="tabTraffic">
-                        <label class="form-label small fw-bold">Daftar Traffic Limit Profiles (Satu per baris)</label>
-                        <textarea id="txtTrafficProfiles" class="form-control font-monospace" rows="6"
+                        <!-- Form Tambah ke OLT -->
+                        <div class="border rounded-3 p-3 mb-3 bg-light">
+                            <div class="small fw-bold text-dark mb-2"><i class="bi bi-plus-circle text-primary me-1"></i> Tambah Traffic Limit Profile Baru ke OLT (CLI)</div>
+                            <div class="row g-2 align-items-end">
+                                <div class="col-5">
+                                    <label class="form-label small text-secondary mb-1">Nama Profile</label>
+                                    <input type="text" id="newTrafficName" class="form-control form-control-sm" placeholder="500M">
+                                </div>
+                                <div class="col-4">
+                                    <label class="form-label small text-secondary mb-1">Speed SIR/PIR (Kbps)</label>
+                                    <input type="number" id="newTrafficSpeed" class="form-control form-control-sm" placeholder="512000" value="512000">
+                                </div>
+                                <div class="col-3">
+                                    <button class="btn btn-google-primary btn-sm w-100" onclick="pushAddProfile('traffic')">
+                                        <i class="bi bi-cloud-arrow-up me-1"></i> Push OLT
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <label class="form-label small fw-bold">Daftar Traffic Limit Profiles di Database/OLT (Satu per baris)</label>
+                        <textarea id="txtTrafficProfiles" class="form-control font-monospace" rows="5"
                                   placeholder="50M&#10;100M&#10;250M"><?= esc($olt['traffic_profiles'] ?? '') ?></textarea>
-                        <div class="form-text">Profil batas kecepatan Upstream/Downstream gemport.</div>
+                        <div class="d-flex justify-content-between align-items-center mt-2">
+                            <div class="form-text">Batas kecepatan Upstream/Downstream gemport.</div>
+                            <div class="d-flex gap-2 align-items-center">
+                                <input type="text" id="delTrafficName" class="form-control form-control-sm" style="width:140px" placeholder="Nama Profile">
+                                <button class="btn btn-google-secondary btn-sm text-danger" onclick="pushDeleteProfile('traffic')">
+                                    <i class="bi bi-trash me-1"></i> Hapus dari OLT
+                                </button>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Tab VLAN Profile -->
                     <div class="tab-pane fade" id="tabVlan">
-                        <label class="form-label small fw-bold">Daftar ONU VLAN Profiles (Format: <code>nama_profile — VLAN ID</code> atau <code>nama_profile:VLAN</code>)</label>
-                        <textarea id="txtVlanProfiles" class="form-control font-monospace" rows="6"
+                        <!-- Form Tambah ke OLT -->
+                        <div class="border rounded-3 p-3 mb-3 bg-light">
+                            <div class="small fw-bold text-dark mb-2"><i class="bi bi-plus-circle text-primary me-1"></i> Tambah ONU VLAN Profile Baru ke OLT (CLI)</div>
+                            <div class="row g-2 align-items-end">
+                                <div class="col-5">
+                                    <label class="form-label small text-secondary mb-1">Nama Profile</label>
+                                    <input type="text" id="newVlanName" class="form-control form-control-sm" placeholder="ppp-vlan150">
+                                </div>
+                                <div class="col-4">
+                                    <label class="form-label small text-secondary mb-1">VLAN ID</label>
+                                    <input type="number" id="newVlanId" class="form-control form-control-sm" placeholder="150" value="150">
+                                </div>
+                                <div class="col-3">
+                                    <button class="btn btn-google-primary btn-sm w-100" onclick="pushAddProfile('vlan')">
+                                        <i class="bi bi-cloud-arrow-up me-1"></i> Push OLT
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <label class="form-label small fw-bold">Daftar ONU VLAN Profiles (Format: <code>nama_profile — VLAN ID</code>)</label>
+                        <textarea id="txtVlanProfiles" class="form-control font-monospace" rows="5"
                                   placeholder="ppp-155 — VLAN 155&#10;ppp-160 — VLAN 160&#10;PPPOE — VLAN 100"><?= esc($olt['vlan_profiles'] ?? '') ?></textarea>
-                        <div class="form-text">Profil VLAN yang dipakai saat registrasi PPPoE (mis. <code>ppp-155 — VLAN 155</code>).</div>
+                        <div class="d-flex justify-content-between align-items-center mt-2">
+                            <div class="form-text">Profil VLAN yang dipakai saat registrasi PPPoE (mis. <code>ppp-155 — VLAN 155</code>).</div>
+                            <div class="d-flex gap-2 align-items-center">
+                                <input type="text" id="delVlanName" class="form-control form-control-sm" style="width:140px" placeholder="Nama Profile">
+                                <button class="btn btn-google-secondary btn-sm text-danger" onclick="pushDeleteProfile('vlan')">
+                                    <i class="bi bi-trash me-1"></i> Hapus dari OLT
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
                 <div id="profileLog" class="d-none mt-3">
-                    <div class="alert alert-info py-2 px-3 small" id="profileLogMsg"></div>
+                    <div class="alert alert-info py-2 px-3 small mb-0" id="profileLogMsg"></div>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-google-secondary" data-bs-dismiss="modal">Batal</button>
+                <button type="button" class="btn btn-google-secondary" data-bs-dismiss="modal">Tutup</button>
                 <button type="button" class="btn btn-google-primary" id="btnSaveProfiles" onclick="saveOltProfiles()">
-                    <i class="bi bi-check-circle me-1"></i> Simpan Profil
+                    <i class="bi bi-check-circle me-1"></i> Simpan Teks Manual
                 </button>
             </div>
         </div>
@@ -665,8 +749,98 @@ function saveOltProfiles() {
         })
         .catch(e => {
             btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-check-circle me-1"></i> Simpan Profil';
+            btn.innerHTML = '<i class="bi bi-check-circle me-1"></i> Simpan Teks Manual';
             log.classList.remove('d-none');
+            msg.className = 'alert alert-danger py-2 px-3 small';
+            msg.textContent = 'Error: ' + e.message;
+        });
+}
+
+function pushAddProfile(type) {
+    let name = '', param = 0;
+    if (type === 'tcont') {
+        name  = document.getElementById('newTcontName').value.trim();
+        param = parseInt(document.getElementById('newTcontBw').value) || 512000;
+    } else if (type === 'traffic') {
+        name  = document.getElementById('newTrafficName').value.trim();
+        param = parseInt(document.getElementById('newTrafficSpeed').value) || 512000;
+    } else if (type === 'vlan') {
+        name  = document.getElementById('newVlanName').value.trim();
+        param = parseInt(document.getElementById('newVlanId').value) || 150;
+    }
+
+    if (!name) {
+        alert('Nama profile wajib diisi!');
+        return;
+    }
+
+    const log = document.getElementById('profileLog');
+    const msg = document.getElementById('profileLogMsg');
+    log.classList.remove('d-none');
+    msg.className = 'alert alert-info py-2 px-3 small';
+    msg.textContent = `Mengirim perintah CLI ke OLT untuk membuat profile '${name}'...`;
+
+    const fd = new FormData();
+    fd.append('type', type);
+    fd.append('name', name);
+    fd.append('param', param);
+    fd.append('<?= csrf_token() ?>', '<?= csrf_hash() ?>');
+
+    fetch(`/olts/${OLT_ID}/add-profile`, { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                msg.className = 'alert alert-success py-2 px-3 small';
+                msg.textContent = data.message;
+                syncProfilesFromOlt();
+            } else {
+                msg.className = 'alert alert-danger py-2 px-3 small';
+                msg.textContent = 'Gagal: ' + data.message;
+            }
+        })
+        .catch(e => {
+            msg.className = 'alert alert-danger py-2 px-3 small';
+            msg.textContent = 'Error: ' + e.message;
+        });
+}
+
+function pushDeleteProfile(type) {
+    let name = '';
+    if (type === 'tcont')   name = document.getElementById('delTcontName').value.trim();
+    if (type === 'traffic') name = document.getElementById('delTrafficName').value.trim();
+    if (type === 'vlan')    name = document.getElementById('delVlanName').value.trim();
+
+    if (!name) {
+        alert('Masukkan nama profile yang ingin dihapus dari OLT!');
+        return;
+    }
+
+    if (!confirm(`Hapus profile '${name}' dari OLT?\nPerintah 'no ...' akan dikirim langsung ke OLT via Telnet.`)) return;
+
+    const log = document.getElementById('profileLog');
+    const msg = document.getElementById('profileLogMsg');
+    log.classList.remove('d-none');
+    msg.className = 'alert alert-info py-2 px-3 small';
+    msg.textContent = `Mengirim perintah CLI ke OLT untuk menghapus profile '${name}'...`;
+
+    const fd = new FormData();
+    fd.append('type', type);
+    fd.append('name', name);
+    fd.append('<?= csrf_token() ?>', '<?= csrf_hash() ?>');
+
+    fetch(`/olts/${OLT_ID}/delete-profile`, { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                msg.className = 'alert alert-success py-2 px-3 small';
+                msg.textContent = data.message;
+                syncProfilesFromOlt();
+            } else {
+                msg.className = 'alert alert-danger py-2 px-3 small';
+                msg.textContent = 'Gagal: ' + data.message;
+            }
+        })
+        .catch(e => {
             msg.className = 'alert alert-danger py-2 px-3 small';
             msg.textContent = 'Error: ' + e.message;
         });

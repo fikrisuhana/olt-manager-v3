@@ -44,6 +44,21 @@ interface OltDriverInterface
     /** Ambil daftar ONU vlan-profile dari OLT: [['name'=>'PPPOE','vlan'=>155], ...] */
     public function getVlanProfiles(): array;
 
+    /** Tambah TCONT profile di OLT */
+    public function addTcontProfile(string $name, int $maxBwKbps = 102400): array;
+    /** Hapus TCONT profile dari OLT */
+    public function deleteTcontProfile(string $name): array;
+
+    /** Tambah Traffic Limit profile di OLT */
+    public function addTrafficProfile(string $name, int $sirKbps = 102400, int $pirKbps = 102400): array;
+    /** Hapus Traffic Limit profile dari OLT */
+    public function deleteTrafficProfile(string $name): array;
+
+    /** Tambah ONU VLAN profile di OLT */
+    public function addVlanProfile(string $name, int $vlanId): array;
+    /** Hapus ONU VLAN profile dari OLT */
+    public function deleteVlanProfile(string $name): array;
+
     /**
      * Ambil konfigurasi aktif satu ONU (VLAN, TCONT, traffic-limit).
      * Return: ['tcont_profile'=>'', 'traffic_profile'=>'', 'vlan_internet'=>0, 'vlan_acs'=>0, 'service_ports'=>[sp=>vlan]]

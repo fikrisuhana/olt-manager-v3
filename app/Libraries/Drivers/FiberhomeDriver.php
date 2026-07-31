@@ -451,6 +451,13 @@ class FiberhomeDriver implements OltDriverInterface
     public function getTrafficProfiles(): array { return []; }
     public function getVlanProfiles(): array { return []; }
 
+    public function addTcontProfile(string $name, int $maxBwKbps = 102400): array { return ['success' => false, 'message' => 'Fiberhome profile CLI creation via app belum didukung.']; }
+    public function deleteTcontProfile(string $name): array { return ['success' => false, 'message' => 'Fiberhome profile CLI deletion via app belum didukung.']; }
+    public function addTrafficProfile(string $name, int $sirKbps = 102400, int $pirKbps = 102400): array { return ['success' => false, 'message' => 'Fiberhome profile CLI creation via app belum didukung.']; }
+    public function deleteTrafficProfile(string $name): array { return ['success' => false, 'message' => 'Fiberhome profile CLI deletion via app belum didukung.']; }
+    public function addVlanProfile(string $name, int $vlanId): array { return ['success' => false, 'message' => 'Fiberhome profile CLI creation via app belum didukung.']; }
+    public function deleteVlanProfile(string $name): array { return ['success' => false, 'message' => 'Fiberhome profile CLI deletion via app belum didukung.']; }
+
     // ── helpers ───────────────────────────────────────────────────────
     private function flat(string $s): string
     {

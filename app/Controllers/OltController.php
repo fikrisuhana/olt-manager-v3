@@ -708,6 +708,129 @@ class OltController extends Controller
         ]);
     }
 
+    /**
+     * AJAX: Tambah profil baru langsung ke OLT via Telnet & simpan di DB.
+     * POST /olts/{id}/add-profile
+     */
+    public function addProfile(int $id)
+    {
+        $this->ensureVlanProfilesColumn();
+        $this->response->setContentType('application/json');
+        $oltModel = new OltModel();
+        $olt = $oltModel->getByUserAndId($this->userId, $id);
+        if (!$olt) {
+            return $this->response->setJSON(['success' => false, 'message' => 'OLT tidak ditemukan.']);
+        }
+
+        $type  = trim($this->request->getPost('type') ?? '');
+        $name  = trim($this->request->getPost('name') ?? '');
+        $param = (int)($this->request->getPost('param') ?? 0);
+
+        if (empty($name)) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Nama profil wajib diisi.']);
+        }
+
+        try {
+            $driver = OltDriverFactory::make($olt);
+            $driver->connect();
+
+            $res = ['success' => false, 'message' => 'Tipe profil tidak valid.'];
+            if ($type === 'tcont') {
+                $maxBw = $param > 0 ? $param : 102400; // default 100M in kbps
+                $res = $driver->addTcontProfile($name, $maxBw);
+                if ($res['success']) {
+                    $existing = array_filter(array_map('trim', explode("\n", $olt['tcont_profiles'] ?? '')));
+                    if (!in_array($name, $existing)) {
+                        $existing[] = $name;
+                        $oltModel->update($id, ['tcont_profiles' => implode("\n", $existing)]);
+                    }
+                }
+            } elseif ($type === 'traffic') {
+                $speed = $param > 0 ? $param : 102400; // default 100M in kbps
+                $res = $driver->addTrafficProfile($name, $speed, $speed);
+                if ($res['success']) {
+                    $existing = array_filter(array_map('trim', explode("\n", $olt['traffic_profiles'] ?? '')));
+                    if (!in_array($name, $existing)) {
+                        $existing[] = $name;
+                        $oltModel->update($id, ['traffic_profiles' => implode("\n", $existing)]);
+                    }
+                }
+            } elseif ($type === 'vlan') {
+                $vlanId = $param > 0 ? $param : 100;
+                $res = $driver->addVlanProfile($name, $vlanId);
+                if ($res['success']) {
+                    $existing = array_filter(array_map('trim', explode("\n", $olt['vlan_profiles'] ?? '')));
+                    $newItem  = "{$name} — VLAN {$vlanId}";
+                    if (!in_array($newItem, $existing)) {
+                        $existing[] = $newItem;
+                        $oltModel->update($id, ['vlan_profiles' => implode("\n", $existing)]);
+                    }
+                }
+            }
+
+            $driver->disconnect();
+            return $this->response->setJSON($res);
+        } catch (\Exception $e) {
+            return $this->response->setJSON(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * AJAX: Hapus profil dari OLT via Telnet & hapus dari DB.
+     * POST /olts/{id}/delete-profile
+     */
+    public function deleteProfile(int $id)
+    {
+        $this->ensureVlanProfilesColumn();
+        $this->response->setContentType('application/json');
+        $oltModel = new OltModel();
+        $olt = $oltModel->getByUserAndId($this->userId, $id);
+        if (!$olt) {
+            return $this->response->setJSON(['success' => false, 'message' => 'OLT tidak ditemukan.']);
+        }
+
+        $type = trim($this->request->getPost('type') ?? '');
+        $name = trim($this->request->getPost('name') ?? '');
+
+        if (empty($name)) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Nama profil wajib diisi.']);
+        }
+
+        try {
+            $driver = OltDriverFactory::make($olt);
+            $driver->connect();
+
+            $res = ['success' => false, 'message' => 'Tipe profil tidak valid.'];
+            if ($type === 'tcont') {
+                $res = $driver->deleteTcontProfile($name);
+                if ($res['success']) {
+                    $existing = array_filter(array_map('trim', explode("\n", $olt['tcont_profiles'] ?? '')));
+                    $existing = array_values(array_filter($existing, fn($p) => $p !== $name));
+                    $oltModel->update($id, ['tcont_profiles' => implode("\n", $existing)]);
+                }
+            } elseif ($type === 'traffic') {
+                $res = $driver->deleteTrafficProfile($name);
+                if ($res['success']) {
+                    $existing = array_filter(array_map('trim', explode("\n", $olt['traffic_profiles'] ?? '')));
+                    $existing = array_values(array_filter($existing, fn($p) => $p !== $name));
+                    $oltModel->update($id, ['traffic_profiles' => implode("\n", $existing)]);
+                }
+            } elseif ($type === 'vlan') {
+                $res = $driver->deleteVlanProfile($name);
+                if ($res['success']) {
+                    $existing = array_filter(array_map('trim', explode("\n", $olt['vlan_profiles'] ?? '')));
+                    $existing = array_values(array_filter($existing, fn($p) => !str_starts_with($p, $name)));
+                    $oltModel->update($id, ['vlan_profiles' => implode("\n", $existing)]);
+                }
+            }
+
+            $driver->disconnect();
+            return $this->response->setJSON($res);
+        } catch (\Exception $e) {
+            return $this->response->setJSON(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
     private function getFormData(): array
     {
         return [
