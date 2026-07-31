@@ -244,9 +244,9 @@ function startScan() {
             btn.innerHTML = '<i class="bi bi-search me-1"></i> 2. Scan Semua ONU Unconfigured';
 
             if (!data.success) {
-                const errMsg = data.message || 'Gagal koneksi Telnet ke OLT atau respons tidak valid.';
-                statusText.innerHTML = `<span class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i>Error: ${errMsg}</span>`;
-                tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger py-4"><i class="bi bi-exclamation-octagon fs-1 d-block mb-2"></i>Gagal scan: ${errMsg}</td></tr>`;
+                const errMsg = data.message ? data.message : 'Respons dari OLT tidak valid atau gagal.';
+                statusText.innerHTML = `<span class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i>${errMsg}</span>`;
+                tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger py-4"><i class="bi bi-exclamation-octagon fs-1 d-block mb-2 text-danger"></i>Gagal Scan: <strong>${errMsg}</strong></td></tr>`;
                 return;
             }
 
@@ -259,9 +259,9 @@ function startScan() {
         .catch(e => {
             btn.disabled = false;
             btn.innerHTML = '<i class="bi bi-search me-1"></i> 2. Scan Semua ONU Unconfigured';
-            const errMsg = e.message || 'Koneksi ke server terputus.';
+            const errMsg = e.message ? e.message : 'Koneksi ke server terputus.';
             statusText.innerHTML = `<span class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i>Error: ${errMsg}</span>`;
-            tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger py-4"><i class="bi bi-exclamation-octagon fs-1 d-block mb-2"></i>Gagal scan: ${errMsg}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger py-4"><i class="bi bi-exclamation-octagon fs-1 d-block mb-2 text-danger"></i>Gagal Scan: <strong>${errMsg}</strong></td></tr>`;
         });
 }
 

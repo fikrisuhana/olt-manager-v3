@@ -133,7 +133,12 @@ class MigrationController extends BaseController
                 'cache_updated_at' => $cacheData['updated_at'],
             ]);
         } catch (\Throwable $e) {
-            return $this->response->setJSON(['success' => false, 'message' => $e->getMessage()]);
+            $msg = $e->getMessage() ?: get_class($e);
+            log_message('error', "Migration scan error OLT {$oltId}: {$msg}");
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => "Telnet OLT Error: " . $msg
+            ]);
         }
     }
 
