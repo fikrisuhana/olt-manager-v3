@@ -67,9 +67,9 @@
                 <div class="col-md-3">
                     <label class="form-label small fw-bold">Skema Nama Pelanggan</label>
                     <select id="nameSchemeSelect" class="form-select form-select-sm shadow-none" onchange="toggleCustomPrefix()">
-                        <option value="scheme_1">Pelanggan_{BOARD}-{SLOT}-{PORT}_{INDEX} (Pelanggan_1-1-1_01)</option>
+                        <option value="scheme_1">Pelanggan_{BOARD}_{SLOT}_{PORT}_{INDEX} (Pelanggan_1_1_1_01)</option>
                         <option value="scheme_2">Pelanggan_001 sekuensial (Pelanggan_001, Pelanggan_002)</option>
-                        <option value="scheme_3">Custom Prefix (Misal: User-HW_01)</option>
+                        <option value="scheme_3">Custom Prefix (Misal: User_HW_01)</option>
                     </select>
                 </div>
 

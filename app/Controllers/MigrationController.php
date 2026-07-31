@@ -100,12 +100,13 @@ class MigrationController extends BaseController
                     $vendor = 'Nokia';
                 }
 
-                // Auto-generate name berdasarkan skema terpilih
+                // Auto-generate name berdasarkan skema terpilih (hanya karakter A-Z, 0-9, dan underscore _)
+                $cleanPrefix = preg_replace('/[^A-Za-z0-9_]/', '_', $prefix ?: 'Migrasi');
                 $autoName = match ($scheme) {
-                    'scheme_1' => sprintf('Pelanggan_%s-%s-%s_%02d', $board, $slot, $port, $index),
+                    'scheme_1' => sprintf('Pelanggan_%s_%s_%s_%02d', $board, $slot, $port, $index),
                     'scheme_2' => sprintf('Pelanggan_%03d', $counter),
-                    'scheme_3' => sprintf('%s-%s_%02d', $prefix ?: 'Migrasi', strtoupper(substr($vendor, 0, 2)), $counter),
-                    default    => sprintf('Pelanggan_%s-%s-%s_%02d', $board, $slot, $port, $index),
+                    'scheme_3' => sprintf('%s_%s_%02d', $cleanPrefix, strtoupper(substr($vendor, 0, 2)), $counter),
+                    default    => sprintf('Pelanggan_%s_%s_%s_%02d', $board, $slot, $port, $index),
                 };
 
                 $existing = $onuModel->getByOltAndSn($oltId, $sn);
@@ -178,7 +179,10 @@ class MigrationController extends BaseController
 
             foreach ($items as $idx => $item) {
                 $sn       = strtoupper(trim($item['sn'] ?? ''));
-                $name     = trim($item['name'] ?? $sn);
+                $rawName  = trim($item['name'] ?? $sn);
+                $name     = preg_replace('/[^A-Za-z0-9_]/', '_', $rawName);
+                $name     = preg_replace('/_+/', '_', trim($name, '_'));
+                if (empty($name)) $name = $sn;
                 $board    = (string)($item['board'] ?? '1');
                 $slot     = (string)($item['slot'] ?? '1');
                 $port     = (string)($item['port'] ?? '1');
