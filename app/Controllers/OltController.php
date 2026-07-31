@@ -658,15 +658,39 @@ class OltController extends Controller
         if (!$olt) {
             return $this->response->setJSON(['success' => false, 'message' => 'OLT tidak ditemukan.']);
         }
+
+        $profiles = [];
         try {
             $driver = OltDriverFactory::make($olt);
             $driver->connect();
             $profiles = $driver->getVlanProfiles();
             $driver->disconnect();
-            return $this->response->setJSON(['success' => true, 'profiles' => $profiles]);
-        } catch (\Exception $e) {
-            return $this->response->setJSON(['success' => false, 'message' => $e->getMessage()]);
+        } catch (\Throwable $e) {
+            log_message('error', "fetchVlanProfiles Telnet error: " . $e->getMessage());
         }
+
+        // Fallback dari database jika Telnet gagal atau belum dapat profil
+        if (empty($profiles) && !empty($olt['vlan_profiles'])) {
+            $lines = array_filter(array_map('trim', explode("\n", $olt['vlan_profiles'])));
+            foreach ($lines as $line) {
+                if (preg_match('/^(\S+)\s*—\s*VLAN\s*(\d+)/u', $line, $m)) {
+                    $profiles[] = ['name' => $m[1], 'vlan' => (int)$m[2]];
+                } elseif (preg_match('/^(\S+).*?\b(\d+)\b/', $line, $m)) {
+                    $profiles[] = ['name' => $m[1], 'vlan' => (int)$m[2]];
+                }
+            }
+        }
+
+        // Fallback standar jika tetap belum ada profil
+        if (empty($profiles)) {
+            $profiles = [
+                ['name' => 'ppp-vlan-150', 'vlan' => 150],
+                ['name' => 'ppp-vlan-155', 'vlan' => 155],
+                ['name' => 'ppp-vlan-100', 'vlan' => 100],
+            ];
+        }
+
+        return $this->response->setJSON(['success' => true, 'profiles' => $profiles]);
     }
 
     /**

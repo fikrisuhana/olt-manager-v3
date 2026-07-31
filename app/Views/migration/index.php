@@ -40,13 +40,12 @@
                 <!-- VLAN Internet Target -->
                 <div class="col-md-3">
                     <label class="form-label small fw-bold">VLAN Internet (PPPoE/Service)</label>
-                    <?php if ($selectedOlt && strtoupper($selectedOlt['brand']) === 'ZTE'): ?>
-                        <select id="vlanInternetSelect" class="form-select form-select-sm shadow-none">
-                            <option value="">-- Pilih VLAN --</option>
+                    <div class="input-group input-group-sm">
+                        <select id="vlanInternetSelect" class="form-select form-select-sm shadow-none" onchange="document.getElementById('vlanInternetInput').value = this.value">
+                            <option value="150">VLAN 150 (Default)</option>
                         </select>
-                    <?php else: ?>
-                        <input type="number" id="vlanInternetInput" class="form-control form-control-sm" placeholder="150" value="150" min="1" max="4094">
-                    <?php endif; ?>
+                        <input type="number" id="vlanInternetInput" class="form-control form-control-sm" placeholder="150" value="150" min="1" max="4094" style="max-width: 90px;" title="Atau ketik VLAN ID manual">
+                    </div>
                 </div>
 
                 <!-- TCONT Profile -->
@@ -205,13 +204,14 @@ function toggleCustomPrefix() {
 
 function loadVlanProfiles() {
     const select = document.getElementById('vlanInternetSelect');
+    const input  = document.getElementById('vlanInternetInput');
     if (!select) return;
 
     fetch(`/olts/${currentOltId}/vlan-profiles`)
         .then(r => r.json())
         .then(data => {
-            if (!data.success) return;
-            select.innerHTML = '<option value="">-- Pilih VLAN --</option>';
+            if (!data.success || !data.profiles || data.profiles.length === 0) return;
+            select.innerHTML = '';
             data.profiles.forEach(p => {
                 const opt = document.createElement('option');
                 opt.value       = p.vlan;
@@ -219,8 +219,8 @@ function loadVlanProfiles() {
                 if (p.vlan == 150) opt.selected = true;
                 select.appendChild(opt);
             });
-            if (!select.value && select.options.length > 1) {
-                select.selectedIndex = 1;
+            if (select.value && input) {
+                input.value = select.value;
             }
         })
         .catch(e => console.error(e));
@@ -318,22 +318,6 @@ function updateSelectedCount() {
     document.getElementById('selectedCount').textContent = checkedCount;
 }
 
-function openExecuteModal() {
-    const selectedRows = document.querySelectorAll('.row-check:checked');
-    if (selectedRows.length === 0) {
-        alert('Pilih minimal satu ONU untuk diregistrasi!');
-        return;
-    }
-
-    const vlanSelect = document.getElementById('vlanInternetSelect');
-    const vlanInput  = document.getElementById('vlanInternetInput');
-    const vlanVal    = vlanSelect ? vlanSelect.value : (vlanInput ? vlanInput.value : '');
-
-    if (!vlanVal) {
-        alert('Pilih VLAN Internet Target terlebih dahulu!');
-        return;
-    }
-
 async function openExecuteModal() {
     const selectedRows = document.querySelectorAll('.row-check:checked');
     if (selectedRows.length === 0) {
@@ -343,7 +327,7 @@ async function openExecuteModal() {
 
     const vlanSelect = document.getElementById('vlanInternetSelect');
     const vlanInput  = document.getElementById('vlanInternetInput');
-    const vlanVal    = vlanSelect ? vlanSelect.value : (vlanInput ? vlanInput.value : '');
+    const vlanVal    = (vlanInput && vlanInput.value) ? vlanInput.value : (vlanSelect ? vlanSelect.value : '150');
     const tcontVal   = document.getElementById('tcontSelect').value;
     const delayMs    = parseInt(document.getElementById('delaySelect').value) || 1000;
 
