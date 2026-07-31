@@ -477,21 +477,34 @@ async function openExecuteModal() {
         fd.append('onu_type', item.onu_type);
         fd.append('vlan_internet', vlanVal);
         fd.append('tcont_profile', tcontVal);
+        fd.append('force', '1');
 
         try {
-            const res = await fetch(`/olts/${currentOltId}/migration/execute-single`, { method: 'POST', body: fd });
-            const data = await res.json();
+            let res = await fetch(`/olts/${currentOltId}/migration/execute-single`, { method: 'POST', body: fd });
+            let data = await res.json().catch(() => null);
+
+            // Fallback ke /onu/register (endpoint resmi registrasi OLT detail) jika execute-single bermasalah
+            if (!data || !data.success) {
+                const res2 = await fetch(`/olts/${currentOltId}/onu/register`, { method: 'POST', body: fd });
+                const data2 = await res2.json().catch(() => null);
+                if (data2 && data2.success) {
+                    data = data2;
+                } else if (data2 && data2.message) {
+                    data = data2;
+                }
+            }
 
             if (data && data.success) {
                 successCount++;
-                execLog.innerHTML += `<div style="color:#81c995">▶ [${i+1}/${total}] ✔ SUKSES: ${item.sn} (${item.name}) terdaftar di ${item.board}/${item.slot}/${item.port}:${item.onu_index}</div>`;
+                const msg = data.message || `Terdaftar di ${item.board}/${item.slot}/${item.port}:${item.onu_index}`;
+                execLog.innerHTML += `<div style="color:#81c995">▶ [${i+1}/${total}] ✔ SUKSES: ${item.sn} (${item.name}) → ${msg}</div>`;
                 const rowTr = document.querySelector(`tr[data-index="${item.idx}"]`);
                 if (rowTr) {
                     rowTr.querySelector('.pe-4').innerHTML = '<span class="chip chip-success">Registered</span>';
                 }
             } else {
                 failCount++;
-                const errMsg = (data && data.message) ? data.message : 'Gagal registrasi / Ditolak server.';
+                const errMsg = (data && data.message) ? data.message : 'Gagal registrasi di OLT (Cek log Telnet OLT / profile).';
                 execLog.innerHTML += `<div style="color:#f87171">▶ [${i+1}/${total}] ✘ GAGAL: ${item.sn} → ${errMsg}</div>`;
             }
         } catch (e) {

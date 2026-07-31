@@ -330,11 +330,11 @@ class MigrationController extends BaseController
 
             $driver->disconnect();
 
-            if ($result['success']) {
+            if (!empty($result['success'])) {
                 $existing = $onuModel->getAnyByOltAndSn($oltId, $sn);
                 if ($existing) {
                     $onuId = (int)$existing['id'];
-                    $updated = $onuModel->update($onuId, [
+                    $onuModel->update($onuId, [
                         'name'          => $name,
                         'board'         => $board,
                         'slot'          => $slot,
@@ -347,10 +347,6 @@ class MigrationController extends BaseController
                         'status'        => 'registered',
                         'registered_at' => date('Y-m-d H:i:s'),
                     ]);
-                    if (!$updated) {
-                        $dbErr = implode(', ', $onuModel->errors() ?: ['DB update error']);
-                        log_message('error', "Gagal update ONU DB: {$dbErr}");
-                    }
                 } else {
                     $insertedId = $onuModel->insert([
                         'olt_id'        => $oltId,
@@ -367,10 +363,6 @@ class MigrationController extends BaseController
                         'status'        => 'registered',
                         'registered_at' => date('Y-m-d H:i:s'),
                     ]);
-                    if (!$insertedId) {
-                        $dbErr = implode(', ', $onuModel->errors() ?: ['DB insert error']);
-                        log_message('error', "Gagal insert ONU DB: {$dbErr}");
-                    }
                     $onuId = (int)$insertedId;
                 }
 
@@ -385,20 +377,25 @@ class MigrationController extends BaseController
                     'message' => "SUKSES: {$sn} ({$name}) terdaftar di {$board}/{$slot}/{$port}:{$onuIndex}",
                 ]);
             } else {
-                $logMsg = implode(' | ', $result['log'] ?? ['Gagal']);
+                $logMsg = implode(' | ', $result['log'] ?? ['Gagal registrasi di OLT']);
                 $logModel->log($this->userId, 'mass_register', 'failed', "Mass register gagal {$sn}: {$logMsg}", null, $oltId);
                 return $this->response->setJSON([
                     'success' => false,
                     'sn'      => $sn,
                     'name'    => $name,
-                    'message' => "GAGAL: {$sn} → {$logMsg}",
+                    'message' => "GAGAL: {$sn} → " . $logMsg,
                     'log'     => $result['log'] ?? [],
                 ]);
             }
         } catch (\Throwable $e) {
             $msg = $e->getMessage() ?: get_class($e);
-            log_message('error', "executeSingle error: " . $msg);
-            return $this->response->setJSON(['success' => false, 'sn' => $sn, 'message' => "Exception: " . $msg]);
+            log_message('error', "executeSingle exception: " . $msg);
+            return $this->response->setJSON([
+                'success' => false,
+                'sn'      => $sn,
+                'name'    => $name,
+                'message' => "Exception: " . $msg
+            ]);
         }
     }
 }
