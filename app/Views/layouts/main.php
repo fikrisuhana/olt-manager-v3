@@ -296,6 +296,9 @@
     <a href="/onus" class="nav-link <?= str_starts_with(uri_string(), 'onus') ? 'active' : '' ?>">
         <i class="bi bi-router"></i> ONU Terdaftar
     </a>
+    <a href="/migration" class="nav-link <?= str_starts_with(uri_string(), 'migration') ? 'active' : '' ?>">
+        <i class="bi bi-arrow-repeat"></i> Migrasi Massal
+    </a>
 
     <div class="nav-label">Pengaturan</div>
 

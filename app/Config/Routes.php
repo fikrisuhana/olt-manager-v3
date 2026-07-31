@@ -75,6 +75,12 @@ $routes->group('', ['filter' => 'auth'], static function ($routes) {
     $routes->post('templates/(:num)/update','TemplateController::update/$1');
     $routes->get('templates/(:num)/delete', 'TemplateController::delete/$1');
 
+    // Migrasi Massal
+    $routes->get('migration',                         'MigrationController::index');
+    $routes->get('olts/(:num)/migration',             'MigrationController::index/$1');
+    $routes->get('olts/(:num)/migration/scan',        'MigrationController::scan/$1');
+    $routes->post('olts/(:num)/migration/execute',     'MigrationController::execute/$1');
+
     // ACS
     $routes->get('acs',                     'AcsController::index');
     $routes->get('acs/create',              'AcsController::create');
