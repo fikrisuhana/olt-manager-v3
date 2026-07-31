@@ -24,6 +24,11 @@
             <?php endif; ?>
         </span>
 
+        <!-- Tombol Cek Alarm OLT -->
+        <button class="btn btn-google-secondary text-danger fw-bold" onclick="checkOltAlarms()" title="Cek Alarm Aktif, Kipas (FAN), Power, & Card OLT">
+            <i class="bi bi-bell-fill me-1 text-danger"></i> Cek Alarm OLT
+        </button>
+
         <!-- Tombol Kelola Profil OLT -->
         <button class="btn btn-google-secondary" onclick="openOltProfilesModal()" title="Kelola TCONT, Traffic Limit & VLAN Profile">
             <i class="bi bi-sliders me-1 text-primary"></i> Profil OLT
@@ -1440,5 +1445,113 @@ function deleteOnu(onuId, sn, btn) {
     })
     .catch(e => { btn.disabled = false; btn.innerHTML = origHtml; alert('Error: ' + e.message); });
 }
+
+function checkOltAlarms() {
+    const modal = new bootstrap.Modal(document.getElementById('alarmModal'));
+    modal.show();
+
+    const loading = document.getElementById('alarmLoading');
+    const content = document.getElementById('alarmContent');
+
+    loading.classList.remove('d-none');
+    content.classList.add('d-none');
+
+    fetch(`/olts/${oltId}/alarms`)
+        .then(r => r.json())
+        .then(data => {
+            loading.classList.add('d-none');
+            content.classList.remove('d-none');
+
+            if (!data.success) {
+                document.getElementById('alarmCurrentPre').textContent = 'Error: ' + data.message;
+                return;
+            }
+
+            const a = data.alarms || {};
+            document.getElementById('alarmCurrentPre').textContent = a.current_alarms || 'Tidak ada alarm aktif / Output kosong.';
+            document.getElementById('alarmFanPre').textContent     = a.fan_status || 'Output show fan kosong.';
+            document.getElementById('alarmPowerPre').textContent   = a.power_status || 'Output show power kosong.';
+            document.getElementById('alarmCardPre').textContent    = a.card_status || 'Output show card kosong.';
+            document.getElementById('alarmEnvPre').textContent     = a.env_status || 'Output show environment kosong.';
+        })
+        .catch(e => {
+            loading.classList.add('d-none');
+            content.classList.remove('d-none');
+            document.getElementById('alarmCurrentPre').textContent = 'Error Exception: ' + e.message;
+        });
+}
 </script>
+
+<!-- Modal Cek Alarm OLT -->
+<div class="modal fade" id="alarmModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header bg-danger text-white border-0 py-3 px-4">
+                <h5 class="modal-title fw-bold" style="font-family: 'Google Sans', sans-serif;">
+                    <i class="bi bi-bell-fill me-2"></i> Status Alarm Aktif & Hardware OLT
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4 bg-light">
+                <div id="alarmLoading" class="text-center py-5">
+                    <div class="spinner-border text-danger mb-3" role="status"></div>
+                    <div class="text-secondary fw-medium">Menghubungi OLT via Telnet & menarik status Alarm, Fan, Power, Card...</div>
+                </div>
+
+                <div id="alarmContent" class="d-none">
+                    <!-- Nav Tabs -->
+                    <ul class="nav nav-pills mb-3 gap-2" id="alarmTabs" role="tablist">
+                        <li class="nav-item">
+                            <button class="nav-link active px-3 py-2 fw-medium" id="tab-current-tab" data-bs-toggle="pill" data-bs-target="#tab-current">
+                                <i class="bi bi-exclamation-triangle-fill text-danger me-1"></i> Current Alarms (show alarm current)
+                            </button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link px-3 py-2 fw-medium" id="tab-fan-tab" data-bs-toggle="pill" data-bs-target="#tab-fan">
+                                <i class="bi bi-fan text-info me-1"></i> Status Kipas / FAN (show fan)
+                            </button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link px-3 py-2 fw-medium" id="tab-power-tab" data-bs-toggle="pill" data-bs-target="#tab-power">
+                                <i class="bi bi-lightning-charge-fill text-warning me-1"></i> Power Supply (show power)
+                            </button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link px-3 py-2 fw-medium" id="tab-card-tab" data-bs-toggle="pill" data-bs-target="#tab-card">
+                                <i class="bi bi-cpu-fill text-primary me-1"></i> Card / Slot (show card)
+                            </button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link px-3 py-2 fw-medium" id="tab-env-tab" data-bs-toggle="pill" data-bs-target="#tab-env">
+                                <i class="bi bi-thermometer-half text-success me-1"></i> Environment (show environment)
+                            </button>
+                        </li>
+                    </ul>
+
+                    <!-- Tab Contents -->
+                    <div class="tab-content">
+                        <div class="tab-pane fade show active" id="tab-current">
+                            <pre class="bg-dark text-warning p-3 rounded-3 small font-monospace" style="max-height: 400px; overflow-y: auto;" id="alarmCurrentPre"></pre>
+                        </div>
+                        <div class="tab-pane fade" id="tab-fan">
+                            <pre class="bg-dark text-info p-3 rounded-3 small font-monospace" style="max-height: 400px; overflow-y: auto;" id="alarmFanPre"></pre>
+                        </div>
+                        <div class="tab-pane fade" id="tab-power">
+                            <pre class="bg-dark text-warning p-3 rounded-3 small font-monospace" style="max-height: 400px; overflow-y: auto;" id="alarmPowerPre"></pre>
+                        </div>
+                        <div class="tab-pane fade" id="tab-card">
+                            <pre class="bg-dark text-success p-3 rounded-3 small font-monospace" style="max-height: 400px; overflow-y: auto;" id="alarmCardPre"></pre>
+                        </div>
+                        <div class="tab-pane fade" id="tab-env">
+                            <pre class="bg-dark text-light p-3 rounded-3 small font-monospace" style="max-height: 400px; overflow-y: auto;" id="alarmEnvPre"></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-secondary px-4 rounded-pill" data-bs-dismiss="modal">Tutup</button>
+            </div>
+        </div>
+    </div>
+</div>
 <?= $this->endSection() ?>

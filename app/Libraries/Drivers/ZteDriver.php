@@ -1145,6 +1145,32 @@ class ZteDriver implements OltDriverInterface
         return strncasecmp($sn, 'ZTE', 3) === 0;
     }
 
+    /**
+     * Ambil status Alarm Aktif, Status Kipas (FAN), Power, dan Card OLT
+     */
+    public function getAlarms(): array
+    {
+        $alarms = [
+            'current_alarms' => '',
+            'card_status'    => '',
+            'fan_status'     => '',
+            'power_status'   => '',
+            'env_status'     => '',
+        ];
+
+        try {
+            $alarms['current_alarms'] = $this->telnet->execute('show alarm current', $this->rootPrompt, 10);
+            $alarms['card_status']    = $this->telnet->execute('show card', $this->rootPrompt, 10);
+            $alarms['fan_status']     = $this->telnet->execute('show fan', $this->rootPrompt, 5);
+            $alarms['power_status']   = $this->telnet->execute('show power', $this->rootPrompt, 5);
+            $alarms['env_status']     = $this->telnet->execute('show environment', $this->rootPrompt, 5);
+        } catch (\Throwable $e) {
+            log_message('error', "getAlarms error: " . $e->getMessage());
+        }
+
+        return $alarms;
+    }
+
     public function getBrand(): string { return 'ZTE'; }
     public function getModel(): string { return $this->config['model'] ?? 'C320'; }
 }

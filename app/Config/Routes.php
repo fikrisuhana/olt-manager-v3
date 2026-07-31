@@ -49,6 +49,7 @@ $routes->group('', ['filter' => 'auth'], static function ($routes) {
     $routes->post('olts/(:num)/delete-profile','OltController::deleteProfile/$1');// AJAX — push hapus profile di OLT
     $routes->get('olts/(:num)/acs-status',   'OltController::acsStatus/$1');     // AJAX
     $routes->get('olts/(:num)/cache-data',   'OltController::cacheData/$1');     // AJAX
+    $routes->get('olts/(:num)/alarms',       'OltController::checkAlarms/$1');   // AJAX
 
     // ONU
     $routes->post('olts/(:num)/onu/register', 'OnuController::register/$1'); // AJAX

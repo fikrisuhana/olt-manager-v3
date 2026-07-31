@@ -920,4 +920,37 @@ class OltController extends Controller
         return !empty($data['name']) && !empty($data['ip'])
             && !empty($data['telnet_user']) && !empty($data['telnet_pass']);
     }
+
+    /**
+     * AJAX: Cek Alarm Aktif, Fan, Power, Card OLT
+     * GET /olts/{id}/alarms
+     */
+    public function checkAlarms(int $id)
+    {
+        $this->response->setContentType('application/json');
+        $oltModel = new OltModel();
+        $olt = $oltModel->getByUserAndId($this->userId, $id);
+        if (!$olt) {
+            return $this->response->setJSON(['success' => false, 'message' => 'OLT tidak ditemukan.']);
+        }
+
+        try {
+            $driver = OltDriverFactory::make($olt);
+            $driver->connect();
+            $alarms = method_exists($driver, 'getAlarms') ? $driver->getAlarms() : [];
+            $driver->disconnect();
+
+            return $this->response->setJSON([
+                'success' => true,
+                'alarms'  => $alarms,
+                'olt'     => [
+                    'name'  => $olt['name'],
+                    'ip'    => $olt['ip'],
+                    'brand' => $olt['brand'],
+                ]
+            ]);
+        } catch (\Throwable $e) {
+            return $this->response->setJSON(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
 }
