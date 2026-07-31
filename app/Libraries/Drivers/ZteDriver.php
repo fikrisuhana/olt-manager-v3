@@ -1140,6 +1140,11 @@ class ZteDriver implements OltDriverInterface
         return ['success' => true, 'message' => "ONU VLAN profile '{$name}' berhasil dihapus dari OLT."];
     }
 
+    private function isZteVendor(string $sn): bool
+    {
+        return strncasecmp($sn, 'ZTE', 3) === 0;
+    }
+
     public function getBrand(): string { return 'ZTE'; }
     public function getModel(): string { return $this->config['model'] ?? 'C320'; }
 }
