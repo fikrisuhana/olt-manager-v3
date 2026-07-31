@@ -339,7 +339,7 @@ class MigrationController extends BaseController
                 $existing = $onuModel->getAnyByOltAndSn($oltId, $sn);
                 if ($existing) {
                     $onuId = (int)$existing['id'];
-                    $onuModel->update($onuId, [
+                    $updated = $onuModel->update($onuId, [
                         'name'          => $name,
                         'board'         => $board,
                         'slot'          => $slot,
@@ -352,6 +352,10 @@ class MigrationController extends BaseController
                         'status'        => 'registered',
                         'registered_at' => date('Y-m-d H:i:s'),
                     ]);
+                    if (!$updated) {
+                        $dbErr = implode(', ', $onuModel->errors() ?: ['DB update error']);
+                        log_message('error', "Gagal update ONU DB: {$dbErr}");
+                    }
                 } else {
                     $insertedId = $onuModel->insert([
                         'olt_id'        => $oltId,
@@ -368,6 +372,10 @@ class MigrationController extends BaseController
                         'status'        => 'registered',
                         'registered_at' => date('Y-m-d H:i:s'),
                     ]);
+                    if (!$insertedId) {
+                        $dbErr = implode(', ', $onuModel->errors() ?: ['DB insert error']);
+                        log_message('error', "Gagal insert ONU DB: {$dbErr}");
+                    }
                     $onuId = (int)$insertedId;
                 }
 
