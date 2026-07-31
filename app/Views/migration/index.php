@@ -237,32 +237,113 @@ function startScan() {
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Memindai OLT...';
     statusText.textContent = 'Meminta data ONU unconfigured dari OLT via Telnet...';
 
+    const finishScan = (onus) => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-search me-1"></i> 2. Scan Semua ONU Unconfigured';
+        processScannedOnus(onus, scheme, customPrefix);
+    };
+
     fetch(`/olts/${currentOltId}/migration/scan?name_scheme=${scheme}&custom_prefix=${encodeURIComponent(customPrefix)}`)
         .then(r => r.json())
         .then(data => {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-search me-1"></i> 2. Scan Semua ONU Unconfigured';
-
-            if (!data.success) {
-                const errMsg = data.message ? data.message : 'Respons dari OLT tidak valid atau gagal.';
-                statusText.innerHTML = `<span class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i>${errMsg}</span>`;
-                tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger py-4"><i class="bi bi-exclamation-octagon fs-1 d-block mb-2 text-danger"></i>Gagal Scan: <strong>${errMsg}</strong></td></tr>`;
-                return;
+            if (data && data.success && Array.isArray(data.onus)) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-search me-1"></i> 2. Scan Semua ONU Unconfigured';
+                scannedOnus = data.onus;
+                document.getElementById('scannedCountBadge').innerHTML = `<i class="bi bi-cpu me-1"></i> ${scannedOnus.length} ONU Ditemukan`;
+                statusText.innerHTML = `<span class="text-success"><i class="bi bi-check-circle me-1"></i> ${scannedOnus.length} ONU unconfigured siap diregistrasi.</span>`;
+                renderTable();
+            } else {
+                // Fallback otomatis memanggil endpoint OLT scan yang terbukti berhasil di detail OLT
+                fetch(`/olts/${currentOltId}/scan`)
+                    .then(r2 => r2.json())
+                    .then(data2 => {
+                        btn.disabled = false;
+                        btn.innerHTML = '<i class="bi bi-search me-1"></i> 2. Scan Semua ONU Unconfigured';
+                        if (data2 && data2.success && Array.isArray(data2.onus)) {
+                            finishScan(data2.onus);
+                        } else {
+                            const errMsg = (data2 && data2.message) ? data2.message : ((data && data.message) ? data.message : 'Respons OLT tidak valid.');
+                            statusText.innerHTML = `<span class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i>${errMsg}</span>`;
+                            tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger py-4"><i class="bi bi-exclamation-octagon fs-1 d-block mb-2 text-danger"></i>Gagal Scan: <strong>${errMsg}</strong></td></tr>`;
+                        }
+                    })
+                    .catch(e2 => {
+                        btn.disabled = false;
+                        btn.innerHTML = '<i class="bi bi-search me-1"></i> 2. Scan Semua ONU Unconfigured';
+                        const errMsg = e2.message || 'Koneksi ke server terputus.';
+                        statusText.innerHTML = `<span class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i>${errMsg}</span>`;
+                        tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger py-4"><i class="bi bi-exclamation-octagon fs-1 d-block mb-2 text-danger"></i>Gagal Scan: <strong>${errMsg}</strong></td></tr>`;
+                    });
             }
-
-            scannedOnus = data.onus || [];
-            document.getElementById('scannedCountBadge').innerHTML = `<i class="bi bi-cpu me-1"></i> ${scannedOnus.length} ONU Ditemukan`;
-            statusText.innerHTML = `<span class="text-success"><i class="bi bi-check-circle me-1"></i> ${scannedOnus.length} ONU unconfigured siap diregistrasi.</span>`;
-
-            renderTable();
         })
         .catch(e => {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-search me-1"></i> 2. Scan Semua ONU Unconfigured';
-            const errMsg = e.message ? e.message : 'Koneksi ke server terputus.';
-            statusText.innerHTML = `<span class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i>Error: ${errMsg}</span>`;
-            tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger py-4"><i class="bi bi-exclamation-octagon fs-1 d-block mb-2 text-danger"></i>Gagal Scan: <strong>${errMsg}</strong></td></tr>`;
+            fetch(`/olts/${currentOltId}/scan`)
+                .then(r2 => r2.json())
+                .then(data2 => {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="bi bi-search me-1"></i> 2. Scan Semua ONU Unconfigured';
+                    if (data2 && data2.success && Array.isArray(data2.onus)) {
+                        finishScan(data2.onus);
+                    } else {
+                        const errMsg = (data2 && data2.message) ? data2.message : e.message;
+                        statusText.innerHTML = `<span class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i>${errMsg}</span>`;
+                        tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger py-4"><i class="bi bi-exclamation-octagon fs-1 d-block mb-2 text-danger"></i>Gagal Scan: <strong>${errMsg}</strong></td></tr>`;
+                    }
+                })
+                .catch(e2 => {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="bi bi-search me-1"></i> 2. Scan Semua ONU Unconfigured';
+                    const errMsg = e2.message || 'Koneksi ke server terputus.';
+                    statusText.innerHTML = `<span class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i>${errMsg}</span>`;
+                    tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger py-4"><i class="bi bi-exclamation-octagon fs-1 d-block mb-2 text-danger"></i>Gagal Scan: <strong>${errMsg}</strong></td></tr>`;
+                });
         });
+}
+
+function processScannedOnus(onus, scheme, prefix) {
+    const statusText = document.getElementById('scanStatusText');
+    const cleanPrefix = prefix ? prefix.replace(/[^A-Za-z0-9_]/g, '_') : 'Migrasi';
+    let counter = 1;
+
+    scannedOnus = onus.map(o => {
+        const sn     = (o.sn || '').toUpperCase();
+        const board  = String(o.board || '1');
+        const slot   = String(o.slot || '1');
+        const port   = String(o.port || '1');
+        const index  = parseInt(o.next_index || o.onu_index || 1);
+
+        let vendor = 'Generic';
+        if (sn.startsWith('HWTC') || sn.startsWith('HWTS') || sn.startsWith('HWTE')) vendor = 'Huawei';
+        else if (sn.startsWith('ZTE')) vendor = 'ZTE';
+        else if (sn.startsWith('FHTT') || sn.startsWith('FHSC')) vendor = 'Fiberhome';
+        else if (sn.startsWith('ALCL')) vendor = 'Nokia';
+
+        let autoName = `Pelanggan_${board}_${slot}_${port}_${String(index).padStart(2, '0')}`;
+        if (scheme === 'scheme_2') {
+            autoName = `Pelanggan_${String(counter).padStart(3, '0')}`;
+        } else if (scheme === 'scheme_3') {
+            autoName = `${cleanPrefix}_${vendor.substring(0, 2).toUpperCase()}_${String(counter).padStart(2, '0')}`;
+        }
+
+        counter++;
+
+        return {
+            sn: sn,
+            vendor: vendor,
+            board: board,
+            slot: slot,
+            port: port,
+            onu_index: index,
+            auto_name: autoName,
+            already_registered: o.already_registered || false,
+            existing_id: o.existing_id || null
+        };
+    });
+
+    document.getElementById('scannedCountBadge').innerHTML = `<i class="bi bi-cpu me-1"></i> ${scannedOnus.length} ONU Ditemukan`;
+    statusText.innerHTML = `<span class="text-success"><i class="bi bi-check-circle me-1"></i> ${scannedOnus.length} ONU unconfigured siap diregistrasi.</span>`;
+    renderTable();
 }
 
 function renderTable() {
