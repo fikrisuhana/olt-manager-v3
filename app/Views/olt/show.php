@@ -554,13 +554,13 @@ function scanOnu() {
             // Refresh OLT state dari cache yang baru diupdate
             loadOltState();
 
-            // Tampilkan peringatan cache kosong tanpa menimpa container
+            // Tampilkan info jika OLT baru / cache belum pernah disync
             const warnEl = document.getElementById('scanWarning');
             if (data.no_cache_warning) {
                 warnEl.className = '';
-                warnEl.innerHTML = `<div class="alert alert-danger rounded-0 border-0 border-bottom py-2 px-3 mb-0 small">
-                    <i class="bi bi-exclamation-triangle-fill me-1"></i><strong>Cache belum ada — index ONU tidak bisa ditentukan dengan aman.</strong>
-                    Klik <strong>Sync Cache</strong> dulu sebelum register ONU baru agar tidak menimpa ONU yang sudah aktif.
+                warnEl.innerHTML = `<div class="alert alert-info rounded-0 border-0 border-bottom py-2 px-3 mb-0 small">
+                    <i class="bi bi-info-circle-fill me-1"></i><strong>Cache OLT belum di-sync.</strong>
+                    Index ONU otomatis ditentukan dari database. Disarankan klik <strong>Sync Cache</strong> jika OLT ini sudah memiliki ONU aktif sebelum aplikasi ini dipasang.
                 </div>`;
             } else {
                 warnEl.className = 'd-none';
@@ -572,7 +572,6 @@ function scanOnu() {
                 return;
             }
 
-            const noCache = data.no_cache_warning;
             let rows = data.onus.map(o => {
                 const portLabel = `${o.board}/${o.slot}/${o.port}`;
                 const nextIdx   = o.next_index ?? 1;
@@ -585,13 +584,9 @@ function scanOnu() {
                              <i class="bi bi-arrow-repeat me-1"></i>Konfigurasi Ulang
                          </button>
                        </div>`
-                    : noCache
-                        ? `<button class="btn btn-sm btn-secondary" disabled title="Sync Cache dulu untuk index yang aman">
-                             <i class="bi bi-lock me-1"></i>Sync Cache dulu
-                           </button>`
-                        : `<button class="btn btn-sm btn-success" onclick="openRegister('${o.sn}','${o.board}','${o.slot}','${o.port}',${nextIdx},false,'${o.onu_type||''}')">
-                             <i class="bi bi-plus me-1"></i>Register (idx ${nextIdx})
-                           </button>`;
+                    : `<button class="btn btn-sm btn-success" onclick="openRegister('${o.sn}','${o.board}','${o.slot}','${o.port}',${nextIdx},false,'${o.onu_type||''}')">
+                         <i class="bi bi-plus me-1"></i>Register (idx ${nextIdx})
+                       </button>`;
                 const typeCell = o.onu_type
                     ? `<span class="badge bg-light text-dark border">${o.onu_type}</span>`
                     : '<span class="text-muted small">-</span>';

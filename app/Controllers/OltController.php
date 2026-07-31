@@ -131,9 +131,15 @@ class OltController extends Controller
             $uncfgOnus = $driver->getUnconfiguredOnus();
             $driver->disconnect();
 
-            // next_index dari cache lokal (tidak tanya OLT)
+            // next_index dari cache & database (tidak lock OLT baru)
             $cacheData = $cache->load($id);
-            $noCacheWarning = empty($cacheData['ports']);
+            $noCacheWarning = ($cacheData['updated_at'] === null);
+
+            // Jika OLT baru & belum pernah sync cache, buat file cache awal agar timestamp terinisialisasi
+            if ($noCacheWarning) {
+                $cache->save($id, []);
+                $cacheData = $cache->load($id);
+            }
 
             foreach ($uncfgOnus as &$onu) {
                 $existing = $onuModel->getByOltAndSn($id, $onu['sn']);

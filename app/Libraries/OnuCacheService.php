@@ -137,13 +137,35 @@ class OnuCacheService
 
     /**
      * Hitung index ONU berikutnya untuk port tertentu.
-     * Ambil max(index) dari cache + 1. Kalau kosong, mulai dari 1.
+     * Ambil max(index) dari cache & database (OnuModel) + 1. Kalau kosong, mulai dari 1.
      */
     public function nextIndex(int $oltId, string $board, string $slot, string $port): int
     {
-        $onus = $this->getOnusByPort($oltId, $board, $slot, $port);
-        if (empty($onus)) return 1;
-        return max(array_column($onus, 'index')) + 1;
+        $cacheOnus = $this->getOnusByPort($oltId, $board, $slot, $port);
+        $maxCacheIndex = !empty($cacheOnus) ? max(array_column($cacheOnus, 'index')) : 0;
+
+        $maxDbIndex = 0;
+        try {
+            $onuModel = new \App\Models\OnuModel();
+            $dbOnus = $onuModel->where([
+                'olt_id'    => $oltId,
+                'board'     => $board,
+                'slot'      => $slot,
+                'port'      => $port,
+                'status !=' => 'deleted',
+            ])->findAll();
+            foreach ($dbOnus as $o) {
+                $idx = (int)($o['onu_index'] ?? 0);
+                if ($idx > $maxDbIndex) {
+                    $maxDbIndex = $idx;
+                }
+            }
+        } catch (\Throwable $e) {
+            // Fallback jika query DB gagal
+        }
+
+        $maxIndex = max((int)$maxCacheIndex, $maxDbIndex);
+        return $maxIndex > 0 ? $maxIndex + 1 : 1;
     }
 
     /**
@@ -166,6 +188,14 @@ class OnuCacheService
     public function lastUpdated(int $oltId): ?string
     {
         return $this->load($oltId)['updated_at'];
+    }
+
+    /**
+     * Cek apakah cache OLT sudah pernah dibuat/di-sync.
+     */
+    public function hasCache(int $oltId): bool
+    {
+        return $this->lastUpdated($oltId) !== null;
     }
 
     /**
