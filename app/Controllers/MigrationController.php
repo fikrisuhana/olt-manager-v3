@@ -132,7 +132,7 @@ class MigrationController extends BaseController
                 'count'            => count($result),
                 'cache_updated_at' => $cacheData['updated_at'],
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             return $this->response->setJSON(['success' => false, 'message' => $e->getMessage()]);
         }
     }
@@ -270,7 +270,7 @@ class MigrationController extends BaseController
                 'logs'          => $logs,
                 'message'       => sprintf('Selesai memproses %d ONU (%d Sukses, %d Gagal).', count($items), $successCount, $failCount),
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             return $this->response->setJSON(['success' => false, 'message' => $e->getMessage(), 'logs' => $logs]);
         }
     }
@@ -400,7 +400,7 @@ class MigrationController extends BaseController
                     'log'     => $result['log'] ?? [],
                 ]);
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             return $this->response->setJSON(['success' => false, 'sn' => $sn, 'message' => $e->getMessage()]);
         }
     }
