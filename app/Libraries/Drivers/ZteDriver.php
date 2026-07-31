@@ -736,25 +736,52 @@ class ZteDriver implements OltDriverInterface
     public function getTcontProfiles(): array
     {
         $output = $this->telnet->execute('show gpon profile tcont', $this->rootPrompt, 10);
+        if (empty(trim($output)) || $this->isCliError($output)) {
+            $output = $this->telnet->execute('show running-config | include profile tcont', $this->rootPrompt, 10);
+        }
         return $this->parseProfileNames($output);
     }
 
     public function getTrafficProfiles(): array
     {
         $output = $this->telnet->execute('show gpon profile traffic', $this->rootPrompt, 10);
+        if (empty(trim($output)) || $this->isCliError($output)) {
+            $output = $this->telnet->execute('show running-config | include profile traffic', $this->rootPrompt, 10);
+        }
         return $this->parseProfileNames($output);
     }
 
     /**
-     * Parse daftar nama profile dari output ZTE "show gpon profile tcont/traffic".
-     * Format output: setiap profile diawali baris "Profile name :NAMA"
+     * Parse daftar nama profile dari output ZTE "show gpon profile tcont/traffic" atau "show running-config".
+     * Mampu membaca berbagai format output firmware ZTE (v1.2, v2.1, C600, dll).
      */
     private function parseProfileNames(string $output): array
     {
         $profiles = [];
+        $skipWords = ['profile-name', 'name', 'type', 'assured-bw(kbps)', 'max-bw(kbps)', 'assured-bw', 'max-bw', 'building', 'current'];
+
         foreach (explode("\n", $output) as $line) {
-            if (preg_match('/^Profile\s+name\s*:\s*(\S+)/i', trim($line), $m)) {
+            $line = trim($line);
+            if (empty($line) || str_starts_with($line, '-') || str_starts_with($line, '#')) continue;
+
+            // Format 1: Profile name: 250M
+            if (preg_match('/^Profile\s+name\s*:\s*(\S+)/i', $line, $m)) {
                 $profiles[] = trim($m[1]);
+                continue;
+            }
+
+            // Format 2: gpon profile tcont 250M ... / gpon profile traffic 50M ...
+            if (preg_match('/gpon\s+profile\s+(?:tcont|traffic)\s+(\S+)/i', $line, $m)) {
+                $profiles[] = trim($m[1]);
+                continue;
+            }
+
+            // Format 3: Tabular output (misal: 250M  4  0  256000)
+            if (preg_match('/^([A-Za-z0-9_\-]+)\s+\d+/i', $line, $m)) {
+                $pName = trim($m[1]);
+                if (!in_array(strtolower($pName), $skipWords)) {
+                    $profiles[] = $pName;
+                }
             }
         }
         return array_values(array_unique(array_filter($profiles)));

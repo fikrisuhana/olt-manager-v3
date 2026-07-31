@@ -48,8 +48,21 @@ class OltController extends Controller
         return redirect()->to('/olts')->with('success', 'OLT berhasil ditambahkan.');
     }
 
+    private function ensureVlanProfilesColumn(): void
+    {
+        try {
+            $db = \Config\Database::connect();
+            if ($db->tableExists('olts') && !$db->fieldExists('vlan_profiles', 'olts')) {
+                $db->query("ALTER TABLE olts ADD COLUMN vlan_profiles TEXT NULL AFTER traffic_profiles");
+            }
+        } catch (\Throwable $e) {
+            // Ignore error if column exists
+        }
+    }
+
     public function show(int $id)
     {
+        $this->ensureVlanProfilesColumn();
         $oltModel = new OltModel();
         $onuModel = new OnuModel();
 
@@ -625,6 +638,7 @@ class OltController extends Controller
      */
     public function syncProfiles(int $id)
     {
+        $this->ensureVlanProfilesColumn();
         $this->response->setContentType('application/json');
         $oltModel = new OltModel();
         $olt = $oltModel->getByUserAndId($this->userId, $id);
@@ -670,6 +684,7 @@ class OltController extends Controller
      */
     public function saveProfiles(int $id)
     {
+        $this->ensureVlanProfilesColumn();
         $this->response->setContentType('application/json');
         $oltModel = new OltModel();
         $olt = $oltModel->getByUserAndId($this->userId, $id);
