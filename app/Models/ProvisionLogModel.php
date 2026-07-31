@@ -13,12 +13,13 @@ class ProvisionLogModel extends Model
 
     public function log(int $userId, string $action, string $status, string $message, ?int $onuId = null, ?int $oltId = null): void
     {
+        $statusEnum = in_array(strtolower($status), ['success', 'failed']) ? strtolower($status) : 'success';
         $this->insert([
             'user_id'    => $userId,
             'onu_id'     => $onuId,
             'olt_id'     => $oltId,
             'action'     => $action,
-            'status'     => $status,
+            'status'     => $statusEnum,
             'message'    => $message,
             'created_at' => date('Y-m-d H:i:s'),
         ]);

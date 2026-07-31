@@ -213,6 +213,36 @@ class OltController extends Controller
                 'traffic_profiles' => implode("\n", $trafficProfiles),
             ]);
 
+            // Sync/upsert semua ONU terdaftar dari OLT ke tabel onus di Database
+            $onuModel = new OnuModel();
+            foreach ($registeredOnus as $ro) {
+                $sn = strtoupper($ro['sn']);
+                $existing = $onuModel->getAnyByOltAndSn($id, $sn);
+                if (!$existing) {
+                    $onuModel->insert([
+                        'olt_id'        => $id,
+                        'sn'            => $sn,
+                        'name'          => $ro['name'] ?? $sn,
+                        'board'         => (string)$ro['board'],
+                        'slot'          => (string)$ro['slot'],
+                        'port'          => (string)$ro['port'],
+                        'onu_index'     => (string)$ro['index'],
+                        'onu_type'      => $ro['type'] ?? 'ALL-ONT',
+                        'status'        => 'registered',
+                        'registered_at' => date('Y-m-d H:i:s'),
+                    ]);
+                } else if ($existing['status'] === 'deleted') {
+                    $onuModel->update($existing['id'], [
+                        'status'        => 'registered',
+                        'board'         => (string)$ro['board'],
+                        'slot'          => (string)$ro['slot'],
+                        'port'          => (string)$ro['port'],
+                        'onu_index'     => (string)$ro['index'],
+                        'registered_at' => date('Y-m-d H:i:s'),
+                    ]);
+                }
+            }
+
             // Sekaligus fetch ACS status untuk semua SN yang ada di OLT
             $acsMessage = '';
             $acsModel   = new AcsServerModel();

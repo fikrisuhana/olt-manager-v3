@@ -188,13 +188,13 @@ class OnuController extends Controller
 
             // Update DB jika re-register, insert jika baru
             if ($existingOnu) {
-                $onuId = $existingOnu['id'];
-                $onuModel->update($onuId, [
+                $onuId = (int)$existingOnu['id'];
+                $updated = $onuModel->update($onuId, [
                     'name'          => $name,
-                    'board'         => $board,
-                    'slot'          => $slot,
-                    'port'          => $port,
-                    'onu_index'     => $onuIndex,
+                    'board'         => (string)$board,
+                    'slot'          => (string)$slot,
+                    'port'          => (string)$port,
+                    'onu_index'     => (string)$onuIndex,
                     'onu_type'      => $onuType,
                     'vlan_internet' => $vlanInternet ?: null,
                     'vlan_acs'      => $vlanAcs ?: null,
@@ -204,15 +204,19 @@ class OnuController extends Controller
                     'status'        => 'registered',
                     'registered_at' => date('Y-m-d H:i:s'),
                 ]);
+                if (!$updated) {
+                    $dbErr = implode(', ', $onuModel->errors() ?: ['DB update error']);
+                    throw new \Exception("Gagal update data ONU ke Database: {$dbErr}");
+                }
             } else {
-                $onuId = $onuModel->insert([
+                $insertedId = $onuModel->insert([
                     'olt_id'        => $oltId,
                     'sn'            => $sn,
                     'name'          => $name,
-                    'board'         => $board,
-                    'slot'          => $slot,
-                    'port'          => $port,
-                    'onu_index'     => $onuIndex,
+                    'board'         => (string)$board,
+                    'slot'          => (string)$slot,
+                    'port'          => (string)$port,
+                    'onu_index'     => (string)$onuIndex,
                     'onu_type'      => $onuType,
                     'vlan_internet' => $vlanInternet ?: null,
                     'vlan_acs'      => $vlanAcs ?: null,
@@ -223,6 +227,12 @@ class OnuController extends Controller
                     'template_id'   => $templateId ?: null,
                     'registered_at' => date('Y-m-d H:i:s'),
                 ]);
+
+                if (!$insertedId) {
+                    $dbErr = implode(', ', $onuModel->errors() ?: ['DB insert error']);
+                    throw new \Exception("Gagal menyimpan data ONU ke Database: {$dbErr}");
+                }
+                $onuId = (int)$insertedId;
             }
 
             // Update cache ONU — status pakai OST aktual dari driver (fallback 'working')
