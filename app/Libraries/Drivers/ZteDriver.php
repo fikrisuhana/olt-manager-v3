@@ -824,21 +824,34 @@ class ZteDriver implements OltDriverInterface
      */
     private function parseProfileNames(string $output): array
     {
-        $profiles = [];
+        $lines = array_map('trim', explode("\n", $output));
+
+        // Format 1 — blok bernama (V4.8.x, terverifikasi di C320 Cibungur):
+        //   Profile name :200M
+        //    Type           FBW(kbps)   ABW(kbps)   MBW(kbps)   PRIORITY   WEIGHT
+        //    4              0           0           200000      N/A         N/A
+        // Baris angka di bawahnya adalah NILAI, bukan nama. Kalau blok bernama ketemu,
+        // berhenti di sini — jangan jalankan fallback tabular yang akan menyerap "4"
+        // (type) dan "9953280" (SIR traffic) jadi entri profil palsu di dropdown.
+        $named = [];
+        foreach ($lines as $line) {
+            if (preg_match('/^Profile\s*name\s*:\s*(\S+)/i', $line, $m)) {
+                $named[] = trim($m[1]);
+            }
+        }
+        if ($named) {
+            return array_values(array_unique(array_filter($named)));
+        }
+
+        // Fallback untuk firmware lain yang formatnya beda.
+        $profiles  = [];
         $skipWords = ['profile-name', 'name', 'type', 'assured-bw(kbps)', 'max-bw(kbps)', 'assured-bw', 'max-bw', 'building', 'current'];
 
-        foreach (explode("\n", $output) as $line) {
-            $line = trim($line);
+        foreach ($lines as $line) {
             if (empty($line) || str_starts_with($line, '-') || str_starts_with($line, '#')) continue;
 
-            // Format 1: Profile name: 250M
-            if (preg_match('/^Profile\s+name\s*:\s*(\S+)/i', $line, $m)) {
-                $profiles[] = trim($m[1]);
-                continue;
-            }
-
             // Format 2: gpon profile tcont 250M ... / gpon profile traffic 50M ...
-            if (preg_match('/gpon\s+profile\s+(?:tcont|traffic)\s+(\S+)/i', $line, $m)) {
+            if (preg_match('/(?:gpon\s+)?profile\s+(?:tcont|traffic)\s+(\S+)/i', $line, $m)) {
                 $profiles[] = trim($m[1]);
                 continue;
             }
@@ -846,6 +859,8 @@ class ZteDriver implements OltDriverInterface
             // Format 3: Tabular output (misal: 250M  4  0  256000)
             if (preg_match('/^([A-Za-z0-9_\-]+)\s+\d+/i', $line, $m)) {
                 $pName = trim($m[1]);
+                // Nama yang isinya angka semua = kolom nilai yang kesasar, bukan profil.
+                if (ctype_digit($pName)) continue;
                 if (!in_array(strtolower($pName), $skipWords)) {
                     $profiles[] = $pName;
                 }
