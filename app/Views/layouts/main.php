@@ -299,6 +299,9 @@
     <a href="/migration" class="nav-link <?= str_starts_with(uri_string(), 'migration') ? 'active' : '' ?>">
         <i class="bi bi-arrow-repeat"></i> Migrasi Massal
     </a>
+    <a href="/olt-settings" class="nav-link <?= (str_starts_with(uri_string(), 'olt-settings') || str_ends_with(uri_string(), '/settings')) ? 'active' : '' ?>">
+        <i class="bi bi-hdd-network"></i> Setting OLT
+    </a>
 
     <div class="nav-label">Pengaturan</div>
 

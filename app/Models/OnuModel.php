@@ -25,6 +25,29 @@ class OnuModel extends Model
                     ->findAll();
     }
 
+    /** Jumlah ONU aktif di satu port PON — dipakai untuk memperingatkan sebelum port dimatikan. */
+    public function countActiveOnPort(int $oltId, string $board, string $slot, string $port): int
+    {
+        return $this->where('olt_id', $oltId)
+                    ->where('board', $board)
+                    ->where('slot', $slot)
+                    ->where('port', $port)
+                    ->where('status !=', 'deleted')
+                    ->countAllResults();
+    }
+
+    /** Jumlah ONU yang memakai sebuah VLAN (internet atau ACS) di satu OLT. */
+    public function countUsingVlan(int $oltId, int $vlanId): int
+    {
+        return $this->where('olt_id', $oltId)
+                    ->where('status !=', 'deleted')
+                    ->groupStart()
+                        ->where('vlan_internet', $vlanId)
+                        ->orWhere('vlan_acs', $vlanId)
+                    ->groupEnd()
+                    ->countAllResults();
+    }
+
     public function getByUser(int $userId): array
     {
         return $this->select('onus.*, olts.name as olt_name, olts.brand, olts.ip as olt_ip')

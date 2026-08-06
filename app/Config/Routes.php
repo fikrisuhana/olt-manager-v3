@@ -83,6 +83,14 @@ $routes->group('', ['filter' => 'auth'], static function ($routes) {
     $routes->post('olts/(:num)/migration/execute',     'MigrationController::execute/$1');
     $routes->post('olts/(:num)/migration/execute-single', 'MigrationController::executeSingle/$1');
 
+    // Setting OLT — perawatan perangkat (port PON, VLAN database, info sistem)
+    $routes->get('olt-settings',                      'OltSettingsController::index');
+    $routes->get('olts/(:num)/settings',              'OltSettingsController::index/$1');
+    $routes->get('olts/(:num)/settings/status',       'OltSettingsController::status/$1');       // AJAX
+    $routes->post('olts/(:num)/settings/pon-state',   'OltSettingsController::ponState/$1');     // AJAX
+    $routes->post('olts/(:num)/settings/vlan-add',    'OltSettingsController::vlanAdd/$1');      // AJAX
+    $routes->post('olts/(:num)/settings/vlan-delete', 'OltSettingsController::vlanDelete/$1');   // AJAX
+
     // ACS
     $routes->get('acs',                     'AcsController::index');
     $routes->get('acs/create',              'AcsController::create');

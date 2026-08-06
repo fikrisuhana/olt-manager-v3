@@ -34,7 +34,14 @@
                 <!-- Info display -->
                 <table class="table table-sm mb-0" id="infoTable">
                     <tr><th class="text-muted" style="width:40%">SN</th><td><code><?= esc($onu['sn']) ?></code></td></tr>
-                    <tr><th class="text-muted">Nama</th><td id="disp_name"><?= esc($onu['name'] ?? '-') ?></td></tr>
+                    <tr>
+                        <th class="text-muted">Nama</th>
+                        <td id="disp_name">
+                            <?= esc($onu['name'] ?? '-') ?>
+                            <button class="btn btn-sm btn-link p-0 ms-1 align-baseline" title="Ubah nama saja"
+                                    onclick="renameOnly()"><i class="bi bi-pencil"></i></button>
+                        </td>
+                    </tr>
                     <tr><th class="text-muted">OLT</th><td><?= esc($onu['olt_name'] ?? '-') ?> <span class="text-muted small">(<?= esc($onu['olt_ip'] ?? '') ?>)</span></td></tr>
                     <tr><th class="text-muted">Port</th><td><?= esc("{$onu['board']}/{$onu['slot']}/{$onu['port']}:{$onu['onu_index']}") ?></td></tr>
                     <tr><th class="text-muted">Tipe</th><td><?= esc($onu['onu_type'] ?? '-') ?></td></tr>
@@ -739,6 +746,28 @@ function toggleEdit() {
         ? '<i class="bi bi-x-circle me-1"></i>Batal'
         : '<i class="bi bi-pencil me-1"></i>Edit';
     if (show) document.getElementById('editResult').classList.add('d-none');
+}
+
+// Ubah nama saja — kirim HANYA field name, sisanya tidak disentuh sama sekali.
+function renameOnly() {
+    const current = <?= json_encode($onu['name'] ?? '') ?>;
+    const val = prompt('Nama pelanggan baru:', current);
+    if (val === null) return;
+    const name = val.trim();
+    if (name === '') { alert('Nama tidak boleh kosong.'); return; }
+    if (name === current) return;
+
+    const fd = new FormData();
+    fd.append('name', name);
+    fd.append('<?= csrf_token() ?>', '<?= csrf_hash() ?>');
+
+    fetch(`/onus/${ONU_ID}/update-info`, { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(d => {
+            if (d.success) location.reload();
+            else alert(d.message || 'Gagal menyimpan.');
+        })
+        .catch(e => alert('Error: ' + e.message));
 }
 
 function saveInfo(autoReload = false) {

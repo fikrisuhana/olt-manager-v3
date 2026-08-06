@@ -1225,4 +1225,207 @@ class ZteDriver implements OltDriverInterface
 
     public function getBrand(): string { return 'ZTE'; }
     public function getModel(): string { return $this->config['model'] ?? 'C320'; }
+
+    // ══ Setup / maintenance OLT ═══════════════════════════════════════════
+    // Semua format di bawah diverifikasi langsung di C320 V2.1.0 (OLT Cibungur).
+
+    /**
+     * show system-group  → System Description / System name / Started before
+     * show ip interface brief → tabel interface manajemen
+     * show card → daftar kartu + jumlah port
+     */
+    public function getSystemInfo(): array
+    {
+        $info = [
+            'name' => '', 'model' => '', 'version' => '', 'uptime' => '',
+            'mgmt' => [], 'cards' => [],
+        ];
+
+        $sys = $this->telnet->execute('show system-group', $this->rootPrompt, 10);
+        if (preg_match('/System name:\s*(\S+)/i', $sys, $m))       $info['name']    = $m[1];
+        if (preg_match('/Started before:\s*(.+)/i', $sys, $m))     $info['uptime']  = trim($m[1]);
+        // "System Description: C320 Version V2.1.0 Software, Copyright (c) ..."
+        if (preg_match('/System Description:\s*(\S+)\s+Version\s+(\S+)/i', $sys, $m)) {
+            $info['model']   = $m[1];
+            $info['version'] = $m[2];
+        }
+
+        // Interface     IP-Address      Mask            Admin Phy  Prot Description
+        // vlan10        192.168.10.2    255.255.255.0   up    up   up   none
+        $ipOut = $this->telnet->execute('show ip interface brief', $this->rootPrompt, 10);
+        foreach (explode("\n", $ipOut) as $line) {
+            $line = trim($line);
+            if (preg_match('/^(\S+)\s+(\d{1,3}(?:\.\d{1,3}){3})\s+(\d{1,3}(?:\.\d{1,3}){3})\s+(\S+)\s+(\S+)\s+(\S+)/', $line, $m)) {
+                $info['mgmt'][] = [
+                    'interface' => $m[1], 'ip' => $m[2], 'mask' => $m[3],
+                    'admin' => $m[4], 'phy' => $m[5], 'proto' => $m[6],
+                ];
+            }
+        }
+
+        $info['cards'] = $this->getCards();
+        return $info;
+    }
+
+    /**
+     * show card
+     * Rack Shelf Slot CfgType RealType Port  HardVer SoftVer  Status
+     * 1    1     1    GTGH    GTGHG    16    V1.0.0  V2.1.0   INSERVICE
+     */
+    private function getCards(): array
+    {
+        $out   = $this->telnet->execute('show card', $this->rootPrompt, 10);
+        $cards = [];
+        foreach (explode("\n", $out) as $line) {
+            $line = trim($line);
+            if (!preg_match('/^(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(.*)$/', $line, $m)) continue;
+            $rest = preg_split('/\s+/', trim($m[5]));
+            // RealType bisa kosong (kartu OFFLINE) → kolom bergeser; ambil angka port bila ada.
+            $realType = '';
+            $ports    = 0;
+            if (isset($rest[0]) && !ctype_digit($rest[0])) {
+                $realType = array_shift($rest);
+            }
+            if (isset($rest[0]) && ctype_digit($rest[0])) {
+                $ports = (int)array_shift($rest);
+            }
+            $cards[] = [
+                'rack'   => $m[1], 'shelf' => $m[2], 'slot' => $m[3],
+                'type'   => $m[4], 'real_type' => $realType, 'ports' => $ports,
+                'status' => $rest ? end($rest) : '',
+            ];
+        }
+        return $cards;
+    }
+
+    /**
+     * Daftar port PON + status. Satu perintah per port (running-config memberi
+     * shutdown/description/name/daftar ONU sekaligus), plus satu perintah global
+     * untuk hitung ONU yang benar-benar working.
+     */
+    public function getPonPorts(): array
+    {
+        // ONU per port dari satu perintah — jangan query per port lagi.
+        $working = [];
+        $stateOut = $this->telnet->execute('show gpon onu state', $this->rootPrompt, 20);
+        foreach (explode("\n", $stateOut) as $line) {
+            if (preg_match('/^\s*(\d+)\/(\d+)\/(\d+):(\d+)\s+\S+\s+\S+\s+(\S+)/', $line, $m)) {
+                $key = "{$m[1]}/{$m[2]}/{$m[3]}";
+                if (!isset($working[$key])) $working[$key] = 0;
+                if (strcasecmp($m[5], 'working') === 0) $working[$key]++;
+            }
+        }
+
+        $ports = [];
+        foreach ($this->getCards() as $card) {
+            // Hanya kartu GPON (GTGH/GTGO/dll) yang punya port PON.
+            if ($card['ports'] < 1 || stripos($card['type'], 'GT') !== 0) continue;
+
+            for ($p = 1; $p <= $card['ports']; $p++) {
+                $b = $card['rack'];
+                $s = $card['slot'];
+                $cfg = $this->telnet->execute(
+                    "show running-config interface gpon-olt_{$b}/{$s}/{$p}",
+                    $this->rootPrompt, 10
+                );
+
+                $enabled = stripos($cfg, 'no shutdown') !== false
+                        || stripos($cfg, 'shutdown')    === false;
+                $desc = preg_match('/^\s*description\s+(.+)$/im', $cfg, $m) ? trim($m[1]) : '';
+                $name = preg_match('/^\s*name\s+(.+)$/im', $cfg, $m)        ? trim($m[1]) : '';
+                $cfgOnu = preg_match_all('/^\s*onu\s+\d+\s+type\s+/im', $cfg);
+
+                $key = "{$b}/{$s}/{$p}";
+                $ports[] = [
+                    'board' => (string)$b, 'slot' => (string)$s, 'port' => (string)$p,
+                    'enabled'        => $enabled,
+                    'description'    => $desc,
+                    'name'           => $name,
+                    'onu_configured' => $cfgOnu,
+                    'onu_working'    => $working[$key] ?? 0,
+                ];
+            }
+        }
+        return $ports;
+    }
+
+    public function setPonPortState(string $board, string $slot, string $port, bool $enable): array
+    {
+        $log = [];
+        $this->telnet->execute('conf t', $this->configPrompt, 5);
+        $this->telnet->execute("interface gpon-olt_{$board}/{$slot}/{$port}", $this->ifPrompt, 5);
+
+        $cmd = $enable ? 'no shutdown' : 'shutdown';
+        $out = $this->telnet->execute($cmd, $this->ifPrompt, 10);
+        $ok  = !$this->isCliError($out);
+        $log[] = ($ok ? '' : 'WARN ') . "gpon-olt_{$board}/{$slot}/{$port}: {$cmd} → " . trim(preg_replace('/\s+/', ' ', $out));
+
+        $this->telnet->execute('exit', $this->configPrompt, 3);
+        $this->telnet->execute('exit', $this->rootPrompt, 3);
+        $this->telnet->execute('write', $this->rootPrompt, 20);
+        $log[] = 'Configuration saved (write)';
+
+        return ['success' => $ok, 'log' => $log];
+    }
+
+    /**
+     * show vlan summary
+     *   All created vlan num: 17
+     *   Details are following:
+     *       1,10,81,100,123,134,145,150,152-155,158,160,162,499-500
+     */
+    public function getVlanDatabase(): array
+    {
+        $out   = $this->telnet->execute('show vlan summary', $this->rootPrompt, 10);
+        $vlans = [];
+
+        foreach (explode("\n", $out) as $line) {
+            $line = trim($line);
+            // Hanya baris yang isinya murni daftar angka/rentang.
+            if (!preg_match('/^[\d,\-\s]+$/', $line) || $line === '') continue;
+
+            foreach (preg_split('/\s*,\s*/', $line) as $chunk) {
+                $chunk = trim($chunk);
+                if ($chunk === '') continue;
+                if (preg_match('/^(\d+)\s*-\s*(\d+)$/', $chunk, $m)) {
+                    for ($v = (int)$m[1]; $v <= (int)$m[2]; $v++) $vlans[] = $v;
+                } elseif (ctype_digit($chunk)) {
+                    $vlans[] = (int)$chunk;
+                }
+            }
+        }
+
+        $vlans = array_values(array_unique(array_filter($vlans, fn($v) => $v >= 1 && $v <= 4094)));
+        sort($vlans);
+        return $vlans;
+    }
+
+    public function addVlan(int $vlanId): array
+    {
+        return $this->vlanDatabaseCmd("vlan {$vlanId}", "VLAN {$vlanId} ditambahkan");
+    }
+
+    public function deleteVlan(int $vlanId): array
+    {
+        return $this->vlanDatabaseCmd("no vlan {$vlanId}", "VLAN {$vlanId} dihapus");
+    }
+
+    private function vlanDatabaseCmd(string $cmd, string $okMsg): array
+    {
+        $log = [];
+        $this->telnet->execute('conf t', $this->configPrompt, 5);
+        // prompt vlan database: (config-vlan)#
+        $this->telnet->execute('vlan database', ['config-vlan)#', 'config)#'], 5);
+
+        $out = $this->telnet->execute($cmd, ['config-vlan)#', 'config)#'], 10);
+        $ok  = !$this->isCliError($out);
+        $log[] = ($ok ? '' : 'WARN ') . "'{$cmd}' → " . trim(preg_replace('/\s+/', ' ', $out));
+
+        $this->telnet->execute('exit', $this->configPrompt, 3);
+        $this->telnet->execute('exit', $this->rootPrompt, 3);
+        $this->telnet->execute('write', $this->rootPrompt, 20);
+        $log[] = 'Configuration saved (write)';
+
+        return ['success' => $ok, 'message' => $ok ? $okMsg : end($log), 'log' => $log];
+    }
 }

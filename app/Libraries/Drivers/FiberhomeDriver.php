@@ -500,4 +500,34 @@ class FiberhomeDriver implements OltDriverInterface
 
     public function getBrand(): string { return 'Fiberhome'; }
     public function getModel(): string { return $this->config['model'] ?? 'AN6000'; }
+
+    // ══ Setup / maintenance OLT ═══════════════════════════════════════════
+    // Belum diimplementasi untuk Fiberhome: grammar AN5516/AN6000 beda dan belum
+    // diverifikasi di perangkat. Menu Setting OLT menyembunyikan fitur ini untuk
+    // brand FH — jangan tebak-tebakan perintah di OLT produksi.
+
+    public function getSystemInfo(): array
+    {
+        return ['name' => '', 'model' => $this->getModel(), 'version' => '', 'uptime' => '',
+                'mgmt' => [], 'cards' => [], 'unsupported' => true];
+    }
+
+    public function getPonPorts(): array { return []; }
+
+    public function setPonPortState(string $board, string $slot, string $port, bool $enable): array
+    {
+        return ['success' => false, 'log' => ['Enable/disable port PON belum didukung driver Fiberhome.']];
+    }
+
+    public function getVlanDatabase(): array { return []; }
+
+    public function addVlan(int $vlanId): array
+    {
+        return ['success' => false, 'message' => 'VLAN database belum didukung driver Fiberhome.', 'log' => []];
+    }
+
+    public function deleteVlan(int $vlanId): array
+    {
+        return ['success' => false, 'message' => 'VLAN database belum didukung driver Fiberhome.', 'log' => []];
+    }
 }

@@ -64,4 +64,31 @@ interface OltDriverInterface
      * Return: ['tcont_profile'=>'', 'traffic_profile'=>'', 'vlan_internet'=>0, 'vlan_acs'=>0, 'service_ports'=>[sp=>vlan]]
      */
     public function getOnuConfig(string $board, string $slot, string $port, string $onuIndex): array;
+
+    // ── Setup / maintenance OLT ────────────────────────────────────────────
+
+    /**
+     * Info sistem OLT: nama, model, versi, uptime, interface manajemen, daftar kartu.
+     * Return: ['name'=>'','model'=>'','version'=>'','uptime'=>'','mgmt'=>[...],'cards'=>[...]]
+     */
+    public function getSystemInfo(): array;
+
+    /**
+     * Daftar port PON beserta statusnya.
+     * Return: [['board'=>'1','slot'=>'1','port'=>'1','enabled'=>true,'description'=>'',
+     *           'name'=>'','onu_configured'=>5,'onu_working'=>5], ...]
+     */
+    public function getPonPorts(): array;
+
+    /** Aktifkan/matikan port PON (no shutdown / shutdown). */
+    public function setPonPortState(string $board, string $slot, string $port, bool $enable): array;
+
+    /** Daftar VLAN di VLAN database OLT. Return: [1,10,100,150,...] */
+    public function getVlanDatabase(): array;
+
+    /** Tambah VLAN ke VLAN database. */
+    public function addVlan(int $vlanId): array;
+
+    /** Hapus VLAN dari VLAN database. */
+    public function deleteVlan(int $vlanId): array;
 }

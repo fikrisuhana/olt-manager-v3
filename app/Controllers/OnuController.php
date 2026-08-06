@@ -305,18 +305,39 @@ class OnuController extends Controller
             return $this->response->setJSON(['success' => false, 'message' => 'ONU tidak ditemukan.']);
         }
 
-        $data = [
-            'name'          => trim($this->request->getPost('name') ?? '') ?: $onu['name'],
-            'vlan_internet' => (int)($this->request->getPost('vlan_internet') ?: 0) ?: null,
-            'vlan_acs'      => (int)($this->request->getPost('vlan_acs') ?: 0) ?: null,
-            'tcont_profile' => trim($this->request->getPost('tcont_profile') ?? '') ?: null,
-            'pppoe_user'    => trim($this->request->getPost('pppoe_user') ?? '') ?: null,
-            'pppoe_pass'    => trim($this->request->getPost('pppoe_pass') ?? '') ?: null,
-        ];
+        // Update parsial: hanya field yang BENAR-BENAR dikirim yang disentuh. Dulu semua
+        // field selalu ditulis, jadi mengubah nama saja ikut menimpa VLAN/TCONT/PPPoE
+        // dengan null kalau kolomnya tidak diisi — makanya terasa "harus isi semua".
+        $data = [];
+
+        if ($this->request->getPost('name') !== null) {
+            $name = trim((string)$this->request->getPost('name'));
+            if ($name !== '') $data['name'] = $name;   // nama tidak boleh dikosongkan
+        }
+
+        foreach (['vlan_internet', 'vlan_acs'] as $f) {
+            $raw = $this->request->getPost($f);
+            if ($raw === null) continue;
+            $data[$f] = trim((string)$raw) === '' ? null : ((int)$raw ?: null);
+        }
+
+        foreach (['tcont_profile', 'pppoe_user', 'pppoe_pass'] as $f) {
+            $raw = $this->request->getPost($f);
+            if ($raw === null) continue;
+            $data[$f] = trim((string)$raw) ?: null;
+        }
+
+        if (empty($data)) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Tidak ada perubahan untuk disimpan.']);
+        }
 
         $onuModel->update($id, $data);
 
-        return $this->response->setJSON(['success' => true, 'message' => 'Info ONU berhasil disimpan.']);
+        return $this->response->setJSON([
+            'success' => true,
+            'fields'  => array_keys($data),
+            'message' => 'Info ONU berhasil disimpan (' . implode(', ', array_keys($data)) . ').',
+        ]);
     }
 
     /**
