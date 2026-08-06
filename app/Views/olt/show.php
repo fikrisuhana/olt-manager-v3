@@ -456,8 +456,12 @@
                                 <div class="form-text">service-port 1 vport 1</div>
                             </div>
                             <div class="col-4">
-                                <label class="form-label small fw-bold">TCONT Profile</label>
-                                <select name="tcont_profile" id="tcontSelect" class="form-select form-select-sm">
+                                <?php $isZte = strtoupper($olt['brand'] ?? '') === 'ZTE'; ?>
+                                <label class="form-label small fw-bold">TCONT Profile
+                                    <?php if ($isZte): ?><span class="text-danger">*</span><?php endif; ?>
+                                </label>
+                                <select name="tcont_profile" id="tcontSelect" class="form-select form-select-sm"
+                                        <?= $isZte ? 'required' : '' ?>>
                                     <option value="">-- Pilih TCONT --</option>
                                     <?php
                                     $tconts = array_values(array_filter(array_map('trim', explode("\n", $olt['tcont_profiles'] ?? ''))));
@@ -466,6 +470,9 @@
                                         <option value="<?= esc($tc) ?>"><?= esc($tc) ?></option>
                                     <?php endforeach; ?>
                                 </select>
+                                <?php if ($isZte): ?>
+                                <div class="form-text">Pilih profil <b>type 4 maximum</b>; <code>fixed</code>/<code>assured</code> mem-booking bandwidth per ONU.</div>
+                                <?php endif; ?>
                             </div>
                         </div>
                     </div>

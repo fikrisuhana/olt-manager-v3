@@ -137,6 +137,18 @@ class OnuController extends Controller
             return $this->response->setJSON(['success' => false, 'message' => 'SN, nama, tipe ONU wajib diisi.']);
         }
 
+        // TCONT wajib untuk ZTE. Kalau kosong, driver menebak profil pertama milik OLT —
+        // di C320 itu 'default' yang bertipe fixed full-rate, jadi ONU kedua dst. langsung
+        // ditolak %Code 62330 dan ONU cuma terdaftar SN tanpa VLAN.
+        if (strtoupper($olt['brand'] ?? '') === 'ZTE' && $tcontProfile === '') {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'TCONT Profile wajib dipilih untuk OLT ZTE. Pilih profil bertipe '
+                           . '"type 4 maximum" (best-effort); profil fixed/assured mem-booking '
+                           . 'bandwidth per ONU sehingga PON port cepat penuh.',
+            ]);
+        }
+
         $force       = (bool)$this->request->getPost('force');
         // Cek termasuk soft-deleted agar tidak kena unique key constraint saat INSERT
         $existingOnu = $onuModel->getAnyByOltAndSn($oltId, $sn);
