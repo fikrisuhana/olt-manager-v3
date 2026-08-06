@@ -322,10 +322,33 @@ class ZteDriver implements OltDriverInterface
         // Konfigurasi interface gpon-onu
         $this->telnet->execute("interface gpon-onu_{$board}/{$slot}/{$port}:{$idx}", $this->ifPrompt, 5);
         $this->telnet->execute("name {$name}", $this->ifPrompt, 3);
+        // gemport & service-port bergantung pada tcont. Kalau tcont ditolak, sisanya pasti
+        // gagal beruntun ("T-CONT does not exist" → "Invalid port") dan cuma bikin log ramai
+        // tanpa info baru. Hentikan rantainya, laporkan sebabnya sekali dengan jelas.
+        $tcontOk = true;
         foreach ($ifCmds as $cmd) {
+            if (!$tcontOk && preg_match('/^(gemport|service-port)\b/i', $cmd)) {
+                $log[] = "SKIP: '{$cmd}' (dilewati — tcont gagal, perintah ini pasti ikut gagal)";
+                continue;
+            }
+
             $out = $this->telnet->execute($cmd, $this->ifPrompt, 5);
             if ($this->isCliError($out)) {
                 $msg = "'{$cmd}' → " . trim(preg_replace('/\s+/', ' ', substr($out, -140)));
+
+                // %Code 62330 "Parameter exceeds range" pada tcont = bandwidth PON port habis:
+                // DBA profile bertipe `fixed`/`assured` mem-booking bandwidth per ONU, jadi
+                // profil 1G (type 1 fixed 1000000) cuma muat SATU ONU per port.
+                if (preg_match('/^tcont\b/i', $cmd)) {
+                    $tcontOk = false;
+                    if (stripos($out, 'exceeds range') !== false || stripos($out, '62330') !== false) {
+                        $msg = "TCONT profile '{$tcont}' ditolak OLT (Parameter exceeds range) — "
+                             . "bandwidth PON port sudah penuh. Profil bertipe fixed/assured "
+                             . "mem-booking bandwidth per ONU; pakai profil type 4 maximum "
+                             . "(best-effort) untuk migrasi banyak ONU. " . $msg;
+                    }
+                }
+
                 $log[] = "WARN: {$msg}";
                 // tcont/gemport/service-port gagal = KRITIS: service acs/int downstream ikut gagal
                 // (mis. tcont profile kegedean → "Parameter exceeds range" → gemport tak terbentuk →

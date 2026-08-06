@@ -106,9 +106,13 @@
                         $tconts = array_values(array_filter(array_map('trim', explode("\n", $selectedOlt['tcont_profiles'] ?? ''))));
                         foreach ($tconts as $tc):
                         ?>
-                            <option value="<?= esc($tc) ?>" <?= strtolower($tc) === 'default' || strtolower($tc) === '1g' ? 'selected' : '' ?>><?= esc($tc) ?></option>
+                            <option value="<?= esc($tc) ?>"><?= esc($tc) ?></option>
                         <?php endforeach; ?>
                     </select>
+                    <div class="form-text small">
+                        Pakai profil <b>type 4 maximum</b> (best-effort). Profil <code>fixed</code>/<code>assured</code>
+                        mem-booking bandwidth per ONU — 1G fixed cuma muat 1 ONU per PON port.
+                    </div>
                 </div>
 
                 <!-- Skema Auto-Name -->
