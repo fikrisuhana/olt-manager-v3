@@ -115,6 +115,54 @@ class OltSettingsController extends BaseController
         }
     }
 
+    /** POST /olts/{id}/settings/pon-info — ubah name & description port PON */
+    public function ponInfo(int $oltId)
+    {
+        $this->response->setContentType('application/json');
+        $olt = (new OltModel())->getByUserAndId($this->userId, $oltId);
+        if (!$olt) return $this->response->setJSON(['success' => false, 'message' => 'OLT tidak ditemukan.']);
+
+        $board = trim($this->request->getPost('board') ?? '');
+        $slot  = trim($this->request->getPost('slot') ?? '');
+        $port  = trim($this->request->getPost('port') ?? '');
+        if ($board === '' || $slot === '' || $port === '') {
+            return $this->response->setJSON(['success' => false, 'message' => 'Port PON tidak lengkap.']);
+        }
+
+        // null = tidak dikirim = jangan disentuh; string kosong = hapus di OLT.
+        $name = $this->request->getPost('name');
+        $desc = $this->request->getPost('description');
+        $name = $name === null ? null : mb_substr(trim((string)$name), 0, 64);
+        $desc = $desc === null ? null : mb_substr(trim((string)$desc), 0, 64);
+
+        if ($name === null && $desc === null) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Tidak ada perubahan untuk disimpan.']);
+        }
+
+        try {
+            $driver = OltDriverFactory::make($olt);
+            $driver->connect();
+            $result = $driver->setPonPortInfo($board, $slot, $port, $name, $desc);
+            $driver->disconnect();
+
+            (new ProvisionLogModel())->log(
+                $this->userId, 'pon_info', $result['success'] ? 'success' : 'failed',
+                "Port gpon-olt_{$board}/{$slot}/{$port}: name='{$name}' description='{$desc}'",
+                null, $oltId
+            );
+
+            return $this->response->setJSON([
+                'success' => $result['success'],
+                'log'     => $result['log'] ?? [],
+                'message' => $result['success']
+                    ? "Nama/deskripsi gpon-olt_{$board}/{$slot}/{$port} disimpan."
+                    : 'Gagal menyimpan: ' . implode(' | ', $result['log'] ?? []),
+            ]);
+        } catch (\Throwable $e) {
+            return $this->response->setJSON(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
     /** POST /olts/{id}/settings/vlan-add */
     public function vlanAdd(int $oltId)
     {

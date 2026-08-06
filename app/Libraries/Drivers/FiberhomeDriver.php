@@ -519,6 +519,11 @@ class FiberhomeDriver implements OltDriverInterface
         return ['success' => false, 'log' => ['Enable/disable port PON belum didukung driver Fiberhome.']];
     }
 
+    public function setPonPortInfo(string $board, string $slot, string $port, ?string $name, ?string $description): array
+    {
+        return ['success' => false, 'log' => ['Ubah nama/deskripsi port PON belum didukung driver Fiberhome.']];
+    }
+
     public function getVlanDatabase(): array { return []; }
 
     public function addVlan(int $vlanId): array

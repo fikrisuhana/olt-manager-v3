@@ -1369,6 +1369,45 @@ class ZteDriver implements OltDriverInterface
     }
 
     /**
+     * name / description port PON. Keduanya opsional:
+     *   null   → biarkan apa adanya
+     *   ''     → hapus (no name / no description)
+     * Verified di running-config C320: "description CIBUNGUR", "name ODC-TONI CBR"
+     * (name boleh mengandung spasi, tanpa kutip).
+     */
+    public function setPonPortInfo(string $board, string $slot, string $port, ?string $name, ?string $description): array
+    {
+        $log = [];
+        $ok  = true;
+
+        $this->telnet->execute('conf t', $this->configPrompt, 5);
+        $this->telnet->execute("interface gpon-olt_{$board}/{$slot}/{$port}", $this->ifPrompt, 5);
+
+        foreach ([['description', $description], ['name', $name]] as [$field, $value]) {
+            if ($value === null) continue;
+
+            // Buang karakter yang bisa memecah baris perintah CLI.
+            $value = trim(preg_replace('/[\r\n;|]+/', ' ', $value));
+            $cmd   = $value === '' ? "no {$field}" : "{$field} {$value}";
+
+            $out = $this->telnet->execute($cmd, $this->ifPrompt, 5);
+            if ($this->isCliError($out)) {
+                $ok = false;
+                $log[] = "WARN '{$cmd}' → " . trim(preg_replace('/\s+/', ' ', substr($out, -140)));
+            } else {
+                $log[] = "'{$cmd}' OK";
+            }
+        }
+
+        $this->telnet->execute('exit', $this->configPrompt, 3);
+        $this->telnet->execute('exit', $this->rootPrompt, 3);
+        $this->telnet->execute('write', $this->rootPrompt, 20);
+        $log[] = 'Configuration saved (write)';
+
+        return ['success' => $ok, 'log' => $log];
+    }
+
+    /**
      * show vlan summary
      *   All created vlan num: 17
      *   Details are following:

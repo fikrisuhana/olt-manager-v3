@@ -98,6 +98,40 @@
         </div>
     </div>
 
+    <!-- Modal edit nama/deskripsi port -->
+    <div class="modal fade" id="ponEditModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content rounded-4 border-0 shadow">
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title fw-bold text-dark">
+                        <i class="bi bi-pencil-square text-primary me-1"></i>
+                        Edit Port <span class="font-monospace" id="pe_title"></span>
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <input type="hidden" id="pe_board"><input type="hidden" id="pe_slot"><input type="hidden" id="pe_port">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Nama (name)</label>
+                        <input type="text" id="pe_name" class="form-control form-control-sm" maxlength="64" placeholder="misal: ODC-TONI CBR">
+                        <div class="form-text">Perintah OLT: <code>name &lt;teks&gt;</code>. Boleh pakai spasi. Kosongkan untuk menghapus.</div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Deskripsi (description)</label>
+                        <input type="text" id="pe_desc" class="form-control form-control-sm" maxlength="64" placeholder="misal: CIBUNGUR">
+                        <div class="form-text">Perintah OLT: <code>description &lt;teks&gt;</code>. Kosongkan untuk menghapus.</div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button class="btn btn-google-secondary btn-sm" data-bs-dismiss="modal">Batal</button>
+                    <button class="btn btn-google-primary btn-sm px-3" onclick="savePonInfo()">
+                        <i class="bi bi-check-circle me-1"></i>Simpan ke OLT
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Log aksi -->
     <div class="card border-0 shadow-sm rounded-4 d-none" id="cardLog">
         <div class="card-body p-4">
@@ -210,6 +244,10 @@ function renderPorts(ports) {
                 <span class="chip ${p.enabled ? 'chip-success' : 'chip-neutral'}">${p.enabled ? 'Aktif' : 'Shutdown'}</span>
             </td>
             <td class="pe-4 text-end">
+                <button class="btn btn-sm btn-outline-secondary py-1 px-3 me-1" title="Ubah nama & deskripsi"
+                        onclick='editPon(${JSON.stringify(p)})'>
+                    <i class="bi bi-pencil"></i>
+                </button>
                 <button class="btn btn-sm ${p.enabled ? 'btn-outline-danger' : 'btn-outline-success'} py-1 px-3"
                         onclick="setPon('${p.board}','${p.slot}','${p.port}',${p.enabled ? 0 : 1},${p.onu_configured})">
                     <i class="bi bi-power me-1"></i>${p.enabled ? 'Disable' : 'Enable'}
@@ -251,6 +289,35 @@ function setPon(board, slot, port, enable, onuCount) {
     fetch(`/olts/${OLT_ID}/settings/pon-state`, { method: 'POST', body: fd })
         .then(r => r.json())
         .then(d => {
+            pushLog(d.log && d.log.length ? d.log : [d.message], !!d.success);
+            if (d.success) loadStatus();
+        })
+        .catch(e => pushLog('Error: ' + e.message, false));
+}
+
+function editPon(p) {
+    document.getElementById('pe_title').textContent = `gpon-olt_${p.board}/${p.slot}/${p.port}`;
+    document.getElementById('pe_board').value = p.board;
+    document.getElementById('pe_slot').value  = p.slot;
+    document.getElementById('pe_port').value  = p.port;
+    document.getElementById('pe_name').value  = p.name || '';
+    document.getElementById('pe_desc').value  = p.description || '';
+    new bootstrap.Modal(document.getElementById('ponEditModal')).show();
+}
+
+function savePonInfo() {
+    const fd = new FormData();
+    fd.append(CSRF_NAME, CSRF_HASH);
+    fd.append('board', document.getElementById('pe_board').value);
+    fd.append('slot',  document.getElementById('pe_slot').value);
+    fd.append('port',  document.getElementById('pe_port').value);
+    fd.append('name',        document.getElementById('pe_name').value.trim());
+    fd.append('description', document.getElementById('pe_desc').value.trim());
+
+    fetch(`/olts/${OLT_ID}/settings/pon-info`, { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(d => {
+            bootstrap.Modal.getInstance(document.getElementById('ponEditModal')).hide();
             pushLog(d.log && d.log.length ? d.log : [d.message], !!d.success);
             if (d.success) loadStatus();
         })

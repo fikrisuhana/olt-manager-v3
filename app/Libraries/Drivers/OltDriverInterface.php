@@ -83,6 +83,12 @@ interface OltDriverInterface
     /** Aktifkan/matikan port PON (no shutdown / shutdown). */
     public function setPonPortState(string $board, string $slot, string $port, bool $enable): array;
 
+    /**
+     * Ubah nama (name) dan/atau deskripsi (description) port PON.
+     * null = jangan sentuh field itu; string kosong = hapus (no name / no description).
+     */
+    public function setPonPortInfo(string $board, string $slot, string $port, ?string $name, ?string $description): array;
+
     /** Daftar VLAN di VLAN database OLT. Return: [1,10,100,150,...] */
     public function getVlanDatabase(): array;
 
