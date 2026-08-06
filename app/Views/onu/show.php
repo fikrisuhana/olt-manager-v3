@@ -764,18 +764,41 @@ function renameOnly() {
     fetch(`/onus/${ONU_ID}/update-info`, { method: 'POST', body: fd })
         .then(r => r.json())
         .then(d => {
-            if (d.success) location.reload();
-            else alert(d.message || 'Gagal menyimpan.');
+            if (!d.success) { alert(d.message || 'Gagal menyimpan.'); return; }
+            // Nama didorong ke OLT juga; kalau OLT menolak, jangan diam-diam kelihatan sukses.
+            if (d.olt_warning) alert(d.message);
+            location.reload();
         })
         .catch(e => alert('Error: ' + e.message));
 }
 
+const ONU_CURRENT = <?= json_encode([
+    'vlan_internet' => (string)($onu['vlan_internet'] ?? ''),
+    'vlan_acs'      => (string)($onu['vlan_acs'] ?? ''),
+    'tcont_profile' => (string)($onu['tcont_profile'] ?? ''),
+]) ?>;
+
 function saveInfo(autoReload = false) {
+    const vi = document.getElementById('edit_vlan_internet').value.trim();
+    const va = document.getElementById('edit_vlan_acs').value.trim();
+    const tc = document.getElementById('edit_tcont').value.trim();
+
+    // VLAN/TCONT berubah = tulis ulang service-port & tcont di OLT → layanan pelanggan
+    // putus beberapa detik. Jangan lakukan diam-diam saat orang cuma mau ganti nama.
+    const cfgChanged = vi !== ONU_CURRENT.vlan_internet
+                    || va !== ONU_CURRENT.vlan_acs
+                    || tc !== ONU_CURRENT.tcont_profile;
+    if (cfgChanged && !autoReload) {
+        if (!confirm('VLAN/TCONT berubah — konfigurasi ONU akan ditulis ulang ke OLT '
+                   + '(service-port lama dihapus, lalu dibuat ulang).\n\n'
+                   + 'Koneksi pelanggan putus beberapa detik. Lanjutkan?')) return;
+    }
+
     const fd = new FormData();
     fd.append('name',           document.getElementById('edit_name').value.trim());
-    fd.append('vlan_internet',  document.getElementById('edit_vlan_internet').value.trim());
-    fd.append('vlan_acs',       document.getElementById('edit_vlan_acs').value.trim());
-    fd.append('tcont_profile',  document.getElementById('edit_tcont').value.trim());
+    fd.append('vlan_internet',  vi);
+    fd.append('vlan_acs',       va);
+    fd.append('tcont_profile',  tc);
     fd.append('pppoe_user',     document.getElementById('edit_pppoe_user').value.trim());
     fd.append('<?= csrf_token() ?>', '<?= csrf_hash() ?>');
 
@@ -790,6 +813,7 @@ function saveInfo(autoReload = false) {
         .then(r => r.json())
         .then(data => {
             if (data.success) {
+                if (data.olt_warning) alert(data.message);
                 location.reload();
             } else {
                 el.className = 'mt-2 small alert alert-danger py-1';

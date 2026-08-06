@@ -331,12 +331,93 @@ class OnuController extends Controller
             return $this->response->setJSON(['success' => false, 'message' => 'Tidak ada perubahan untuk disimpan.']);
         }
 
+        // Edit di aplikasi harus benar-benar sampai ke OLT — kalau cuma masuk database,
+        // tampilan bilang VLAN 100 padahal running-config OLT masih VLAN lama.
+        $nameChanged = isset($data['name']) && $data['name'] !== $onu['name'];
+        $cfgChanged  = false;
+        foreach (['vlan_internet', 'vlan_acs', 'tcont_profile'] as $f) {
+            if (array_key_exists($f, $data) && (string)$data[$f] !== (string)$onu[$f]) $cfgChanged = true;
+        }
+
+        $oltLog     = [];
+        $oltWarning = null;
+        $oltPartial = false;
+
+        if ($nameChanged || $cfgChanged) {
+            try {
+                $olt    = (new OltModel())->find($onu['olt_id']);
+                $driver = OltDriverFactory::make($olt);
+                $driver->connect();
+
+                if ($cfgChanged) {
+                    // VLAN/TCONT berubah → tulis ulang konfigurasi ONU lewat jalur register
+                    // yang sudah terbukti (tcont/gemport/service-port + pon-onu-mng), dengan
+                    // reconfigure agar service-port lama dibersihkan dulu.
+                    $res = $driver->registerOnu([
+                        'board'         => $onu['board'],
+                        'slot'          => $onu['slot'],
+                        'port'          => $onu['port'],
+                        'onu_index'     => (string)$onu['onu_index'],
+                        'onu_type'      => $onu['onu_type'] ?: 'ALL-ONT',
+                        'sn'            => $onu['sn'],
+                        'name'          => $data['name'] ?? $onu['name'],
+                        'vlan_internet' => (int)($data['vlan_internet'] ?? $onu['vlan_internet']),
+                        'vlan_acs'      => (int)($data['vlan_acs'] ?? $onu['vlan_acs']),
+                        'tcont_profile' => (string)($data['tcont_profile'] ?? $onu['tcont_profile']),
+                        'pppoe_user'    => (string)($data['pppoe_user'] ?? $onu['pppoe_user'] ?? ''),
+                        'pppoe_pass'    => (string)($data['pppoe_pass'] ?? $onu['pppoe_pass'] ?? ''),
+                        'acs_url'       => trim($olt['acs_url'] ?? ''),
+                        'use_acs'       => (bool)($olt['use_acs'] ?? 1),
+                        'force'         => true,
+                        'reconfigure'   => true,
+                    ]);
+                    $oltLog     = $res['log'] ?? [];
+                    $oltPartial = !empty($res['partial']);
+                    if ($oltPartial) {
+                        $oltWarning = implode(' | ', $res['warnings'] ?? ['Sebagian perintah ditolak OLT.']);
+                    }
+                } else {
+                    // Nama saja → cukup ubah 'name' di interface, tidak mengganggu layanan.
+                    $res    = $driver->setOnuName($onu['board'], $onu['slot'], $onu['port'], $onu['onu_index'], $data['name']);
+                    $oltLog = $res['log'] ?? [];
+                    if (!empty($res['success'])) {
+                        $data['name'] = $res['name'] ?: $data['name'];   // samakan DB dengan OLT
+                    } else {
+                        $oltWarning = implode(' | ', $oltLog) ?: 'Gagal menulis nama ke OLT.';
+                    }
+                }
+
+                $driver->disconnect();
+            } catch (\Throwable $e) {
+                $oltWarning = 'OLT tidak bisa dihubungi: ' . $e->getMessage();
+            }
+
+            (new ProvisionLogModel())->log(
+                $this->userId, 'edit_onu', $oltWarning ? 'failed' : 'success',
+                "Edit ONU {$onu['sn']} (" . implode(', ', array_keys($data)) . ')'
+                . ($oltWarning ? " — OLT: {$oltWarning}" : ''),
+                $id, $onu['olt_id']
+            );
+        }
+
         $onuModel->update($id, $data);
 
+        $msg = 'Tersimpan & diterapkan ke OLT (' . implode(', ', array_keys($data)) . ').';
+        if ($oltWarning) {
+            $msg = 'Tersimpan di database, TAPI OLT belum sepenuhnya berubah: ' . $oltWarning;
+        } elseif (!$nameChanged && !$cfgChanged) {
+            $msg = 'Info ONU berhasil disimpan (' . implode(', ', array_keys($data)) . ').';
+        }
+
         return $this->response->setJSON([
-            'success' => true,
-            'fields'  => array_keys($data),
-            'message' => 'Info ONU berhasil disimpan (' . implode(', ', array_keys($data)) . ').',
+            'success'     => true,
+            'fields'      => array_keys($data),
+            'name'        => $data['name'] ?? $onu['name'],
+            'olt_pushed'  => $nameChanged || $cfgChanged,
+            'olt_partial' => $oltPartial,
+            'olt_warning' => $oltWarning,
+            'log'         => $oltLog,
+            'message'     => $msg,
         ]);
     }
 

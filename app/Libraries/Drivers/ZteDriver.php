@@ -322,6 +322,16 @@ class ZteDriver implements OltDriverInterface
         // Konfigurasi interface gpon-onu
         $this->telnet->execute("interface gpon-onu_{$board}/{$slot}/{$port}:{$idx}", $this->ifPrompt, 5);
         $this->telnet->execute("name {$name}", $this->ifPrompt, 3);
+
+        // Ganti VLAN pada ONU yang SUDAH punya service-port: ZTE menolak service-port
+        // dengan nomor sama ("port service para conflicted") sehingga VLAN baru tak pernah
+        // masuk. Hapus dulu service-port lama — hanya saat reconfigure, bukan register baru.
+        if (!empty($params['reconfigure'])) {
+            for ($sp = 1; $sp <= 4; $sp++) {
+                $this->telnet->execute("no service-port {$sp}", $this->ifPrompt, 5);
+            }
+            $log[] = 'Service-port lama dibersihkan (reconfigure)';
+        }
         // gemport & service-port bergantung pada tcont. Kalau tcont ditolak, sisanya pasti
         // gagal beruntun ("T-CONT does not exist" → "Invalid port") dan cuma bikin log ramai
         // tanpa info baru. Hentikan rantainya, laporkan sebabnya sekali dengan jelas.
@@ -701,6 +711,36 @@ class ZteDriver implements OltDriverInterface
         }
         $log[] = "WARN: service hsi/int/ppp semua gagal untuk vlan {$vlan}";
         return false;
+    }
+
+    /**
+     * Ganti nama ONU tanpa re-register:
+     *   conf t → interface gpon-onu_B/S/P:I → name <nama> → write
+     * Nama dibersihkan seperti saat register (CLI ZTE memecah token di spasi).
+     */
+    public function setOnuName(string $board, string $slot, string $port, string $onuIndex, string $name): array
+    {
+        $clean = preg_replace('/[^A-Za-z0-9_\-]/', '_', trim($name));
+        $clean = trim(preg_replace('/_+/', '_', $clean), '_');
+        if ($clean === '') {
+            return ['success' => false, 'name' => '', 'log' => ['Nama kosong setelah dibersihkan.']];
+        }
+
+        $log = [];
+        $this->telnet->execute('conf t', $this->configPrompt, 5);
+        $this->telnet->execute("interface gpon-onu_{$board}/{$slot}/{$port}:{$onuIndex}", $this->ifPrompt, 5);
+
+        $out = $this->telnet->execute("name {$clean}", $this->ifPrompt, 5);
+        $ok  = !$this->isCliError($out);
+        $log[] = ($ok ? '' : 'WARN ') . "gpon-onu_{$board}/{$slot}/{$port}:{$onuIndex} → 'name {$clean}' "
+               . ($ok ? 'OK' : trim(preg_replace('/\s+/', ' ', substr($out, -140))));
+
+        $this->telnet->execute('exit', $this->configPrompt, 3);
+        $this->telnet->execute('exit', $this->rootPrompt, 3);
+        $this->telnet->execute('write', $this->rootPrompt, 20);
+        $log[] = 'Configuration saved (write)';
+
+        return ['success' => $ok, 'name' => $clean, 'log' => $log];
     }
 
     public function getSnAtIndex(string $board, string $slot, string $port, string $onuIndex): ?string

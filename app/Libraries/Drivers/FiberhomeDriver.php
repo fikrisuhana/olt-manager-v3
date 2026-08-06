@@ -498,6 +498,16 @@ class FiberhomeDriver implements OltDriverInterface
         return (bool)preg_match('/(error|invalid|fail|unknown command|incomplete|%\s)/i', $s);
     }
 
+    /**
+     * Ganti nama ONU di OLT. Grammar AN5516/AN6000 untuk rename tanpa re-register
+     * belum diverifikasi di perangkat — jangan tebak perintah di OLT produksi.
+     */
+    public function setOnuName(string $board, string $slot, string $port, string $onuIndex, string $name): array
+    {
+        return ['success' => false, 'name' => $name,
+                'log' => ['Ganti nama ONU di OLT belum didukung driver Fiberhome (nama tetap tersimpan di database).']];
+    }
+
     public function getBrand(): string { return 'Fiberhome'; }
     public function getModel(): string { return $this->config['model'] ?? 'AN6000'; }
 
