@@ -5,7 +5,7 @@ namespace App\Controllers;
 use App\Models\OltModel;
 use App\Models\OnuModel;
 use App\Models\ProvisionLogModel;
-use App\Libraries\Drivers\OltDriverFactory;
+use App\Libraries\OltDriverFactory;
 use App\Libraries\OnuCacheService;
 
 class MigrationController extends BaseController
