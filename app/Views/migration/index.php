@@ -48,6 +48,55 @@
                     </div>
                 </div>
 
+                <!-- VLAN ACS / Management -->
+                <?php $useAcsDefault = (int)($selectedOlt['use_acs'] ?? 1) === 1; ?>
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold d-flex align-items-center justify-content-between">
+                        <span>VLAN ACS / Management</span>
+                        <span class="form-check form-switch mb-0">
+                            <input class="form-check-input" type="checkbox" id="useAcsToggle"
+                                   onchange="toggleUseAcs()" <?= $useAcsDefault ? 'checked' : '' ?>>
+                            <label class="form-check-label small text-secondary" for="useAcsToggle">Pakai ACS</label>
+                        </span>
+                    </label>
+                    <input type="number" id="vlanAcsInput" class="form-control form-control-sm"
+                           placeholder="100" value="100" min="1" max="4094"
+                           <?= $useAcsDefault ? '' : 'disabled' ?>
+                           title="VLAN manajemen TR-069. Harus beda dari VLAN internet.">
+                    <div class="form-text small" id="vlanAcsHint">
+                        <?= $useAcsDefault
+                            ? 'Wajib beda dari VLAN internet — dipakai <code>service acs</code> + <code>tr069-mgmt</code>.'
+                            : 'ACS dimatikan di setting OLT ini — ONU diregistrasi tanpa <code>service acs</code>.' ?>
+                    </div>
+                </div>
+
+                <!-- Traffic / Bandwidth Profile -->
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold">Traffic Profile (Bandwidth)</label>
+                    <select id="trafficSelect" class="form-select form-select-sm shadow-none">
+                        <option value="">-- Tanpa traffic-limit --</option>
+                        <?php
+                        $traffics = array_values(array_filter(array_map('trim', explode("\n", $selectedOlt['traffic_profiles'] ?? ''))));
+                        foreach ($traffics as $tf):
+                        ?>
+                            <option value="<?= esc($tf) ?>"><?= esc($tf) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+
+                <!-- Tipe ONU -->
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold">Tipe ONU (onu type)</label>
+                    <input type="text" id="onuTypeInput" class="form-control form-control-sm"
+                           value="ALL-ONT" list="migOnuTypeList" placeholder="ALL-ONT"
+                           title="Harus nama onu-type yang ada di OLT (show gpon onu-type)">
+                    <datalist id="migOnuTypeList">
+                        <?php foreach (($onu_types ?? []) as $t): ?>
+                            <option value="<?= esc($t) ?>">
+                        <?php endforeach; ?>
+                    </datalist>
+                </div>
+
                 <!-- TCONT Profile -->
                 <div class="col-md-3">
                     <label class="form-label small fw-bold">TCONT Profile</label>
@@ -181,6 +230,7 @@
 <script>
 let currentOltId = <?= $selectedOlt ? $selectedOlt['id'] : 0 ?>;
 let scannedOnus  = [];
+let vlanProfileMap = {};   // vlan id → nama onu vlan-profile di OLT
 
 document.addEventListener('DOMContentLoaded', () => {
     if (currentOltId) {
@@ -190,6 +240,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function changeOlt(oltId) {
     window.location.href = `/olts/${oltId}/migration`;
+}
+
+function toggleUseAcs() {
+    const on    = document.getElementById('useAcsToggle').checked;
+    const input = document.getElementById('vlanAcsInput');
+    const hint  = document.getElementById('vlanAcsHint');
+    input.disabled = !on;
+    hint.innerHTML = on
+        ? 'Wajib beda dari VLAN internet — dipakai <code>service acs</code> + <code>tr069-mgmt</code>.'
+        : 'ACS dimatikan — ONU diregistrasi tanpa <code>service acs</code> / <code>tr069-mgmt</code>.';
 }
 
 function toggleCustomPrefix() {
@@ -218,6 +278,8 @@ function loadVlanProfiles() {
                 opt.textContent = `${p.name} — VLAN ${p.vlan}`;
                 if (p.vlan == 150) opt.selected = true;
                 select.appendChild(opt);
+                // nama onu vlan-profile dipakai driver ZTE untuk wan-ip/vlan-profile
+                vlanProfileMap[String(p.vlan)] = p.name;
             });
             if (select.value && input) {
                 input.value = select.value;
@@ -412,11 +474,41 @@ async function openExecuteModal() {
     const vlanSelect = document.getElementById('vlanInternetSelect');
     const vlanInput  = document.getElementById('vlanInternetInput');
     const vlanVal    = (vlanInput && vlanInput.value) ? vlanInput.value : (vlanSelect ? vlanSelect.value : '150');
+    const useAcs     = document.getElementById('useAcsToggle').checked;
+    const vlanAcsVal = useAcs ? (document.getElementById('vlanAcsInput').value || '').trim() : '';
     const tcontVal   = document.getElementById('tcontSelect').value;
+    const trafficVal = document.getElementById('trafficSelect').value;
+    const onuTypeVal = (document.getElementById('onuTypeInput').value || '').trim() || 'ALL-ONT';
+    const pppoeProf  = vlanProfileMap[String(vlanVal)] || '';
     const delayMs    = parseInt(document.getElementById('delaySelect').value) || 1000;
 
     if (!vlanVal) {
         alert('Pilih VLAN Internet Target terlebih dahulu!');
+        return;
+    }
+
+    // TCONT wajib: kalau `tcont 1 ... profile X` gagal (profil tak ada di OLT), gemport 1
+    // ikut gagal → service-port & service hsi/acs gagal → ONU cuma ke-register SN-nya,
+    // VLAN tidak nembus sama sekali. Ini penyebab utama migrasi "sukses tapi mati".
+    if (!tcontVal) {
+        alert('Pilih TCONT Profile dulu.\n\n'
+            + 'Kalau TCONT kosong, driver menebak profil dan bisa ditolak OLT — '
+            + 'akibatnya gemport & service-port gagal, ONU cuma terdaftar SN tanpa VLAN.');
+        return;
+    }
+
+    // Tanpa VLAN ACS, driver tidak menulis `service acs` / `ip-host dhcp` / `tr069-mgmt`
+    // → ONU tak pernah nyampe ACS dan PPPoE tak pernah ter-provision. Ini bikin migrasi
+    // "sukses" tapi pelanggan tetap mati. Tahan di depan, jangan diam-diam.
+    if (useAcs && !vlanAcsVal) {
+        alert('Mode "Pakai ACS" aktif tapi VLAN ACS kosong.\n\n'
+            + 'Isi VLAN manajemen (default 100), atau matikan toggle "Pakai ACS" '
+            + 'kalau OLT ini memang tidak pakai ACS.');
+        return;
+    } else if (vlanAcsVal && parseInt(vlanAcsVal) === parseInt(vlanVal)) {
+        alert('VLAN ACS tidak boleh sama dengan VLAN Internet.\n\n'
+            + 'Kalau sama, service-port & service acs rebutan gemport/VLAN yang sama di OMCI '
+            + '(ZTE Code 66669 / ONU config-fail). ACS harus di VLAN manajemen terpisah (mis. 100).');
         return;
     }
 
@@ -450,13 +542,17 @@ async function openExecuteModal() {
             slot: o.slot,
             port: o.port,
             onu_index: o.onu_index,
-            onu_type: 'ALL-ONT'
+            onu_type: onuTypeVal
         });
     });
 
     let successCount = 0;
     let failCount = 0;
+    let partialCount = 0;
     const total = items.length;
+
+    execLog.innerHTML += `<div style="color:#94a3b8">! Preset: VLAN internet ${vlanVal} | ACS ${useAcs ? ('ON, VLAN ' + vlanAcsVal) : 'OFF'}`
+                       + ` | tipe ${onuTypeVal} | tcont ${tcontVal || '-'} | traffic ${trafficVal || '-'}</div>`;
 
     for (let i = 0; i < total; i++) {
         const item = items[i];
@@ -476,31 +572,37 @@ async function openExecuteModal() {
         fd.append('onu_index', item.onu_index);
         fd.append('onu_type', item.onu_type);
         fd.append('vlan_internet', vlanVal);
+        fd.append('vlan_acs', vlanAcsVal);
+        fd.append('use_acs', useAcs ? '1' : '0');
         fd.append('tcont_profile', tcontVal);
+        fd.append('traffic_profile', trafficVal);
+        fd.append('pppoe_vlan_profile', pppoeProf);
         fd.append('force', '1');
 
         try {
             let res = await fetch(`/olts/${currentOltId}/migration/execute-single`, { method: 'POST', body: fd });
             let data = await res.json().catch(() => null);
 
-            // Fallback ke /onu/register (endpoint resmi registrasi OLT detail) jika execute-single bermasalah
-            if (!data || !data.success) {
+            // Fallback ke /onu/register HANYA kalau endpoint-nya sendiri yang rusak (respons
+            // bukan JSON / 500). Kalau OLT yang menolak (success=false), JANGAN diulang —
+            // dulu retry ini menyembunyikan error OLT dan mendaftar ulang ONU yang sama.
+            if (!data) {
                 const res2 = await fetch(`/olts/${currentOltId}/onu/register`, { method: 'POST', body: fd });
-                const data2 = await res2.json().catch(() => null);
-                if (data2 && data2.success) {
-                    data = data2;
-                } else if (data2 && data2.message) {
-                    data = data2;
-                }
+                data = await res2.json().catch(() => null);
             }
 
             if (data && data.success) {
                 successCount++;
                 const msg = data.message || `Terdaftar di ${item.board}/${item.slot}/${item.port}:${item.onu_index}`;
-                execLog.innerHTML += `<div style="color:#81c995">▶ [${i+1}/${total}] ✔ SUKSES: ${item.sn} (${item.name}) → ${msg}</div>`;
                 const rowTr = document.querySelector(`tr[data-index="${item.idx}"]`);
-                if (rowTr) {
-                    rowTr.querySelector('.pe-4').innerHTML = '<span class="chip chip-success">Registered</span>';
+                if (data.partial) {
+                    // ONU terdaftar tapi ada perintah kritis yang gagal — jangan hijau polos.
+                    partialCount++;
+                    execLog.innerHTML += `<div style="color:#fbbf24">▶ [${i+1}/${total}] ⚠ TIDAK LENGKAP: ${item.sn} (${item.name}) → ${msg}</div>`;
+                    if (rowTr) rowTr.querySelector('.pe-4').innerHTML = '<span class="chip chip-warning">Partial</span>';
+                } else {
+                    execLog.innerHTML += `<div style="color:#81c995">▶ [${i+1}/${total}] ✔ SUKSES: ${item.sn} (${item.name}) → ${msg}</div>`;
+                    if (rowTr) rowTr.querySelector('.pe-4').innerHTML = '<span class="chip chip-success">Registered</span>';
                 }
             } else {
                 failCount++;
@@ -521,10 +623,11 @@ async function openExecuteModal() {
 
     progressBar.style.width = '100%';
     progressPercent.textContent = '100%';
-    progressText.textContent = `Selesai! (${successCount} Sukses, ${failCount} Gagal)`;
+    progressText.textContent = `Selesai! (${successCount - partialCount} Sukses, ${partialCount} Tidak Lengkap, ${failCount} Gagal)`;
     progressBar.classList.remove('bg-primary');
-    progressBar.classList.add(failCount > 0 ? 'bg-warning' : 'bg-success');
-    execLog.innerHTML += `<div class="text-success fw-bold mt-2">✔ Selesai memproses ${total} ONU (${successCount} Sukses, ${failCount} Gagal).</div>`;
+    progressBar.classList.add((failCount > 0 || partialCount > 0) ? 'bg-warning' : 'bg-success');
+    execLog.innerHTML += `<div class="fw-bold mt-2 ${(failCount || partialCount) ? 'text-warning' : 'text-success'}">`
+                       + `✔ Selesai memproses ${total} ONU (${successCount - partialCount} Sukses, ${partialCount} Tidak Lengkap, ${failCount} Gagal).</div>`;
     btnClose.disabled = false;
 }
 </script>

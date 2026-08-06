@@ -6,7 +6,7 @@ use App\Models\OltModel;
 use App\Models\OnuModel;
 use App\Models\ProvisionLogModel;
 use App\Libraries\Drivers\OltDriverFactory;
-use App\Services\OnuCacheService;
+use App\Libraries\OnuCacheService;
 
 class MigrationController extends BaseController
 {
@@ -38,10 +38,19 @@ class MigrationController extends BaseController
             $selectedOlt = $olts[0];
         }
 
+        // Tipe ONU yang sudah pernah dipakai di OLT ini — jadi saran di form,
+        // bukan hardcode 'ALL-ONT' yang bisa ditolak OLT.
+        $onuTypes = [];
+        if ($selectedOlt) {
+            $existing = (new OnuModel())->getByOlt((int)$selectedOlt['id']);
+            $onuTypes = array_values(array_unique(array_filter(array_column($existing, 'onu_type'))));
+        }
+
         return view('migration/index', [
             'title'       => 'Migrasi & Registrasi Massal',
             'olts'        => $olts,
             'selectedOlt' => $selectedOlt,
+            'onu_types'   => $onuTypes,
         ]);
     }
 
@@ -153,6 +162,9 @@ class MigrationController extends BaseController
 
         $vlanInternet   = (int) $this->request->getPost('vlan_internet');
         $vlanAcs        = (int) $this->request->getPost('vlan_acs');
+        $useAcsPost     = $this->request->getPost('use_acs');
+        $useAcs         = $useAcsPost !== null ? (bool)(int)$useAcsPost : (bool)($olt['use_acs'] ?? 1);
+        if (!$useAcs) $vlanAcs = 0;
         $tcontProfile   = trim($this->request->getPost('tcont_profile') ?? '');
         $trafficProfile = trim($this->request->getPost('traffic_profile') ?? '');
 
@@ -182,7 +194,8 @@ class MigrationController extends BaseController
                 $slot     = (string)($item['slot'] ?? '1');
                 $port     = (string)($item['port'] ?? '1');
                 $onuIndex = (int)($item['onu_index'] ?? 1);
-                $onuType  = trim($item['onu_type'] ?? 'ALL-ONT');
+                $onuType  = trim($item['onu_type'] ?? '');
+                if ($onuType === '' || strtolower($onuType) === 'undefined') $onuType = 'ALL-ONT';
 
                 if (empty($sn)) continue;
 
@@ -202,7 +215,8 @@ class MigrationController extends BaseController
                     'traffic_profile' => $trafficProfile,
                     'pppoe_user'      => '', // Kosongkan agar murni transparent bridge tanpa OMCI PPPoE
                     'pppoe_pass'      => '',
-                    'use_acs'         => (bool)($olt['use_acs'] ?? 1),
+                    'acs_url'         => trim($olt['acs_url'] ?? ''),
+                    'use_acs'         => $useAcs,
                     'force'           => true,
                 ]);
 
@@ -246,7 +260,9 @@ class MigrationController extends BaseController
                     $logModel->log($this->userId, 'mass_register', 'success', "Mass register {$sn} ({$name})", $onuId, $oltId);
 
                     $successCount++;
-                    $logs[] = "  ✔ SUKSES: {$sn} ({$name}) terdaftar di {$board}/{$slot}/{$port}:{$onuIndex}";
+                    $logs[] = empty($result['partial'])
+                        ? "  ✔ SUKSES: {$sn} ({$name}) terdaftar di {$board}/{$slot}/{$port}:{$onuIndex}"
+                        : "  ⚠ TIDAK LENGKAP: {$sn} ({$name}) di {$board}/{$slot}/{$port}:{$onuIndex} — " . implode(' | ', $result['warnings'] ?? []);
                 } else {
                     $failCount++;
                     $logMsg = implode(' | ', $result['log'] ?? ['Gagal']);
@@ -294,10 +310,17 @@ class MigrationController extends BaseController
         $slot         = (string)($this->request->getPost('slot') ?? '1');
         $port         = (string)($this->request->getPost('port') ?? '1');
         $onuIndex     = (int)($this->request->getPost('onu_index') ?? 1);
-        $onuType      = trim($this->request->getPost('onu_type') ?? 'ALL-ONT');
+        $onuType      = trim($this->request->getPost('onu_type') ?? '');
+        if ($onuType === '' || strtolower($onuType) === 'undefined') $onuType = 'ALL-ONT';
         $vlanInternet = (int) $this->request->getPost('vlan_internet');
         $vlanAcs      = (int) $this->request->getPost('vlan_acs');
-        $tcontProfile = trim($this->request->getPost('tcont_profile') ?? '');
+        // Pakai ACS atau tidak: pilihan di form, default ikut setting OLT (kolom use_acs).
+        $useAcsPost = $this->request->getPost('use_acs');
+        $useAcs     = $useAcsPost !== null ? (bool)(int)$useAcsPost : (bool)($olt['use_acs'] ?? 1);
+        if (!$useAcs) $vlanAcs = 0;   // tanpa ACS: jangan tulis service acs/tr069-mgmt
+        $tcontProfile     = trim($this->request->getPost('tcont_profile') ?? '');
+        $trafficProfile   = trim($this->request->getPost('traffic_profile') ?? '');
+        $pppoeVlanProfile = trim($this->request->getPost('pppoe_vlan_profile') ?? '');
 
         if (empty($sn) || !$vlanInternet) {
             return $this->response->setJSON(['success' => false, 'message' => 'SN & VLAN Internet wajib diisi.']);
@@ -322,9 +345,14 @@ class MigrationController extends BaseController
                 'vlan_internet'   => $vlanInternet,
                 'vlan_acs'        => $vlanAcs,
                 'tcont_profile'   => $tcontProfile,
-                'pppoe_user'      => '',
-                'pppoe_pass'      => '',
-                'use_acs'         => (bool)($olt['use_acs'] ?? 1),
+                'traffic_profile' => $trafficProfile,
+                // Transparent bridge: PPPoE tidak di-dial dari OLT — ONU dial sendiri via ACS.
+                'pppoe_user'         => '',
+                'pppoe_pass'         => '',
+                'pppoe_vlan_profile' => $pppoeVlanProfile,
+                // Tanpa acs_url, driver tidak menulis tr069-mgmt → ONU tak pernah nyampe ACS.
+                'acs_url'         => trim($olt['acs_url'] ?? ''),
+                'use_acs'         => $useAcs,
                 'force'           => true,
             ]);
 
@@ -367,14 +395,29 @@ class MigrationController extends BaseController
                 }
 
                 $cache->addOnu($oltId, $board, $slot, $port, $onuIndex, $sn, $onuType, $name, $result['state'] ?? 'working');
-                $logModel->log($this->userId, 'mass_register', 'success', "Mass register {$sn} ({$name})", $onuId, $oltId);
+
+                // "Sukses tapi tidak lengkap": ONU terdaftar tapi ada perintah kritis yang gagal
+                // (tcont/gemport/service/acs). Jangan dilaporkan hijau polos — nanti ketahuan
+                // belakangan pas ONU tak dapat service/ACS.
+                $partial  = !empty($result['partial']);
+                $warnings = $result['warnings'] ?? [];
+                // status ENUM('success','failed') — 'partial' ditandai lewat pesan.
+                $logModel->log(
+                    $this->userId, 'mass_register', 'success',
+                    "Mass register {$sn} ({$name})" . ($partial ? ' — TIDAK LENGKAP: ' . implode(' | ', $warnings) : ''),
+                    $onuId, $oltId
+                );
 
                 return $this->response->setJSON([
-                    'success' => true,
-                    'sn'      => $sn,
-                    'name'    => $name,
-                    'log'     => $result['log'] ?? [],
-                    'message' => "SUKSES: {$sn} ({$name}) terdaftar di {$board}/{$slot}/{$port}:{$onuIndex}",
+                    'success'  => true,
+                    'partial'  => $partial,
+                    'warnings' => $warnings,
+                    'sn'       => $sn,
+                    'name'     => $name,
+                    'log'      => $result['log'] ?? [],
+                    'message'  => $partial
+                        ? "TIDAK LENGKAP: {$sn} ({$name}) terdaftar di {$board}/{$slot}/{$port}:{$onuIndex} — " . implode(' | ', $warnings)
+                        : "SUKSES: {$sn} ({$name}) terdaftar di {$board}/{$slot}/{$port}:{$onuIndex}",
                 ]);
             } else {
                 $logMsg = implode(' | ', $result['log'] ?? ['Gagal registrasi di OLT']);

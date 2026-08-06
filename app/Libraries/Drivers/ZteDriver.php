@@ -369,7 +369,21 @@ class ZteDriver implements OltDriverInterface
                         $warnings[] = "service internet gemport 1 vlan {$vlanInternet} gagal";
                     }
                 }
-                $this->telnet->execute("vlan port veip_1 mode hybrid", $this->mngPrompt, 5);
+                // veip = jalur data ke ONU. Kalau ini gagal, ONU terdaftar tapi tak lewat trafik —
+                // dulu output-nya diabaikan diam-diam. Cek + fallback transparent, lalu warning.
+                $oV = $this->telnet->execute("vlan port veip_1 mode hybrid", $this->mngPrompt, 5);
+                if ($this->isCliError($oV)) {
+                    $oV2 = $this->telnet->execute("vlan port veip_1 mode transparent", $this->mngPrompt, 5);
+                    if ($this->isCliError($oV2)) {
+                        $msg = "vlan port veip_1 (hybrid & transparent gagal) → " . trim(preg_replace('/\s+/', ' ', substr($oV2, -140)));
+                        $log[] = "WARN pon-onu-mng: {$msg}";
+                        $warnings[] = $msg;
+                    } else {
+                        $log[] = "vlan port veip_1 mode transparent OK (fallback dari hybrid)";
+                    }
+                } else {
+                    $log[] = "vlan port veip_1 mode hybrid OK";
+                }
 
                 if ($vlanAcs && $useAcs) {
                     $this->applyWanIpDhcp(2, $log);
