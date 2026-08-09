@@ -534,6 +534,18 @@ class FiberhomeDriver implements OltDriverInterface
         return ['success' => false, 'log' => ['Ubah nama/deskripsi port PON belum didukung driver Fiberhome.']];
     }
 
+    /** Index terpakai per port, dari 'show authorization <f/s/p>' per port PON yang dikenal. */
+    public function getUsedOnuIndexes(): array
+    {
+        $used = [];
+        foreach ($this->getRegisteredOnus() as $o) {
+            $key = "{$o['board']}/{$o['slot']}/{$o['port']}";
+            $used[$key][] = (int)$o['onu_index'];
+        }
+        foreach ($used as $k => $v) { $v = array_values(array_unique($v)); sort($v); $used[$k] = $v; }
+        return $used;
+    }
+
     public function getVlanDatabase(): array { return []; }
 
     public function addVlan(int $vlanId): array

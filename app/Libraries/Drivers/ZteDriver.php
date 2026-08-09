@@ -719,6 +719,28 @@ class ZteDriver implements OltDriverInterface
     }
 
     /**
+     * Index terpakai per port, dari 'show gpon onu state' — satu perintah untuk semua port.
+     * Baris: "1/1/1:1     enable       enable      working      1(GPON)"
+     * Ini sumber kebenaran saat memilih index kosong; cache JSON bisa basi.
+     */
+    public function getUsedOnuIndexes(): array
+    {
+        $out  = $this->telnet->execute('show gpon onu state', $this->rootPrompt, 20);
+        $used = [];
+        foreach (explode("\n", $out) as $line) {
+            if (preg_match('/^\s*(\d+)\/(\d+)\/(\d+):(\d+)\s+/', $line, $m)) {
+                $used["{$m[1]}/{$m[2]}/{$m[3]}"][] = (int)$m[4];
+            }
+        }
+        foreach ($used as $k => $v) {
+            $v = array_values(array_unique($v));
+            sort($v);
+            $used[$k] = $v;
+        }
+        return $used;
+    }
+
+    /**
      * Ganti nama ONU tanpa re-register:
      *   conf t → interface gpon-onu_B/S/P:I → name <nama> → write
      * Nama dibersihkan seperti saat register (CLI ZTE memecah token di spasi).

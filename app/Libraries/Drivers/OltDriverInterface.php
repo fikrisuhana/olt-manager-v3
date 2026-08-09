@@ -26,6 +26,12 @@ interface OltDriverInterface
     /** Push pon-onu-mng (PPPoE + ACS DHCP) ke ONU yang sudah terdaftar (tanpa re-register) */
     public function applyPonMng(string $board, string $slot, string $port, string $onuIndex, int $vlanAcs, string $acsUrl, int $vlanInternet = 0, string $pppoeUser = '', string $pppoePass = ''): array;
 
+    /**
+     * Index ONU yang SUDAH terpakai di OLT, per port. Sumber kebenaran untuk memilih
+     * index kosong saat registrasi massal. Return: ['1/1/1' => [1,3,4,5], ...]
+     */
+    public function getUsedOnuIndexes(): array;
+
     /** Ubah nama ONU di OLT (tanpa re-register). */
     public function setOnuName(string $board, string $slot, string $port, string $onuIndex, string $name): array;
 

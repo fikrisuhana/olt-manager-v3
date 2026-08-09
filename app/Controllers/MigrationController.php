@@ -77,6 +77,11 @@ class MigrationController extends BaseController
             $driver = OltDriverFactory::make($olt);
             $driver->connect();
             $uncfgOnus = $driver->getUnconfiguredOnus();
+            // Index terpakai dibaca LANGSUNG dari OLT, bukan dari cache JSON/DB. Cache
+            // tidak berubah selama loop, jadi dulu SEMUA ONU dalam satu batch dapat index
+            // yang sama — hasilnya saling menimpa di gpon-onu_B/S/P:<index yang sama> dan
+            // cuma satu yang benar-benar terdaftar meski semuanya dilaporkan sukses.
+            $usedIndexes = $driver->getUsedOnuIndexes();
             $driver->disconnect();
 
             $cacheData = $cache->load($oltId);
@@ -92,7 +97,14 @@ class MigrationController extends BaseController
                 $board  = (string)$onu['board'];
                 $slot   = (string)$onu['slot'];
                 $port   = (string)$onu['port'];
-                $index  = $cache->nextIndex($oltId, $board, $slot, $port);
+
+                // Ambil index bebas terkecil untuk port ini, lalu tandai terpakai supaya
+                // ONU berikutnya di batch yang sama tidak kebagian angka yang sama.
+                $portKey = "{$board}/{$slot}/{$port}";
+                $taken   = $usedIndexes[$portKey] ?? [];
+                $index   = 1;
+                while (in_array($index, $taken, true)) $index++;
+                $usedIndexes[$portKey][] = $index;
 
                 $existing = $onuModel->getByOltAndSn($oltId, $sn);
 
@@ -333,6 +345,20 @@ class MigrationController extends BaseController
         try {
             $driver = OltDriverFactory::make($olt);
             $driver->connect();
+
+            // Index sudah dipakai SN lain = menimpa pelanggan yang sudah jalan. Registrasi
+            // pakai force, jadi OLT tidak akan menahan; pengamannya harus di sini.
+            $snAtIndex = $driver->getSnAtIndex($board, $slot, $port, (string)$onuIndex);
+            if ($snAtIndex !== null && strcasecmp($snAtIndex, $sn) !== 0) {
+                $driver->disconnect();
+                return $this->response->setJSON([
+                    'success' => false,
+                    'sn'      => $sn,
+                    'name'    => $name,
+                    'message' => "BATAL: index {$board}/{$slot}/{$port}:{$onuIndex} sudah dipakai SN {$snAtIndex}. "
+                               . "Scan ulang agar index dihitung ulang dari OLT.",
+                ]);
+            }
 
             $result = $driver->registerOnu([
                 'board'           => $board,
