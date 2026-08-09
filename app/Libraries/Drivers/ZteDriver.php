@@ -381,14 +381,19 @@ class ZteDriver implements OltDriverInterface
         if ($vlanInternet || $vlanAcs) {
             $pppoeUser = trim($params['pppoe_user'] ?? '');
             $pppoePass = trim($params['pppoe_pass'] ?? '');
-            $useAcs    = (bool)($params['use_acs'] ?? $this->config['use_acs'] ?? true);
             $isZteOnu  = $this->isZteVendor($sn);
+
+            // VLAN ACS terisi = ACS memang diminta. Dulu blok ACS di pon-onu-mng masih
+            // di-gate flag use_acs OLT, sementara 'service-port user-vlan <acs>' di atas
+            // tidak — hasilnya service-port VLAN ACS terbentuk tapi 'service acs' TIDAK,
+            // jadi ONU tak pernah nyampe ACS padahal konfigurasinya kelihatan ada.
+            // Pemanggil yang menentukan: kalau ACS dimatikan, vlan_acs dikirim 0.
 
             $this->telnet->execute("pon-onu-mng gpon-onu_{$board}/{$slot}/{$port}:{$idx}", $this->mngPrompt, 5);
 
             if ($isZteOnu) {
                 // ── ONU Merk ZTE: OMCI native ZTE (service acs/ppp, wan-ip pppoe) ──
-                if ($vlanAcs && $useAcs) {
+                if ($vlanAcs) {
                     $out = $this->telnet->execute("service acs gemport 1 vlan {$vlanAcs}", $this->mngPrompt, 5);
                     if ($this->isCliError($out)) {
                         $msg = "service acs gemport 1 vlan {$vlanAcs} → " . trim(preg_replace('/\s+/', ' ', substr($out, -140)));
@@ -418,7 +423,7 @@ class ZteDriver implements OltDriverInterface
                     $log[] = "vlan port veip_1 mode hybrid OK";
                 }
 
-                if ($vlanAcs && $useAcs) {
+                if ($vlanAcs) {
                     $this->applyWanIpDhcp(2, $log);
                     $acsUrl = trim($params['acs_url'] ?? $this->config['acs_url'] ?? '');
                     if ($acsUrl) {
@@ -459,7 +464,7 @@ class ZteDriver implements OltDriverInterface
                         $log[] = "service 1 gemport 1 vlan {$vlanInternet} OK (Non-ZTE / Huawei ONU)";
                     }
                 }
-                if ($vlanAcs && $useAcs) {
+                if ($vlanAcs) {
                     $this->telnet->execute("service acs gemport 1 vlan {$vlanAcs}", $this->mngPrompt, 5);
                 }
 
