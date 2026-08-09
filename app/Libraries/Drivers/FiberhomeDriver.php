@@ -502,6 +502,35 @@ class FiberhomeDriver implements OltDriverInterface
      * Ganti nama ONU di OLT. Grammar AN5516/AN6000 untuk rename tanpa re-register
      * belum diverifikasi di perangkat — jangan tebak perintah di OLT produksi.
      */
+    /**
+     * Batch bertahap belum dibuat untuk Fiberhome (grammar whitelist/wan-cfg beda dan
+     * urutan fasenya belum diverifikasi di perangkat). Jatuh balik ke registerOnu()
+     * satu per satu — tetap dalam satu sesi telnet karena pemanggil yang membuka koneksi.
+     */
+    public function registerOnuBatch(array $items, array $common): array
+    {
+        $results = [];
+        foreach ($items as $it) {
+            $sn = strtoupper($it['sn']);
+            try {
+                $res = $this->registerOnu($common + [
+                    'board' => $it['board'], 'slot' => $it['slot'], 'port' => $it['port'],
+                    'onu_index' => (string)$it['onu_index'], 'sn' => $sn,
+                    'name' => $it['name'], 'onu_type' => $it['onu_type'] ?? 'ALL-ONT',
+                ]);
+                $results[$sn] = [
+                    'sn' => $sn, 'success' => !empty($res['success']),
+                    'partial' => !empty($res['partial']),
+                    'warnings' => $res['warnings'] ?? [], 'log' => $res['log'] ?? [],
+                ];
+            } catch (\Throwable $e) {
+                $results[$sn] = ['sn' => $sn, 'success' => false, 'partial' => false,
+                                 'warnings' => [], 'log' => [$e->getMessage()]];
+            }
+        }
+        return ['results' => $results, 'log' => ['Fiberhome: batch dijalankan satu per satu']];
+    }
+
     public function setOnuName(string $board, string $slot, string $port, string $onuIndex, string $name): array
     {
         return ['success' => false, 'name' => $name,

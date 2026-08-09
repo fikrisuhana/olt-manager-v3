@@ -180,8 +180,9 @@ class MigrationController extends BaseController
         $useAcsPost     = $this->request->getPost('use_acs');
         $useAcs         = $useAcsPost !== null ? (bool)(int)$useAcsPost : (bool)($olt['use_acs'] ?? 1);
         if (!$useAcs) $vlanAcs = 0;
-        $tcontProfile   = trim($this->request->getPost('tcont_profile') ?? '');
-        $trafficProfile = trim($this->request->getPost('traffic_profile') ?? '');
+        $tcontProfile     = trim($this->request->getPost('tcont_profile') ?? '');
+        $trafficProfile   = trim($this->request->getPost('traffic_profile') ?? '');
+        $pppoeVlanProfile = trim($this->request->getPost('pppoe_vlan_profile') ?? '');
 
         if (!$vlanInternet) {
             return $this->response->setJSON(['success' => false, 'message' => 'VLAN Internet (Service) wajib dipilih.']);
@@ -201,12 +202,18 @@ class MigrationController extends BaseController
             $driver = OltDriverFactory::make($olt);
             $driver->connect();
 
-            foreach ($items as $idx => $item) {
-                $sn       = strtoupper(trim($item['sn'] ?? ''));
-                $rawName  = trim($item['name'] ?? $sn);
-                $name     = preg_replace('/[^A-Za-z0-9_]/', '_', $rawName);
-                $name     = preg_replace('/_+/', '_', trim($name, '_'));
-                if (empty($name)) $name = $sn;
+            // Normalisasi + pengaman index sebelum apa pun ditulis ke OLT.
+            $batch   = [];
+            $skipped = [];
+            foreach ($items as $item) {
+                $sn = strtoupper(trim($item['sn'] ?? ''));
+                if ($sn === '') continue;
+
+                $rawName = trim($item['name'] ?? $sn);
+                $name    = preg_replace('/[^A-Za-z0-9_]/', '_', $rawName);
+                $name    = preg_replace('/_+/', '_', trim($name, '_'));
+                if ($name === '') $name = $sn;
+
                 $board    = (string)($item['board'] ?? '1');
                 $slot     = (string)($item['slot'] ?? '1');
                 $port     = (string)($item['port'] ?? '1');
@@ -214,100 +221,109 @@ class MigrationController extends BaseController
                 $onuType  = trim($item['onu_type'] ?? '');
                 if ($onuType === '' || strtolower($onuType) === 'undefined') $onuType = 'ALL-ONT';
 
-                if (empty($sn)) continue;
-
-                $logs[] = sprintf("▶ [%d/%d] Registrasi %s (%s) di %s/%s/%s:%d...", $idx + 1, count($items), $sn, $name, $board, $slot, $port, $onuIndex);
-
-                // Registrasi memakai force, jadi OLT tidak menahan penulisan ulang index yang
-                // sudah dipakai ONU lain — pengamannya harus di sini.
+                // Registrasi memakai force, jadi OLT tidak menahan penulisan ulang index
+                // yang sudah dipakai ONU lain — pengamannya harus di sini.
                 $snAtIndex = $driver->getSnAtIndex($board, $slot, $port, (string)$onuIndex);
                 if ($snAtIndex !== null && strcasecmp($snAtIndex, $sn) !== 0) {
                     $failCount++;
                     $results[] = ['sn' => $sn, 'status' => 'failed'];
-                    $logs[] = "  ✘ BATAL: index {$board}/{$slot}/{$port}:{$onuIndex} sudah dipakai SN {$snAtIndex} — scan ulang.";
+                    $logs[]    = "  ✘ BATAL: index {$board}/{$slot}/{$port}:{$onuIndex} sudah dipakai SN {$snAtIndex} — scan ulang.";
                     $logModel->log($this->userId, 'mass_register', 'failed',
                         "Mass register batal {$sn}: index {$onuIndex} dipakai {$snAtIndex}", null, $oltId);
+                    $skipped[$sn] = true;
                     continue;
                 }
 
-                $result = $driver->registerOnu([
-                    'board'           => $board,
-                    'slot'            => $slot,
-                    'port'            => $port,
-                    'onu_index'       => (string)$onuIndex,
-                    'onu_type'        => $onuType,
-                    'sn'              => $sn,
-                    'name'            => $name,
-                    'vlan_internet'   => $vlanInternet,
-                    'vlan_acs'        => $vlanAcs,
-                    'tcont_profile'   => $tcontProfile,
-                    'traffic_profile' => $trafficProfile,
-                    'pppoe_user'      => '', // Kosongkan agar murni transparent bridge tanpa OMCI PPPoE
-                    'pppoe_pass'      => '',
-                    'acs_url'         => trim($olt['acs_url'] ?? ''),
-                    'use_acs'         => $useAcs,
-                    'force'           => true,
-                ]);
-
-                if ($result['success']) {
-                    $existing = $onuModel->getAnyByOltAndSn($oltId, $sn);
-                    if ($existing) {
-                        $onuId = (int)$existing['id'];
-                        $onuModel->update($onuId, [
-                            'name'          => $name,
-                            'board'         => $board,
-                            'slot'          => $slot,
-                            'port'          => $port,
-                            'onu_index'     => $onuIndex,
-                            'onu_type'      => $onuType,
-                            'vlan_internet' => $vlanInternet,
-                            'vlan_acs'      => $vlanAcs ?: null,
-                            'tcont_profile' => $tcontProfile ?: null,
-                            'status'        => 'registered',
-                            'registered_at' => date('Y-m-d H:i:s'),
-                        ]);
-                    } else {
-                        $insertedId = $onuModel->insert([
-                            'olt_id'        => $oltId,
-                            'sn'            => $sn,
-                            'name'          => $name,
-                            'board'         => $board,
-                            'slot'          => $slot,
-                            'port'          => $port,
-                            'onu_index'     => $onuIndex,
-                            'onu_type'      => $onuType,
-                            'vlan_internet' => $vlanInternet,
-                            'vlan_acs'      => $vlanAcs ?: null,
-                            'tcont_profile' => $tcontProfile ?: null,
-                            'status'        => 'registered',
-                            'registered_at' => date('Y-m-d H:i:s'),
-                        ]);
-                        $onuId = (int)$insertedId;
-                    }
-
-                    $cache->addOnu($oltId, $board, $slot, $port, $onuIndex, $sn, $onuType, $name, $result['state'] ?? 'working');
-                    $logModel->log($this->userId, 'mass_register', 'success', "Mass register {$sn} ({$name})", $onuId, $oltId);
-
-                    $successCount++;
-                    if (empty($result['partial'])) {
-                        $results[] = ['sn' => $sn, 'status' => 'success'];
-                        $logs[] = "  ✔ SUKSES: {$sn} ({$name}) terdaftar di {$board}/{$slot}/{$port}:{$onuIndex}";
-                    } else {
-                        $partialCount++;
-                        $results[] = ['sn' => $sn, 'status' => 'partial'];
-                        $logs[] = "  ⚠ TIDAK LENGKAP: {$sn} ({$name}) di {$board}/{$slot}/{$port}:{$onuIndex} — "
-                                . implode(' | ', $result['warnings'] ?? []);
-                    }
-                } else {
-                    $failCount++;
-                    $results[] = ['sn' => $sn, 'status' => 'failed'];
-                    $logMsg = implode(' | ', $result['log'] ?? ['Gagal']);
-                    $logModel->log($this->userId, 'mass_register', 'failed', "Mass register gagal {$sn}: {$logMsg}", null, $oltId);
-                    $logs[] = "  ✘ GAGAL: {$sn} → " . $logMsg;
-                }
+                $batch[] = [
+                    'sn' => $sn, 'name' => $name, 'board' => $board, 'slot' => $slot,
+                    'port' => $port, 'onu_index' => $onuIndex, 'onu_type' => $onuType,
+                ];
+                $logs[] = sprintf("▶ %s (%s) → %s/%s/%s:%d", $sn, $name, $board, $slot, $port, $onuIndex);
             }
 
+            if (empty($batch)) {
+                $driver->disconnect();
+                return $this->response->setJSON([
+                    'success' => true, 'total' => count($items),
+                    'success_count' => 0, 'fail_count' => $failCount, 'partial_count' => 0,
+                    'results' => $results, 'logs' => $logs,
+                    'message' => 'Tidak ada ONU yang bisa diproses pada batch ini.',
+                ]);
+            }
+
+            // Registrasi BERTAHAP dalam satu sesi: otorisasi semua SN dulu → VLAN/TCONT →
+            // pon-onu-mng → 'write' SEKALI untuk seluruh batch. 'write' menyimpan ke flash
+            // dan paling lama; sekali per batch jauh lebih murah daripada sekali per ONU.
+            $batchRes = $driver->registerOnuBatch($batch, [
+                'vlan_internet'      => $vlanInternet,
+                'vlan_acs'           => $vlanAcs,
+                'tcont_profile'      => $tcontProfile,
+                'traffic_profile'    => $trafficProfile,
+                'pppoe_vlan_profile' => $pppoeVlanProfile,
+                // Transparent bridge: PPPoE tidak di-dial dari OLT.
+                'pppoe_user'         => '',
+                'pppoe_pass'         => '',
+                'acs_url'            => trim($olt['acs_url'] ?? ''),
+                'use_acs'            => $useAcs,
+                'force'              => true,
+            ]);
+
             $driver->disconnect();
+
+            foreach ($batchRes['log'] ?? [] as $l) {
+                $logs[] = "  · {$l}";
+            }
+
+            foreach ($batch as $b) {
+                $sn  = $b['sn'];
+                $res = $batchRes['results'][$sn] ?? ['success' => false, 'log' => ['Tidak ada hasil dari driver']];
+
+                if (empty($res['success'])) {
+                    $failCount++;
+                    $results[] = ['sn' => $sn, 'status' => 'failed'];
+                    $logMsg = implode(' | ', $res['log'] ?? ['Gagal']);
+                    $logModel->log($this->userId, 'mass_register', 'failed', "Mass register gagal {$sn}: {$logMsg}", null, $oltId);
+                    $logs[] = "  ✘ GAGAL: {$sn} → " . $logMsg;
+                    continue;
+                }
+
+                $row = [
+                    'name'          => $b['name'],
+                    'board'         => $b['board'],
+                    'slot'          => $b['slot'],
+                    'port'          => $b['port'],
+                    'onu_index'     => $b['onu_index'],
+                    'onu_type'      => $b['onu_type'],
+                    'vlan_internet' => $vlanInternet,
+                    'vlan_acs'      => $vlanAcs ?: null,
+                    'tcont_profile' => $tcontProfile ?: null,
+                    'status'        => 'registered',
+                    'registered_at' => date('Y-m-d H:i:s'),
+                ];
+
+                $existing = $onuModel->getAnyByOltAndSn($oltId, $sn);
+                if ($existing) {
+                    $onuId = (int)$existing['id'];
+                    $onuModel->update($onuId, $row);
+                } else {
+                    $onuId = (int)$onuModel->insert(['olt_id' => $oltId, 'sn' => $sn] + $row);
+                }
+
+                $cache->addOnu($oltId, $b['board'], $b['slot'], $b['port'], $b['onu_index'], $sn, $b['onu_type'], $b['name'], 'working');
+
+                $successCount++;
+                if (empty($res['partial'])) {
+                    $results[] = ['sn' => $sn, 'status' => 'success'];
+                    $logs[]    = "  ✔ SUKSES: {$sn} ({$b['name']}) terdaftar di {$b['board']}/{$b['slot']}/{$b['port']}:{$b['onu_index']}";
+                    $logModel->log($this->userId, 'mass_register', 'success', "Mass register {$sn} ({$b['name']})", $onuId, $oltId);
+                } else {
+                    $partialCount++;
+                    $results[] = ['sn' => $sn, 'status' => 'partial'];
+                    $warn      = implode(' | ', $res['warnings'] ?? []);
+                    $logs[]    = "  ⚠ TIDAK LENGKAP: {$sn} ({$b['name']}) di {$b['board']}/{$b['slot']}/{$b['port']}:{$b['onu_index']} — {$warn}";
+                    $logModel->log($this->userId, 'mass_register', 'success', "Mass register {$sn} ({$b['name']}) — TIDAK LENGKAP: {$warn}", $onuId, $oltId);
+                }
+            }
 
             return $this->response->setJSON([
                 'success' => true,

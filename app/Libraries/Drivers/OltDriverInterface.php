@@ -20,6 +20,13 @@ interface OltDriverInterface
      */
     public function registerOnu(array $params): array;
 
+    /**
+     * Registrasi banyak ONU dalam satu sesi, dikerjakan bertahap per fase
+     * (otorisasi SN → VLAN/TCONT → pon-onu-mng → write sekali).
+     * Return: ['results' => [SN => ['success','partial','warnings','log']], 'log' => [...]]
+     */
+    public function registerOnuBatch(array $items, array $common): array;
+
     /** Hapus ONU dari OLT */
     public function deleteOnu(string $board, string $slot, string $port, string $onuIndex): bool;
 

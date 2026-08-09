@@ -218,21 +218,24 @@ class ZteDriver implements OltDriverInterface
      * Catatan PPPoE: tidak dikonfigurasi via OMCI (pon-onu-mng ip-host tidak dipakai).
      * PPPoE dipush via GenieACS/TR-069 setelah ONU online — untuk semua brand ONU.
      */
-    public function registerOnu(array $params): array
+    /**
+     * Terapkan blok "interface gpon-onu_B/S/P:I" (name, sn-bind, tcont, gemport, service-port).
+     * Dipakai bersama oleh registerOnu() dan registerOnuBatch() supaya perilakunya tak bercabang.
+     * Asumsi: sudah berada di config mode.
+     */
+    /**
+     * Susun daftar perintah untuk blok "interface gpon-onu" (sn-bind, tcont, gemport,
+     * traffic-limit, service-port, script template). Dipakai bersama registerOnu() dan
+     * registerOnuBatch() supaya aturannya — termasuk dedupe service-port saat VLAN ACS
+     * sama dengan VLAN internet — tidak bercabang antar jalur.
+     *
+     * @return array ['cmds' => string[], 'tcont' => string]
+     */
+    private function buildIfCmds(array $params, array &$log, array &$warnings): array
     {
-        $board = $params['board'];
-        $slot  = $params['slot'];
-        $port  = $params['port'];
-        $idx   = $params['onu_index'];
-        $type  = $params['onu_type'];
-        $sn    = $params['sn'];
-        $name  = $params['name'];
-        $log   = [];
-        $warnings = [];   // perintah kritis yang gagal (tcont/gemport/service) → config incomplete
-
-        // Parameter terstruktur
         $vlanInternet = (int)($params['vlan_internet'] ?? 0);
         $vlanAcs      = (int)($params['vlan_acs'] ?? 0);
+
         $tcont = trim($params['tcont_profile'] ?? '');
         if (!$tcont) {
             $tcontList = array_values(array_filter(array_map('trim', explode("\n", $this->config['tcont_profiles'] ?? ''))));
@@ -240,98 +243,62 @@ class ZteDriver implements OltDriverInterface
             $log[] = "TCONT profile tidak dipilih — menggunakan default: '{$tcont}'";
         }
 
-        // Script tambahan dari template (opsional)
-        $ifExtra = trim($params['gpon_onu_script'] ?? '');
+        $cmds   = ['sn-bind enable sn'];
+        $cmds[] = "tcont 1 name tcont profile {$tcont}";
+        $cmds[] = "gemport 1 name gemport tcont 1";
 
-        // --- Build perintah gpon-onu interface ---
-        // Format diverifikasi dari "show running-config interface" ZTE C320 v1.2
-        $ifCmds = [];
-        $ifCmds[] = 'sn-bind enable sn';
         $trafficProfile = trim($params['traffic_profile'] ?? '');
-
-        $ifCmds[] = "tcont 1 name tcont profile {$tcont}";
-        $ifCmds[] = "gemport 1 name gemport tcont 1";
         if ($trafficProfile) {
-            $ifCmds[] = "gemport 1 traffic-limit upstream {$trafficProfile} downstream {$trafficProfile}";
-            $log[] = "Traffic limit: {$trafficProfile}";
+            $cmds[] = "gemport 1 traffic-limit upstream {$trafficProfile} downstream {$trafficProfile}";
+            $log[]  = "Traffic limit: {$trafficProfile}";
         }
         $log[] = "TCONT profile: {$tcont}";
-        // ACS dulu (sp1), internet kedua (sp2) — sesuai konvensi OLT tgp.
-        // PENTING: satu ONU tak boleh punya 2 service-port dgn pasangan (user-vlan/vlan)
-        // identik → ZTE balas "%Code 66669: port service para conflicted". Pada deployment
-        // single-VLAN (mis. VLAN 155 dipakai bareng ACS+internet/PPPoE), cukup 1 service-port;
-        // gemport 1 sudah membawa service acs + service ppp di VLAN yg sama.
+
+        // ACS dulu (sp1), internet kedua (sp2). Satu ONU tak boleh punya 2 service-port
+        // dengan pasangan (user-vlan/vlan) identik → ZTE balas Code 66669.
         $spIdx   = 1;
-        $spVlans = [];   // pasangan vlan yg sudah dibuat, cegah duplikat service-port
+        $spVlans = [];
         if ($vlanAcs) {
-            $ifCmds[] = "service-port {$spIdx} vport 1 user-vlan {$vlanAcs} vlan {$vlanAcs}";
+            $cmds[] = "service-port {$spIdx} vport 1 user-vlan {$vlanAcs} vlan {$vlanAcs}";
             $spVlans[$vlanAcs] = true;
             $spIdx++;
             $log[] = "VLAN ACS: {$vlanAcs}";
         }
         if ($vlanInternet && !isset($spVlans[$vlanInternet])) {
-            $ifCmds[] = "service-port {$spIdx} vport 1 user-vlan {$vlanInternet} vlan {$vlanInternet}";
-            $spVlans[$vlanInternet] = true;
-            $log[] = "VLAN internet: {$vlanInternet}";
+            $cmds[] = "service-port {$spIdx} vport 1 user-vlan {$vlanInternet} vlan {$vlanInternet}";
+            $log[]  = "VLAN internet: {$vlanInternet}";
         } elseif ($vlanInternet) {
-            // VLAN ACS == VLAN internet: service-port kedua di-skip supaya tak bentrok
-            // (Code 66669). Tapi ini nyaris selalu SALAH INPUT — ACS mestinya di VLAN
-            // manajemen terpisah (mis. 100). Kalau sama, service acs & service ppp rebutan
-            // gemport/vlan yg sama di OMCI → ONU "Config state: fail". Warning-kan.
             $log[] = "⚠ VLAN ACS = VLAN internet ({$vlanInternet}) — kemungkinan salah input. "
                    . "ACS biasanya di VLAN manajemen terpisah. service-port & service acs bisa bentrok "
                    . "(OMCI config-fail). Cek VLAN ACS.";
             $warnings[] = "VLAN ACS = VLAN internet ({$vlanInternet}) — ACS mestinya VLAN mgmt terpisah";
         }
-        foreach (explode("\n", $ifExtra) as $cmd) {
+
+        foreach (explode("\n", trim($params['gpon_onu_script'] ?? '')) as $cmd) {
             $cmd = trim($cmd);
-            if ($cmd && !str_starts_with($cmd, '#')) $ifCmds[] = $cmd;
+            if ($cmd && !str_starts_with($cmd, '#')) $cmds[] = $cmd;
         }
 
-        // Profile dari UI dropdown (sudah diketahui) → langsung pakai, tidak perlu Telnet.
-        // Fallback: ambil dari config OLT (pppoe_vlan_profile), atau default 'PPPOE'.
-        $pppoeProfile = trim($params['pppoe_vlan_profile'] ?? '')
-            ?: trim($this->config['pppoe_vlan_profile'] ?? 'PPPOE');
+        return ['cmds' => $cmds, 'tcont' => $tcont];
+    }
 
-        // --- Eksekusi CLI ke OLT ---
-        $this->telnet->execute('conf t', $this->configPrompt, 5);
-        $log[] = 'Entered configuration mode';
-
-        // Daftarkan ONU di port PON
-        $force  = (bool)($params['force'] ?? false);
-        $this->telnet->execute("interface gpon-olt_{$board}/{$slot}/{$port}", $this->ifPrompt, 5);
-        $result = $this->telnet->execute("onu {$idx} type {$type} sn {$sn}", $this->ifPrompt, 8);
-        $log[]  = "OLT response: " . trim(preg_replace('/\s+/', ' ', $result));
-        $alreadyExist = stripos($result, 'already exist') !== false || stripos($result, 'exist') !== false;
-        if ($alreadyExist && $force) {
-            $log[] = "ONU sudah ada di OLT (force re-configure interface)";
-        } else {
-            $errPatterns = ['error', 'invalid', 'failure', 'failed', 'already exist',
-                            'duplicated', 'occupied', 'exist', '% '];
-            foreach ($errPatterns as $pat) {
-                if (stripos($result, $pat) !== false) {
-                    $this->telnet->execute('exit', $this->configPrompt, 3);
-                    $this->telnet->execute('exit', $this->rootPrompt, 3);
-                    throw new \Exception("Gagal mendaftarkan ONU di OLT: " . trim(preg_replace('/\s+/', ' ', $result)));
-                }
-            }
-        }
-        $this->telnet->execute('exit', $this->configPrompt, 3);
-        $log[] = "ONU sn={$sn} registered on gpon-olt_{$board}/{$slot}/{$port}:{$idx}";
-
-        // Konfigurasi interface gpon-onu
+    private function applyIfCmds(
+        string $board, string $slot, string $port, string $idx, string $name,
+        array $ifCmds, string $tcont, bool $reconfigure, array &$log, array &$warnings
+    ): void {
         $this->telnet->execute("interface gpon-onu_{$board}/{$slot}/{$port}:{$idx}", $this->ifPrompt, 5);
         $this->telnet->execute("name {$name}", $this->ifPrompt, 3);
 
         // Ganti VLAN pada ONU yang SUDAH punya service-port: ZTE menolak service-port
         // dengan nomor sama ("port service para conflicted") sehingga VLAN baru tak pernah
         // masuk. Hapus dulu service-port lama — hanya saat reconfigure, bukan register baru.
-        if (!empty($params['reconfigure'])) {
+        if ($reconfigure) {
             for ($sp = 1; $sp <= 4; $sp++) {
                 $this->telnet->execute("no service-port {$sp}", $this->ifPrompt, 5);
             }
             $log[] = 'Service-port lama dibersihkan (reconfigure)';
         }
+
         // gemport & service-port bergantung pada tcont. Kalau tcont ditolak, sisanya pasti
         // gagal beruntun ("T-CONT does not exist" → "Invalid port") dan cuma bikin log ramai
         // tanpa info baru. Hentikan rantainya, laporkan sebabnya sekali dengan jelas.
@@ -360,9 +327,7 @@ class ZteDriver implements OltDriverInterface
                 }
 
                 $log[] = "WARN: {$msg}";
-                // tcont/gemport/service-port gagal = KRITIS: service acs/int downstream ikut gagal
-                // (mis. tcont profile kegedean → "Parameter exceeds range" → gemport tak terbentuk →
-                //  service acs gemport 1 gagal diam-diam → ONU tak dapat ACS). Jangan lapor sukses penuh.
+                // tcont/gemport/service-port gagal = KRITIS: service acs/int downstream ikut gagal.
                 if (preg_match('/^(tcont|gemport|service-port)\b/i', $cmd)) {
                     $warnings[] = $msg;
                 }
@@ -371,7 +336,18 @@ class ZteDriver implements OltDriverInterface
 
         $this->telnet->execute('exit', $this->configPrompt, 3);
         $log[] = 'gpon-onu interface configured';
+    }
 
+    /**
+     * Terapkan blok pon-onu-mng untuk satu ONU. Dipisah dari registerOnu() supaya jalur
+     * batch memakai logika yang sama persis (cabang ONU ZTE vs non-ZTE, veip, ACS, PPPoE).
+     * Asumsi: sudah berada di config mode.
+     */
+    private function applyPonMngForRegister(
+        string $board, string $slot, string $port, string $idx, string $sn,
+        int $vlanInternet, int $vlanAcs, array $params, string $pppoeProfile,
+        array &$log, array &$warnings
+    ): void {
         // pon-onu-mng: blok terpisah — service mapping VLAN ke veip
         // Syntax diverifikasi dari running-config ZTE C320:
         //   pon-onu-mng gpon-onu_B/S/P:I
@@ -485,6 +461,68 @@ class ZteDriver implements OltDriverInterface
             $this->telnet->execute('exit', $this->configPrompt, 3);
             $log[] = "pon-onu-mng: hsi={$vlanInternet} acs={$vlanAcs} (vendor=" . ($isZteOnu ? 'ZTE' : 'Non-ZTE/Huawei') . ")";
         }
+    }
+
+    public function registerOnu(array $params): array
+    {
+        $board = $params['board'];
+        $slot  = $params['slot'];
+        $port  = $params['port'];
+        $idx   = $params['onu_index'];
+        $type  = $params['onu_type'];
+        $sn    = $params['sn'];
+        $name  = $params['name'];
+        $log   = [];
+        $warnings = [];   // perintah kritis yang gagal (tcont/gemport/service) → config incomplete
+
+        // Parameter terstruktur
+        $vlanInternet = (int)($params['vlan_internet'] ?? 0);
+        $vlanAcs      = (int)($params['vlan_acs'] ?? 0);
+
+        // Perintah interface disusun helper yang sama dengan jalur batch.
+        $built  = $this->buildIfCmds($params, $log, $warnings);
+        $ifCmds = $built['cmds'];
+        $tcont  = $built['tcont'];
+
+        // Profile dari UI dropdown (sudah diketahui) → langsung pakai, tidak perlu Telnet.
+        // Fallback: ambil dari config OLT (pppoe_vlan_profile), atau default 'PPPOE'.
+        $pppoeProfile = trim($params['pppoe_vlan_profile'] ?? '')
+            ?: trim($this->config['pppoe_vlan_profile'] ?? 'PPPOE');
+
+        // --- Eksekusi CLI ke OLT ---
+        $this->telnet->execute('conf t', $this->configPrompt, 5);
+        $log[] = 'Entered configuration mode';
+
+        // Daftarkan ONU di port PON
+        $force  = (bool)($params['force'] ?? false);
+        $this->telnet->execute("interface gpon-olt_{$board}/{$slot}/{$port}", $this->ifPrompt, 5);
+        $result = $this->telnet->execute("onu {$idx} type {$type} sn {$sn}", $this->ifPrompt, 8);
+        $log[]  = "OLT response: " . trim(preg_replace('/\s+/', ' ', $result));
+        $alreadyExist = stripos($result, 'already exist') !== false || stripos($result, 'exist') !== false;
+        if ($alreadyExist && $force) {
+            $log[] = "ONU sudah ada di OLT (force re-configure interface)";
+        } else {
+            $errPatterns = ['error', 'invalid', 'failure', 'failed', 'already exist',
+                            'duplicated', 'occupied', 'exist', '% '];
+            foreach ($errPatterns as $pat) {
+                if (stripos($result, $pat) !== false) {
+                    $this->telnet->execute('exit', $this->configPrompt, 3);
+                    $this->telnet->execute('exit', $this->rootPrompt, 3);
+                    throw new \Exception("Gagal mendaftarkan ONU di OLT: " . trim(preg_replace('/\s+/', ' ', $result)));
+                }
+            }
+        }
+        $this->telnet->execute('exit', $this->configPrompt, 3);
+        $log[] = "ONU sn={$sn} registered on gpon-olt_{$board}/{$slot}/{$port}:{$idx}";
+
+        // Konfigurasi interface gpon-onu
+        $this->applyIfCmds(
+            $board, $slot, $port, $idx, $name, $ifCmds, $tcont,
+            !empty($params['reconfigure']), $log, $warnings
+        );
+
+        // pon-onu-mng (service/veip/ACS/PPPoE) — logika sama dipakai jalur batch.
+        $this->applyPonMngForRegister($board, $slot, $port, $idx, $sn, $vlanInternet, $vlanAcs, $params, $pppoeProfile, $log, $warnings);
 
         // Keluar config mode dan simpan
         $this->telnet->execute('exit', $this->rootPrompt, 3);
@@ -501,6 +539,143 @@ class ZteDriver implements OltDriverInterface
         }
 
         return ['success' => true, 'log' => $log, 'warnings' => $warnings, 'partial' => $partial];
+    }
+
+    /**
+     * Registrasi banyak ONU dalam SATU sesi telnet, dikerjakan BERTAHAP per fase —
+     * bukan satu ONU tuntas lalu ONU berikutnya:
+     *
+     *   Fase 1  conf t → interface gpon-olt_B/S/P → 'onu N type T sn S' untuk semua ONU
+     *           di port itu (otorisasi dulu; satu kali masuk interface per port)
+     *   Fase 2  interface gpon-onu_B/S/P:N → name/tcont/gemport/service-port per ONU
+     *   Fase 3  pon-onu-mng gpon-onu_B/S/P:N → service/veip/ACS/PPPoE per ONU
+     *   Fase 4  exit → 'write' SEKALI untuk seluruh batch
+     *
+     * 'write' menyimpan ke flash dan memakan waktu paling lama; sekali per batch jauh
+     * lebih murah daripada sekali per ONU. Fase 1 juga hanya sekali masuk/keluar
+     * interface gpon-olt per port.
+     *
+     * @param array $items  [['sn','name','board','slot','port','onu_index','onu_type'], ...]
+     * @param array $common vlan_internet, vlan_acs, tcont_profile, traffic_profile,
+     *                      pppoe_vlan_profile, acs_url, gpon_onu_script, force, reconfigure
+     * @return array ['results' => [sn => ['success','partial','warnings','log']], 'log' => [...]]
+     */
+    public function registerOnuBatch(array $items, array $common): array
+    {
+        $batchLog = [];
+        $results  = [];
+
+        foreach ($items as $it) {
+            $results[strtoupper($it['sn'])] = [
+                'sn' => strtoupper($it['sn']), 'success' => false, 'partial' => false,
+                'warnings' => [], 'log' => [],
+            ];
+        }
+
+        $this->telnet->execute('conf t', $this->configPrompt, 5);
+        $batchLog[] = 'Entered configuration mode';
+
+        // ── Fase 1: otorisasi SN, dikelompokkan per port PON ──────────────────
+        $byPort = [];
+        foreach ($items as $it) {
+            $byPort["{$it['board']}/{$it['slot']}/{$it['port']}"][] = $it;
+        }
+
+        $force = (bool)($common['force'] ?? false);
+        foreach ($byPort as $portKey => $portItems) {
+            [$b, $s, $p] = explode('/', $portKey);
+            $this->telnet->execute("interface gpon-olt_{$b}/{$s}/{$p}", $this->ifPrompt, 5);
+
+            foreach ($portItems as $it) {
+                $sn   = strtoupper($it['sn']);
+                $idx  = (string)$it['onu_index'];
+                $type = trim($it['onu_type'] ?? '') ?: 'ALL-ONT';
+
+                $out    = $this->telnet->execute("onu {$idx} type {$type} sn {$sn}", $this->ifPrompt, 8);
+                $exists = stripos($out, 'exist') !== false;
+
+                if (!$exists && $this->isCliError($out)) {
+                    // Gagal otorisasi → ONU ini tidak dilanjutkan ke fase berikutnya,
+                    // tapi ONU lain dalam batch tetap jalan.
+                    $results[$sn]['log'][] = "Gagal otorisasi di {$portKey}:{$idx} → "
+                                           . trim(preg_replace('/\s+/', ' ', $out));
+                    continue;
+                }
+                if ($exists && !$force) {
+                    $results[$sn]['log'][] = "ONU sudah ada di {$portKey}:{$idx} dan force tidak aktif.";
+                    continue;
+                }
+
+                $results[$sn]['authorized'] = true;
+                $results[$sn]['log'][] = $exists
+                    ? "ONU sudah terdaftar di {$portKey}:{$idx} (force re-configure)"
+                    : "Terotorisasi di {$portKey}:{$idx} (type {$type})";
+            }
+
+            $this->telnet->execute('exit', $this->configPrompt, 3);
+        }
+        $batchLog[] = 'Fase 1 selesai: otorisasi SN';
+
+        // ── Fase 2: interface gpon-onu (tcont/gemport/service-port) ───────────
+        foreach ($items as $it) {
+            $sn = strtoupper($it['sn']);
+            if (empty($results[$sn]['authorized'])) continue;
+
+            $params = $common + [
+                'board' => $it['board'], 'slot' => $it['slot'], 'port' => $it['port'],
+                'onu_index' => (string)$it['onu_index'], 'sn' => $sn,
+                'name' => $it['name'], 'onu_type' => $it['onu_type'] ?? 'ALL-ONT',
+            ];
+
+            $log = []; $warn = [];
+            $built = $this->buildIfCmds($params, $log, $warn);
+
+            $this->applyIfCmds(
+                (string)$it['board'], (string)$it['slot'], (string)$it['port'],
+                (string)$it['onu_index'], $it['name'], $built['cmds'], $built['tcont'],
+                !empty($common['reconfigure']), $log, $warn
+            );
+
+            $results[$sn]['log']      = array_merge($results[$sn]['log'], $log);
+            $results[$sn]['warnings'] = array_merge($results[$sn]['warnings'], $warn);
+            $results[$sn]['params']   = $params;
+        }
+        $batchLog[] = 'Fase 2 selesai: VLAN/TCONT/service-port';
+
+        // ── Fase 3: pon-onu-mng ───────────────────────────────────────────────
+        $vlanInternet = (int)($common['vlan_internet'] ?? 0);
+        $vlanAcs      = (int)($common['vlan_acs'] ?? 0);
+        $pppoeProfile = trim($common['pppoe_vlan_profile'] ?? '')
+            ?: trim($this->config['pppoe_vlan_profile'] ?? 'PPPOE');
+
+        foreach ($items as $it) {
+            $sn = strtoupper($it['sn']);
+            if (empty($results[$sn]['authorized'])) continue;
+
+            $log = []; $warn = [];
+            $this->applyPonMngForRegister(
+                (string)$it['board'], (string)$it['slot'], (string)$it['port'],
+                (string)$it['onu_index'], $sn, $vlanInternet, $vlanAcs,
+                $results[$sn]['params'] ?? $common, $pppoeProfile, $log, $warn
+            );
+
+            $results[$sn]['log']      = array_merge($results[$sn]['log'], $log);
+            $results[$sn]['warnings'] = array_merge($results[$sn]['warnings'], $warn);
+        }
+        $batchLog[] = 'Fase 3 selesai: pon-onu-mng';
+
+        // ── Fase 4: keluar config mode, simpan SEKALI untuk seluruh batch ─────
+        $this->telnet->execute('exit', $this->rootPrompt, 3);
+        $this->telnet->execute('write', $this->rootPrompt, 30);
+        $batchLog[] = 'Fase 4 selesai: konfigurasi disimpan (write 1x untuk ' . count($items) . ' ONU)';
+
+        foreach ($results as $sn => $r) {
+            unset($results[$sn]['params']);
+            $results[$sn]['success'] = !empty($r['authorized']);
+            $results[$sn]['partial'] = !empty($r['warnings']);
+        }
+
+        return ['results' => $results, 'log' => $batchLog];
     }
 
     /**
