@@ -558,69 +558,83 @@ async function openExecuteModal() {
     execLog.innerHTML += `<div style="color:#94a3b8">! Preset: VLAN internet ${vlanVal} | ACS ${useAcs ? ('ON, VLAN ' + vlanAcsVal) : 'OFF'}`
                        + ` | tipe ${onuTypeVal} | tcont ${tcontVal || '-'} | traffic ${trafficVal || '-'}</div>`;
 
-    for (let i = 0; i < total; i++) {
-        const item = items[i];
-        const currentPct = Math.round(((i + 1) / total) * 100);
-        
-        progressText.textContent = `[${i + 1}/${total}] Memproses ${item.sn} (${item.name})...`;
-        progressBar.style.width = `${currentPct}%`;
-        progressPercent.textContent = `${currentPct}%`;
+    // Dikirim per BATCH, bukan per ONU. execute-single membuka sesi Telnet baru tiap ONU;
+    // untuk 50 pelanggan itu 50 kali connect/login beruntun dan VTY OLT bisa penuh
+    // (telnet menolak koneksi baru sampai sesi lama idle-timeout ~7 menit). Endpoint
+    // batch memakai SATU sesi untuk seluruh isi batch.
+    const CHUNK = 10;
+    let done = 0;
+
+    for (let start = 0; start < total; start += CHUNK) {
+        const batch = items.slice(start, start + CHUNK);
+
+        progressText.textContent = `Memproses ${start + 1}–${start + batch.length} dari ${total} ONU (satu sesi Telnet per batch)...`;
+        execLog.innerHTML += `<div style="color:#94a3b8">! Batch ${Math.floor(start / CHUNK) + 1}: ${batch.length} ONU (${batch[0].sn} ... ${batch[batch.length-1].sn})</div>`;
+        execLog.scrollTop = execLog.scrollHeight;
 
         const fd = new FormData();
         fd.append('<?= csrf_token() ?>', '<?= csrf_hash() ?>');
-        fd.append('sn', item.sn);
-        fd.append('name', item.name);
-        fd.append('board', item.board);
-        fd.append('slot', item.slot);
-        fd.append('port', item.port);
-        fd.append('onu_index', item.onu_index);
-        fd.append('onu_type', item.onu_type);
         fd.append('vlan_internet', vlanVal);
         fd.append('vlan_acs', vlanAcsVal);
         fd.append('use_acs', useAcs ? '1' : '0');
         fd.append('tcont_profile', tcontVal);
         fd.append('traffic_profile', trafficVal);
         fd.append('pppoe_vlan_profile', pppoeProf);
-        fd.append('force', '1');
+        batch.forEach((item, n) => {
+            fd.append(`items[${n}][sn]`,        item.sn);
+            fd.append(`items[${n}][name]`,      item.name);
+            fd.append(`items[${n}][board]`,     item.board);
+            fd.append(`items[${n}][slot]`,      item.slot);
+            fd.append(`items[${n}][port]`,      item.port);
+            fd.append(`items[${n}][onu_index]`, item.onu_index);
+            fd.append(`items[${n}][onu_type]`,  item.onu_type);
+        });
 
         try {
-            let res = await fetch(`/olts/${currentOltId}/migration/execute-single`, { method: 'POST', body: fd });
-            let data = await res.json().catch(() => null);
-
-            // Fallback ke /onu/register HANYA kalau endpoint-nya sendiri yang rusak (respons
-            // bukan JSON / 500). Kalau OLT yang menolak (success=false), JANGAN diulang —
-            // dulu retry ini menyembunyikan error OLT dan mendaftar ulang ONU yang sama.
-            if (!data) {
-                const res2 = await fetch(`/olts/${currentOltId}/onu/register`, { method: 'POST', body: fd });
-                data = await res2.json().catch(() => null);
-            }
+            const res  = await fetch(`/olts/${currentOltId}/migration/execute`, { method: 'POST', body: fd });
+            const data = await res.json().catch(() => null);
 
             if (data && data.success) {
-                successCount++;
-                const msg = data.message || `Terdaftar di ${item.board}/${item.slot}/${item.port}:${item.onu_index}`;
-                const rowTr = document.querySelector(`tr[data-index="${item.idx}"]`);
-                if (data.partial) {
-                    // ONU terdaftar tapi ada perintah kritis yang gagal — jangan hijau polos.
-                    partialCount++;
-                    execLog.innerHTML += `<div style="color:#fbbf24">▶ [${i+1}/${total}] ⚠ TIDAK LENGKAP: ${item.sn} (${item.name}) → ${msg}</div>`;
-                    if (rowTr) rowTr.querySelector('.pe-4').innerHTML = '<span class="chip chip-warning">Partial</span>';
-                } else {
-                    execLog.innerHTML += `<div style="color:#81c995">▶ [${i+1}/${total}] ✔ SUKSES: ${item.sn} (${item.name}) → ${msg}</div>`;
-                    if (rowTr) rowTr.querySelector('.pe-4').innerHTML = '<span class="chip chip-success">Registered</span>';
-                }
+                (data.logs || []).forEach(l => {
+                    const warn = l.includes('TIDAK LENGKAP') || l.includes('BATAL');
+                    const bad  = l.includes('GAGAL');
+                    const color = bad ? '#f87171' : (warn ? '#fbbf24' : (l.includes('SUKSES') ? '#81c995' : '#94a3b8'));
+                    execLog.innerHTML += `<div style="color:${color}">${l}</div>`;
+                });
+                successCount += (data.success_count || 0);
+                failCount    += (data.fail_count || 0);
+                partialCount += (data.partial_count || 0);
+
+                // Tandai baris tabel sesuai hasil per SN.
+                (data.results || []).forEach(r => {
+                    const it = batch.find(b => b.sn === r.sn);
+                    if (!it) return;
+                    const tr = document.querySelector(`tr[data-index="${it.idx}"]`);
+                    if (!tr) return;
+                    tr.querySelector('.pe-4').innerHTML = r.status === 'success'
+                        ? '<span class="chip chip-success">Registered</span>'
+                        : (r.status === 'partial'
+                            ? '<span class="chip chip-warning">Partial</span>'
+                            : '<span class="chip chip-danger">Gagal</span>');
+                });
             } else {
-                failCount++;
-                const errMsg = (data && data.message) ? data.message : 'Gagal registrasi di OLT (Cek log Telnet OLT / profile).';
-                execLog.innerHTML += `<div style="color:#f87171">▶ [${i+1}/${total}] ✘ GAGAL: ${item.sn} → ${errMsg}</div>`;
+                failCount += batch.length;
+                const errMsg = (data && data.message) ? data.message : 'Respons server tidak valid.';
+                execLog.innerHTML += `<div style="color:#f87171">✘ Batch gagal: ${errMsg}</div>`;
             }
         } catch (e) {
-            failCount++;
-            execLog.innerHTML += `<div style="color:#f87171">▶ [${i+1}/${total}] ❌ ERROR: ${item.sn} → ${e.message}</div>`;
+            failCount += batch.length;
+            execLog.innerHTML += `<div style="color:#f87171">❌ ERROR batch: ${e.message}</div>`;
         }
 
+        done += batch.length;
+        const pct = Math.round((done / total) * 100);
+        progressBar.style.width = `${pct}%`;
+        progressPercent.textContent = `${pct}%`;
         execLog.scrollTop = execLog.scrollHeight;
 
-        if (i < total - 1 && delayMs > 0) {
+        // Jeda antar batch: beri waktu VTY OLT melepas sesi sebelumnya.
+        if (done < total && delayMs > 0) {
             await new Promise(r => setTimeout(r, delayMs));
         }
     }

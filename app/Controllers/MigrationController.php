@@ -160,6 +160,9 @@ class MigrationController extends BaseController
     public function execute(int $oltId)
     {
         $this->response->setContentType('application/json');
+        // Satu batch = satu sesi telnet untuk banyak ONU (± 4 detik per ONU + write).
+        // Jangan sampai PHP memutus di tengah dan meninggalkan ONU setengah terkonfigurasi.
+        set_time_limit(600);
 
         $oltModel = new OltModel();
         $olt = $oltModel->getByUserAndId($this->userId, $oltId);
@@ -190,7 +193,9 @@ class MigrationController extends BaseController
 
         $successCount = 0;
         $failCount    = 0;
+        $partialCount = 0;
         $logs         = [];
+        $results      = [];   // per SN, supaya UI bisa menandai baris tabelnya
 
         try {
             $driver = OltDriverFactory::make($olt);
@@ -212,6 +217,18 @@ class MigrationController extends BaseController
                 if (empty($sn)) continue;
 
                 $logs[] = sprintf("▶ [%d/%d] Registrasi %s (%s) di %s/%s/%s:%d...", $idx + 1, count($items), $sn, $name, $board, $slot, $port, $onuIndex);
+
+                // Registrasi memakai force, jadi OLT tidak menahan penulisan ulang index yang
+                // sudah dipakai ONU lain — pengamannya harus di sini.
+                $snAtIndex = $driver->getSnAtIndex($board, $slot, $port, (string)$onuIndex);
+                if ($snAtIndex !== null && strcasecmp($snAtIndex, $sn) !== 0) {
+                    $failCount++;
+                    $results[] = ['sn' => $sn, 'status' => 'failed'];
+                    $logs[] = "  ✘ BATAL: index {$board}/{$slot}/{$port}:{$onuIndex} sudah dipakai SN {$snAtIndex} — scan ulang.";
+                    $logModel->log($this->userId, 'mass_register', 'failed',
+                        "Mass register batal {$sn}: index {$onuIndex} dipakai {$snAtIndex}", null, $oltId);
+                    continue;
+                }
 
                 $result = $driver->registerOnu([
                     'board'           => $board,
@@ -272,11 +289,18 @@ class MigrationController extends BaseController
                     $logModel->log($this->userId, 'mass_register', 'success', "Mass register {$sn} ({$name})", $onuId, $oltId);
 
                     $successCount++;
-                    $logs[] = empty($result['partial'])
-                        ? "  ✔ SUKSES: {$sn} ({$name}) terdaftar di {$board}/{$slot}/{$port}:{$onuIndex}"
-                        : "  ⚠ TIDAK LENGKAP: {$sn} ({$name}) di {$board}/{$slot}/{$port}:{$onuIndex} — " . implode(' | ', $result['warnings'] ?? []);
+                    if (empty($result['partial'])) {
+                        $results[] = ['sn' => $sn, 'status' => 'success'];
+                        $logs[] = "  ✔ SUKSES: {$sn} ({$name}) terdaftar di {$board}/{$slot}/{$port}:{$onuIndex}";
+                    } else {
+                        $partialCount++;
+                        $results[] = ['sn' => $sn, 'status' => 'partial'];
+                        $logs[] = "  ⚠ TIDAK LENGKAP: {$sn} ({$name}) di {$board}/{$slot}/{$port}:{$onuIndex} — "
+                                . implode(' | ', $result['warnings'] ?? []);
+                    }
                 } else {
                     $failCount++;
+                    $results[] = ['sn' => $sn, 'status' => 'failed'];
                     $logMsg = implode(' | ', $result['log'] ?? ['Gagal']);
                     $logModel->log($this->userId, 'mass_register', 'failed', "Mass register gagal {$sn}: {$logMsg}", null, $oltId);
                     $logs[] = "  ✘ GAGAL: {$sn} → " . $logMsg;
@@ -290,8 +314,11 @@ class MigrationController extends BaseController
                 'total'   => count($items),
                 'success_count' => $successCount,
                 'fail_count'    => $failCount,
+                'partial_count' => $partialCount,
+                'results'       => $results,
                 'logs'          => $logs,
-                'message'       => sprintf('Selesai memproses %d ONU (%d Sukses, %d Gagal).', count($items), $successCount, $failCount),
+                'message'       => sprintf('Selesai memproses %d ONU (%d Sukses, %d Tidak Lengkap, %d Gagal).',
+                                            count($items), $successCount - $partialCount, $partialCount, $failCount),
             ]);
         } catch (\Throwable $e) {
             return $this->response->setJSON(['success' => false, 'message' => $e->getMessage(), 'logs' => $logs]);
