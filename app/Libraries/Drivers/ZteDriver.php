@@ -994,12 +994,50 @@ class ZteDriver implements OltDriverInterface
      * Return: ['raw' => string, 'pppoe_user' => ?string, 'pppoe_pass' => ?string,
      *          'services' => [...], 'wan_ip' => [...]]
      */
+    /** Cache running-config global per sesi telnet — outputnya besar, jangan diambil berulang. */
+    private ?string $runningConfigCache = null;
+
+    /**
+     * Ambil blok "pon-onu-mng gpon-onu_B/S/P:I" dari running-config global.
+     * Dipakai sebagai fallback untuk firmware yang tidak punya perintah per-ONU.
+     */
+    private function extractPonMngBlock(string $board, string $slot, string $port, string $onuIndex): string
+    {
+        if ($this->runningConfigCache === null) {
+            $this->runningConfigCache = $this->telnet->execute('show running-config', $this->rootPrompt, 90);
+        }
+
+        $header = "pon-onu-mng gpon-onu_{$board}/{$slot}/{$port}:{$onuIndex}";
+        $lines  = explode("\n", $this->runningConfigCache);
+        $block  = [];
+        $inside = false;
+
+        foreach ($lines as $line) {
+            $trim = trim($line, " \r\n");
+            if (!$inside) {
+                if ($trim === $header) { $inside = true; $block[] = $trim; }
+                continue;
+            }
+            if ($trim === '!' || preg_match('/^pon-onu-mng\s/', $trim)) break;
+            $block[] = $trim;
+        }
+
+        return $block ? implode("\n", $block) : '';
+    }
+
     public function getPonMngConfig(string $board, string $slot, string $port, string $onuIndex): array
     {
         $raw = $this->telnet->execute(
             "show running-config pon-onu-mng gpon-onu_{$board}/{$slot}/{$port}:{$onuIndex}",
             $this->rootPrompt, 10
         );
+
+        // C320 V2.1.0 menolak perintah di atas (%Error 20201) dan tidak punya modul 'pon'
+        // di 'show running-config module', jadi blok pon-onu-mng hanya bisa diambil dari
+        // running-config global. Diambil sekali per sesi lalu dipakai ulang.
+        if (preg_match('/%Error\s+\d+|Invalid input detected|Invalid command/i', $raw)) {
+            $raw = $this->extractPonMngBlock($board, $slot, $port, $onuIndex);
+        }
 
         $result = ['raw' => $raw, 'pppoe_user' => null, 'pppoe_pass' => null, 'services' => [], 'wan_ip' => []];
 
@@ -1267,6 +1305,24 @@ class ZteDriver implements OltDriverInterface
     /**
      * Ambil status Alarm Aktif, Status Kipas (FAN), Power, dan Card OLT
      */
+    /**
+     * Jalankan kandidat perintah berurutan, kembalikan output pertama yang DITERIMA OLT.
+     * Deteksi penolakan dipatok pada kode error ZTE (%Error 202xx) supaya output sah yang
+     * kebetulan memuat kata "fail"/"invalid" — misal 'show alarm counter' — tidak ikut dibuang.
+     */
+    private function firstSupported(array $candidates): string
+    {
+        $last = '';
+        foreach ($candidates as $cmd) {
+            $out  = $this->telnet->execute($cmd, $this->rootPrompt, 10);
+            $last = $out;
+            if (!preg_match('/%Error\s+\d+|Invalid input detected|Invalid command|Ambiguous command|Incomplete command/i', $out)) {
+                return $out;
+            }
+        }
+        return "(tidak didukung firmware OLT ini)\n" . trim($last);
+    }
+
     public function getAlarms(): array
     {
         $alarms = [
@@ -1277,12 +1333,18 @@ class ZteDriver implements OltDriverInterface
             'env_status'     => '',
         ];
 
+        // Perintah berbeda antar firmware. Di C320 V2.1.0 (verified): 'show alarm current',
+        // 'show power', dan 'show environment' DITOLAK — yang jalan 'show alarm pool',
+        // 'show alarm crtv-active', 'show alarm counter', dan 'show fan' (sudah memuat suhu).
+        // Coba berurutan, pakai yang pertama diterima, jangan tampilkan pesan %Error ke user.
         try {
-            $alarms['current_alarms'] = $this->telnet->execute('show alarm current', $this->rootPrompt, 10);
-            $alarms['card_status']    = $this->telnet->execute('show card', $this->rootPrompt, 10);
-            $alarms['fan_status']     = $this->telnet->execute('show fan', $this->rootPrompt, 5);
-            $alarms['power_status']   = $this->telnet->execute('show power', $this->rootPrompt, 5);
-            $alarms['env_status']     = $this->telnet->execute('show environment', $this->rootPrompt, 5);
+            $alarms['current_alarms'] = $this->firstSupported([
+                'show alarm pool', 'show alarm current', 'show alarm crtv-active',
+            ]);
+            $alarms['card_status']  = $this->telnet->execute('show card', $this->rootPrompt, 10);
+            $alarms['fan_status']   = $this->firstSupported(['show fan']);
+            $alarms['power_status'] = $this->firstSupported(['show power', 'show power-supply', 'show alarm counter']);
+            $alarms['env_status']   = $this->firstSupported(['show environment', 'show temperature', 'show fan']);
         } catch (\Throwable $e) {
             log_message('error', "getAlarms error: " . $e->getMessage());
         }

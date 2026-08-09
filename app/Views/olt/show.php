@@ -1477,9 +1477,9 @@ function checkOltAlarms() {
             const a = data.alarms || {};
             document.getElementById('alarmCurrentPre').textContent = a.current_alarms || 'Tidak ada alarm aktif / Output kosong.';
             document.getElementById('alarmFanPre').textContent     = a.fan_status || 'Output show fan kosong.';
-            document.getElementById('alarmPowerPre').textContent   = a.power_status || 'Output show power kosong.';
+            document.getElementById('alarmPowerPre').textContent   = a.power_status || 'Tidak didukung firmware OLT ini.';
             document.getElementById('alarmCardPre').textContent    = a.card_status || 'Output show card kosong.';
-            document.getElementById('alarmEnvPre').textContent     = a.env_status || 'Output show environment kosong.';
+            document.getElementById('alarmEnvPre').textContent     = a.env_status || 'Tidak didukung firmware OLT ini.';
         })
         .catch(e => {
             loading.classList.add('d-none');
@@ -1510,7 +1510,7 @@ function checkOltAlarms() {
                     <ul class="nav nav-pills mb-3 gap-2" id="alarmTabs" role="tablist">
                         <li class="nav-item">
                             <button class="nav-link active px-3 py-2 fw-medium" id="tab-current-tab" data-bs-toggle="pill" data-bs-target="#tab-current">
-                                <i class="bi bi-exclamation-triangle-fill text-danger me-1"></i> Current Alarms (show alarm current)
+                                <i class="bi bi-exclamation-triangle-fill text-danger me-1"></i> Alarm Aktif (show alarm pool / current)
                             </button>
                         </li>
                         <li class="nav-item">
@@ -1520,7 +1520,7 @@ function checkOltAlarms() {
                         </li>
                         <li class="nav-item">
                             <button class="nav-link px-3 py-2 fw-medium" id="tab-power-tab" data-bs-toggle="pill" data-bs-target="#tab-power">
-                                <i class="bi bi-lightning-charge-fill text-warning me-1"></i> Power Supply (show power)
+                                <i class="bi bi-lightning-charge-fill text-warning me-1"></i> Power / Counter Alarm (sesuai dukungan firmware)
                             </button>
                         </li>
                         <li class="nav-item">
@@ -1530,7 +1530,7 @@ function checkOltAlarms() {
                         </li>
                         <li class="nav-item">
                             <button class="nav-link px-3 py-2 fw-medium" id="tab-env-tab" data-bs-toggle="pill" data-bs-target="#tab-env">
-                                <i class="bi bi-thermometer-half text-success me-1"></i> Environment (show environment)
+                                <i class="bi bi-thermometer-half text-success me-1"></i> Environment / Suhu (sesuai dukungan firmware)
                             </button>
                         </li>
                     </ul>
