@@ -4,7 +4,7 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '..', '..');
 const copies = [
-  ['node_modules/lucide/dist/umd/lucide.min.js', 'public/assets/vendor/lucide.min.js'],
+  ['node_modules/lucide/dist/umd/lucide.min.js', 'public/assets/lib/lucide.min.js'],
   ['node_modules/@fontsource-variable/inter/files/inter-latin-wght-normal.woff2', 'public/assets/fonts/inter-latin-wght-normal.woff2'],
   ['node_modules/@fontsource-variable/jetbrains-mono/files/jetbrains-mono-latin-wght-normal.woff2', 'public/assets/fonts/jetbrains-mono-latin-wght-normal.woff2'],
 ];

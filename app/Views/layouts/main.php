@@ -9,7 +9,7 @@
     <link rel="preload" href="/assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="/assets/css/style.css">
     <link rel="stylesheet" href="/assets/css/tailwind.css">
-    <script src="/assets/vendor/lucide.min.js"></script>
+    <script src="/assets/lib/lucide.min.js"></script>
 </head>
 <body class="bg-[#f8fafc] text-slate-800 min-h-screen flex font-sans antialiased text-sm">
 

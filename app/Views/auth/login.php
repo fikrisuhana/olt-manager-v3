@@ -7,7 +7,7 @@
     <!-- Aset lokal (offline) — build: `npm run build`, lihat package.json -->
     <link rel="preload" href="/assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="/assets/css/tailwind.css">
-    <script src="/assets/vendor/lucide.min.js"></script>
+    <script src="/assets/lib/lucide.min.js"></script>
 </head>
 <body class="bg-slate-50 font-sans text-slate-800 antialiased min-h-screen flex items-center justify-center p-4">
     <div class="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-xl p-8 space-y-6">
