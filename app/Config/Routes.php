@@ -99,6 +99,9 @@ $routes->group('', ['filter' => 'auth'], static function ($routes) {
     $routes->get('acs/(:num)/delete',       'AcsController::delete/$1');
     $routes->get('acs/(:num)/default',      'AcsController::setDefault/$1');
     $routes->get('acs/(:num)/test',         'AcsController::test/$1');        // AJAX
+    $routes->get('acs/(:num)/policy',        'AcsController::policy/$1');      // Kebijakan ACS mandiri
+    $routes->post('acs/(:num)/policy/save',  'AcsController::policySave/$1');
+    $routes->post('acs/(:num)/policy/push',  'AcsController::policyPush/$1');
 });
 
 // Admin-only routes

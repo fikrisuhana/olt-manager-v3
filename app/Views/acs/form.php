@@ -21,7 +21,7 @@
             </div>
             <div class="form-group">
                 <label class="form-label">URL ACS <span class="text-rose-500">*</span></label>
-                <input type="url" name="url" class="form-input font-mono" placeholder="http://136.1.1.8:7557" required>
+                <input type="url" name="url" class="form-input font-mono" placeholder="http://host.docker.internal:7557" required>
                 <div class="text-[11px] text-slate-400 mt-1">Port default GenieACS: 7557</div>
             </div>
             <div class="form-grid" style="grid-template-columns:1fr 1fr">

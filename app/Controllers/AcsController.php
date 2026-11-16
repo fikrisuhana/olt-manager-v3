@@ -3,7 +3,9 @@
 namespace App\Controllers;
 
 use App\Models\AcsServerModel;
+use App\Models\AcsPolicyModel;
 use App\Libraries\AcsService;
+use App\Libraries\AcsPolicyService;
 use CodeIgniter\Controller;
 
 class AcsController extends Controller
@@ -13,7 +15,8 @@ class AcsController extends Controller
     public function __construct()
     {
         $this->userId = (int) session()->get('user_id');
-        session_write_close();
+        // JANGAN session_write_close() di sini: redirect()->with() (flash sukses/error)
+        // jadi tidak tersimpan. Lepas lock sesi hanya di endpoint AJAX yang lama (test()).
     }
 
     public function index()
@@ -75,6 +78,7 @@ class AcsController extends Controller
      */
     public function test(int $id)
     {
+        session_write_close(); // AJAX bisa lama (timeout NBI) — jangan kunci sesi tab lain
         $model  = new AcsServerModel();
         $server = $model->getByUserAndId($this->userId, $id);
         if (!$server) {
@@ -91,6 +95,92 @@ class AcsController extends Controller
         } catch (\Exception $e) {
             return $this->response->setJSON(['success' => false, 'message' => $e->getMessage()]);
         }
+    }
+
+    // ── Kebijakan ACS mandiri (provision/preset gm-* di GenieACS) ───────────
+
+    public function policy(int $id)
+    {
+        $server = (new AcsServerModel())->getByUserAndId($this->userId, $id);
+        if (!$server) return redirect()->to('/acs')->with('error', 'ACS server tidak ditemukan.');
+
+        AcsPolicyModel::ensureTable();
+        $row      = (new AcsPolicyModel())->getSettings($id);
+        $settings = AcsPolicyService::withDefaults($row['settings'] ?? null);
+
+        // Info preset di GenieACS (boleh gagal — halaman tetap tampil)
+        $foreign = null;
+        $gmLive  = [];
+        $acsErr  = null;
+        try {
+            $acs = new AcsService($server);
+            foreach ($acs->listPresets() as $p) {
+                if (str_starts_with((string)($p['_id'] ?? ''), AcsPolicyService::PREFIX)) $gmLive[] = $p['_id'];
+            }
+            $foreign = AcsPolicyService::foreignPresets($acs);
+        } catch (\Throwable $e) {
+            $acsErr = $e->getMessage();
+        }
+
+        return view('acs/policy', [
+            'title'    => 'Kebijakan ACS',
+            'server'   => $server,
+            'settings' => $settings,
+            'row'      => $row,
+            'plan'     => AcsPolicyService::plan($settings),
+            'gmLive'   => $gmLive,
+            'foreign'  => $foreign,
+            'acsErr'   => $acsErr,
+        ]);
+    }
+
+    public function policySave(int $id)
+    {
+        $server = (new AcsServerModel())->getByUserAndId($this->userId, $id);
+        if (!$server) return redirect()->to('/acs')->with('error', 'ACS server tidak ditemukan.');
+
+        AcsPolicyModel::ensureTable();
+        $model   = new AcsPolicyModel();
+        $current = $model->getSettings($id)['settings'] ?? [];
+
+        [$settings, $errors] = AcsPolicyService::fromPost($this->request->getPost() ?? [], $current);
+        if ($errors) {
+            return redirect()->to("/acs/{$id}/policy")->with('error', implode(' ', $errors));
+        }
+        $model->saveSettings($id, $settings);
+
+        return $this->doPush($id, $server, $settings, 'Kebijakan disimpan');
+    }
+
+    /** Push ulang kebijakan tersimpan (mis. setelah GenieACS di-reset). */
+    public function policyPush(int $id)
+    {
+        $server = (new AcsServerModel())->getByUserAndId($this->userId, $id);
+        if (!$server) return redirect()->to('/acs')->with('error', 'ACS server tidak ditemukan.');
+
+        AcsPolicyModel::ensureTable();
+        $row = (new AcsPolicyModel())->getSettings($id);
+        if (!$row) {
+            return redirect()->to("/acs/{$id}/policy")->with('error', 'Belum ada kebijakan tersimpan. Simpan dulu.');
+        }
+        return $this->doPush($id, $server, $row['settings'], 'Push ulang');
+    }
+
+    private function doPush(int $id, array $server, array $settings, string $what)
+    {
+        $model = new AcsPolicyModel();
+        try {
+            $result = AcsPolicyService::push(new AcsService($server), $settings);
+        } catch (\Throwable $e) {
+            $result = ['ok' => false, 'log' => ['✖ ' . $e->getMessage()]];
+        }
+        $msg = implode(' · ', $result['log']);
+        $model->savePushResult($id, $result['ok'], $msg);
+
+        return redirect()->to("/acs/{$id}/policy")->with(
+            $result['ok'] ? 'success' : 'error',
+            "{$what}. " . ($result['ok'] ? 'Push ke GenieACS berhasil: ' : 'Push ke GenieACS GAGAL: ') . $msg
+        );
     }
 
     private function getFormData(): array

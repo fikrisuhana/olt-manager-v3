@@ -605,7 +605,50 @@ class AcsService
         return ['onu_rx' => (string)$rx, 'temperature' => $temp !== null ? (string)$temp : null];
     }
 
-    private function request(string $method, string $path, ?array $body = null): array
+    // ── Kelola preset & provision GenieACS (dipakai AcsPolicyService) ─────────
+
+    /** PUT /provisions/<name> — body = kode JavaScript provision (teks mentah). */
+    public function putProvision(string $name, string $script): array
+    {
+        return $this->request('PUT', '/provisions/' . rawurlencode($name), $script);
+    }
+
+    /** PUT /presets/<name> — buat/timpa preset. */
+    public function putPreset(string $name, array $preset): array
+    {
+        return $this->request('PUT', '/presets/' . rawurlencode($name), $preset);
+    }
+
+    /** DELETE /presets/<name> — 404 dianggap sukses (memang tidak ada). */
+    public function deletePreset(string $name): array
+    {
+        return $this->request('DELETE', '/presets/' . rawurlencode($name));
+    }
+
+    /** GET /presets — semua preset di GenieACS. */
+    public function listPresets(): array
+    {
+        $res = $this->request('GET', '/presets');
+        if ($res['status'] !== 200) {
+            throw new \Exception("Gagal baca preset GenieACS (HTTP {$res['status']})");
+        }
+        return json_decode($res['body'], true) ?: [];
+    }
+
+    /** GET /provisions — [{_id, script}, ...]. */
+    public function listProvisions(): array
+    {
+        $res = $this->request('GET', '/provisions');
+        if ($res['status'] !== 200) {
+            throw new \Exception("Gagal baca provision GenieACS (HTTP {$res['status']})");
+        }
+        return json_decode($res['body'], true) ?: [];
+    }
+
+    /**
+     * @param array|string|null $body array → dikirim JSON; string → dikirim mentah (provision script).
+     */
+    private function request(string $method, string $path, array|string|null $body = null): array
     {
         $ch = curl_init($this->baseUrl . $path);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -616,7 +659,10 @@ class AcsService
             curl_setopt($ch, CURLOPT_USERPWD, "{$this->username}:{$this->password}");
         }
 
-        if ($body !== null) {
+        if (is_string($body)) {
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: text/plain; charset=utf-8']);
+        } elseif ($body !== null) {
             curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($body));
             curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
         }

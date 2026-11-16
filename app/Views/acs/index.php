@@ -21,7 +21,7 @@
     <i data-lucide="info" class="w-4 h-4 text-blue-500 shrink-0 mt-0.5"></i>
     <div>
         ACS (Auto Configuration Server) digunakan untuk provisioning WAN ONU non-ZTE via TR-069.
-        Biasanya GenieACS di port 7557. Contoh URL: <code class="font-mono bg-blue-100 px-1 rounded">http://136.1.1.8:7557</code>
+        Biasanya GenieACS di port 7557. Contoh URL: <code class="font-mono bg-blue-100 px-1 rounded">http://host.docker.internal:7557</code> (GenieACS di server yang sama) atau <code class="font-mono bg-blue-100 px-1 rounded">http://IP-SERVER:7557</code>
     </div>
 </div>
 
@@ -53,6 +53,9 @@
                         <i data-lucide="star" class="w-3.5 h-3.5"></i>
                     </a>
                     <?php endif; ?>
+                    <a href="/acs/<?= $s['id'] ?>/policy" class="btn btn-secondary btn-sm" title="Kebijakan ACS: inform, refresh info, password admin modem">
+                        <i data-lucide="sliders-horizontal" class="w-3.5 h-3.5"></i> Kebijakan
+                    </a>
                     <button class="btn btn-secondary btn-sm" onclick="testAcs(<?= $s['id'] ?>, this)" title="Test koneksi ke ACS">
                         <i data-lucide="plug" class="w-3.5 h-3.5"></i> Test
                     </button>
