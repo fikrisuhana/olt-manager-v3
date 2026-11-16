@@ -1,158 +1,160 @@
 <?= $this->extend('layouts/main') ?>
 <?= $this->section('content') ?>
 
-<div class="d-flex align-items-center gap-3 mb-4">
-    <a href="/olts/<?= $onu['olt_id'] ?>" class="btn btn-sm btn-light"><i class="bi bi-arrow-left"></i></a>
-    <div>
-        <span class="badge bg-secondary"><?= esc($onu['onu_type'] ?? '-') ?></span>
-        <span class="text-muted small ms-1"><?= esc("{$onu['board']}/{$onu['slot']}/{$onu['port']}:{$onu['onu_index']}") ?></span>
+<!-- Page Header -->
+<div class="flex items-center gap-3 flex-wrap">
+    <a href="/olts/<?= $onu['olt_id'] ?>" class="btn btn-secondary btn-sm btn-icon-only" title="Kembali ke OLT">
+        <i data-lucide="arrow-left" class="w-4 h-4"></i>
+    </a>
+    <div class="flex items-center gap-2 flex-wrap min-w-0">
+        <span class="font-mono text-sm font-bold text-slate-900"><?= esc($onu['sn']) ?></span>
+        <span class="chip chip-neutral"><?= esc($onu['onu_type'] ?? '-') ?></span>
+        <span class="text-[11px] text-slate-400 font-mono"><?= esc("{$onu['board']}/{$onu['slot']}/{$onu['port']}:{$onu['onu_index']}") ?></span>
     </div>
-    <div class="ms-auto d-flex gap-2">
-        <button class="btn btn-sm btn-outline-warning" onclick="setAcsMng()" id="btnSetAcs">
-            <i class="bi bi-plug me-1"></i>Set ACS
+    <div class="ml-auto flex gap-2">
+        <button class="btn btn-sm bg-amber-500 hover:bg-amber-600 text-white border-0" onclick="setAcsMng()" id="btnSetAcs">
+            <i data-lucide="plug" class="w-3.5 h-3.5"></i> Set ACS
         </button>
-        <button class="btn btn-sm btn-outline-info" onclick="loadAcsInfo()" id="btnLoadAcs">
-            <i class="bi bi-arrow-clockwise me-1"></i>Refresh ACS
+        <button class="btn btn-sm bg-cyan-600 hover:bg-cyan-700 text-white border-0" onclick="loadAcsInfo()" id="btnLoadAcs">
+            <i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i> Refresh ACS
         </button>
-        <button class="btn btn-sm btn-outline-danger" id="btnReboot" onclick="reboot()">
-            <i class="bi bi-power me-1"></i>Reboot
+        <button class="btn btn-danger btn-sm" id="btnReboot" onclick="reboot()">
+            <i data-lucide="power" class="w-3.5 h-3.5"></i> Reboot
         </button>
     </div>
 </div>
 
-<div class="row g-4">
-    <!-- Info ONU -->
-    <div class="col-lg-5">
-        <div class="card border-0 shadow-sm mb-4">
-            <div class="card-header bg-white border-bottom py-3 d-flex align-items-center justify-content-between">
-                <h6 class="mb-0 fw-semibold"><i class="bi bi-router me-1"></i>Info ONU</h6>
-                <button class="btn btn-sm btn-outline-secondary py-0" onclick="toggleEdit()" id="btnToggleEdit">
-                    <i class="bi bi-pencil me-1"></i>Edit
+<div class="grid lg:grid-cols-12 gap-3 items-start">
+    <!-- Kolom kiri: info, sinyal, ACS -->
+    <div class="lg:col-span-5 space-y-3">
+        <!-- Info ONU -->
+        <div class="card !mb-0">
+            <div class="card-header">
+                <div class="card-title"><i data-lucide="cpu" class="w-4 h-4 text-slate-400"></i> Info ONU</div>
+                <button class="btn btn-secondary btn-sm" onclick="toggleEdit()" id="btnToggleEdit">
+                    <i data-lucide="pencil" class="w-3.5 h-3.5"></i> Edit
                 </button>
             </div>
-            <div class="card-body">
+            <div>
                 <!-- Info display -->
-                <table class="table table-sm mb-0" id="infoTable">
-                    <tr><th class="text-muted" style="width:40%">SN</th><td><code><?= esc($onu['sn']) ?></code></td></tr>
+                <table class="data-table !min-w-0" id="infoTable">
+                    <tr><th class="!bg-transparent">SN</th><td class="font-mono text-xs"><?= esc($onu['sn']) ?></td></tr>
                     <tr>
-                        <th class="text-muted">Nama</th>
+                        <th class="!bg-transparent">Nama</th>
                         <td id="disp_name">
-                            <?= esc($onu['name'] ?? '-') ?>
-                            <button class="btn btn-sm btn-link p-0 ms-1 align-baseline" title="Ubah nama saja"
-                                    onclick="renameOnly()"><i class="bi bi-pencil"></i></button>
+                            <span class="font-medium"><?= esc($onu['name'] ?? '-') ?></span>
+                            <button class="btn btn-secondary btn-sm !min-h-[24px] !min-w-[24px] !p-1 ml-1 align-middle" title="Ubah nama saja" onclick="renameOnly()">
+                                <i data-lucide="pencil" class="w-3 h-3"></i>
+                            </button>
                         </td>
                     </tr>
-                    <tr><th class="text-muted">OLT</th><td><?= esc($onu['olt_name'] ?? '-') ?> <span class="text-muted small">(<?= esc($onu['olt_ip'] ?? '') ?>)</span></td></tr>
-                    <tr><th class="text-muted">Port</th><td><?= esc("{$onu['board']}/{$onu['slot']}/{$onu['port']}:{$onu['onu_index']}") ?></td></tr>
-                    <tr><th class="text-muted">Tipe</th><td><?= esc($onu['onu_type'] ?? '-') ?></td></tr>
+                    <tr><th class="!bg-transparent">OLT</th><td class="text-xs"><?= esc($onu['olt_name'] ?? '-') ?> <span class="text-slate-400 font-mono text-[10px]">(<?= esc($onu['olt_ip'] ?? '') ?>)</span></td></tr>
+                    <tr><th class="!bg-transparent">Port</th><td class="font-mono text-xs"><?= esc("{$onu['board']}/{$onu['slot']}/{$onu['port']}:{$onu['onu_index']}") ?></td></tr>
+                    <tr><th class="!bg-transparent">Tipe</th><td class="text-xs"><?= esc($onu['onu_type'] ?? '-') ?></td></tr>
                     <tr>
-                        <th class="text-muted">VLAN</th>
-                        <td class="small" id="disp_vlan">
+                        <th class="!bg-transparent">VLAN</th>
+                        <td id="disp_vlan">
                             <?php if ($onu['vlan_internet']): ?>
-                                <span class="badge bg-primary me-1">Internet: <?= $onu['vlan_internet'] ?></span>
+                                <span class="chip chip-info mr-1">Internet: <?= $onu['vlan_internet'] ?></span>
                             <?php endif; ?>
                             <?php if ($onu['vlan_acs']): ?>
-                                <span class="badge bg-secondary">ACS: <?= $onu['vlan_acs'] ?></span>
+                                <span class="chip chip-neutral">ACS: <?= $onu['vlan_acs'] ?></span>
                             <?php endif; ?>
                             <?php if (!$onu['vlan_internet'] && !$onu['vlan_acs']): ?>
-                                <span class="text-muted">—</span>
+                                <span class="text-slate-300">—</span>
                             <?php endif; ?>
                         </td>
                     </tr>
-                    <tr><th class="text-muted">TCONT</th><td id="disp_tcont"><?= $onu['tcont_profile'] ? '<code>'.esc($onu['tcont_profile']).'</code>' : '<span class="text-muted">—</span>' ?></td></tr>
-                    <tr><th class="text-muted">PPPoE User</th><td id="disp_pppoe"><code><?= esc($onu['pppoe_user'] ?? '—') ?></code></td></tr>
-                    <tr><th class="text-muted">Terdaftar</th><td class="small"><?= date('d/m/Y H:i', strtotime($onu['registered_at'])) ?></td></tr>
+                    <tr><th class="!bg-transparent">TCONT</th><td id="disp_tcont"><?= $onu['tcont_profile'] ? '<span class="font-mono text-xs">'.esc($onu['tcont_profile']).'</span>' : '<span class="text-slate-300">—</span>' ?></td></tr>
+                    <tr><th class="!bg-transparent">PPPoE User</th><td id="disp_pppoe" class="font-mono text-xs"><?= esc($onu['pppoe_user'] ?? '—') ?></td></tr>
+                    <tr><th class="!bg-transparent">Terdaftar</th><td class="text-xs text-slate-400"><?= date('d/m/Y H:i', strtotime($onu['registered_at'])) ?></td></tr>
                 </table>
 
                 <!-- Edit form (hidden by default) -->
-                <div id="editForm" class="d-none border-top mt-3 pt-3">
-                    <div class="d-flex align-items-center justify-content-between mb-2">
-                        <span class="small fw-medium text-muted">Edit Konfigurasi</span>
-                        <button type="button" class="btn btn-sm btn-outline-info py-0" id="btnFetchConfig" onclick="fetchConfigFromOlt()">
-                            <i class="bi bi-cloud-download me-1"></i>Ambil dari OLT
+                <div id="editForm" class="hidden border-t border-slate-100 mt-3 pt-3">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-semibold text-slate-500">Edit Konfigurasi</span>
+                        <button type="button" class="btn btn-sm bg-cyan-600 hover:bg-cyan-700 text-white border-0" id="btnFetchConfig" onclick="fetchConfigFromOlt()">
+                            <i data-lucide="cloud-download" class="w-3.5 h-3.5"></i> Ambil dari OLT
                         </button>
                     </div>
-                    <div id="fetchConfigResult" class="d-none mb-2"></div>
-                    <div class="row g-2">
-                        <div class="col-12">
-                            <label class="form-label small fw-medium">Nama Pelanggan</label>
-                            <input type="text" id="edit_name" class="form-control form-control-sm" value="<?= esc($onu['name'] ?? '') ?>">
+                    <div id="fetchConfigResult" class="hidden mb-2"></div>
+                    <div class="form-grid">
+                        <div class="form-group sm:col-span-2" style="grid-column: span 2">
+                            <label class="form-label">Nama Pelanggan</label>
+                            <input type="text" id="edit_name" class="form-input" value="<?= esc($onu['name'] ?? '') ?>">
                         </div>
-                        <div class="col-6">
-                            <label class="form-label small fw-medium">VLAN Internet</label>
-                            <input type="number" id="edit_vlan_internet" class="form-control form-control-sm" value="<?= esc($onu['vlan_internet'] ?? '') ?>" placeholder="misal: 100">
+                        <div class="form-group">
+                            <label class="form-label">VLAN Internet</label>
+                            <input type="number" id="edit_vlan_internet" class="form-input" value="<?= esc($onu['vlan_internet'] ?? '') ?>" placeholder="misal: 100">
                         </div>
-                        <div class="col-6">
-                            <label class="form-label small fw-medium">VLAN ACS</label>
-                            <input type="number" id="edit_vlan_acs" class="form-control form-control-sm" value="<?= esc($onu['vlan_acs'] ?? '') ?>" placeholder="misal: 155">
+                        <div class="form-group">
+                            <label class="form-label">VLAN ACS</label>
+                            <input type="number" id="edit_vlan_acs" class="form-input" value="<?= esc($onu['vlan_acs'] ?? '') ?>" placeholder="misal: 155">
                         </div>
-                        <div class="col-6">
-                            <label class="form-label small fw-medium">TCONT Profile</label>
-                            <input type="text" id="edit_tcont" class="form-control form-control-sm" value="<?= esc($onu['tcont_profile'] ?? '') ?>" placeholder="misal: 250M">
+                        <div class="form-group">
+                            <label class="form-label">TCONT Profile</label>
+                            <input type="text" id="edit_tcont" class="form-input" value="<?= esc($onu['tcont_profile'] ?? '') ?>" placeholder="misal: 250M">
                         </div>
-                        <div class="col-6">
-                            <label class="form-label small fw-medium">PPPoE Username</label>
-                            <input type="text" id="edit_pppoe_user" class="form-control form-control-sm" value="<?= esc($onu['pppoe_user'] ?? '') ?>" placeholder="user@isp">
+                        <div class="form-group">
+                            <label class="form-label">PPPoE Username</label>
+                            <input type="text" id="edit_pppoe_user" class="form-input" value="<?= esc($onu['pppoe_user'] ?? '') ?>" placeholder="user@isp">
                         </div>
                     </div>
-                    <div id="editResult" class="mt-2 d-none"></div>
-                    <div class="mt-3 d-flex gap-2">
+                    <div id="editResult" class="hidden"></div>
+                    <div class="mt-3 flex gap-2">
                         <button class="btn btn-primary btn-sm" onclick="saveInfo()">
-                            <i class="bi bi-check-circle me-1"></i>Simpan
+                            <i data-lucide="check-circle" class="w-3.5 h-3.5"></i> Simpan
                         </button>
-                        <button class="btn btn-light btn-sm" onclick="toggleEdit()">Batal</button>
+                        <button class="btn btn-secondary btn-sm" onclick="toggleEdit()">Batal</button>
                     </div>
                 </div>
             </div>
         </div>
 
         <!-- Sinyal ONU -->
-        <div class="card border-0 shadow-sm mb-4">
-            <div class="card-header bg-white border-bottom py-3 d-flex align-items-center justify-content-between">
-                <h6 class="mb-0 fw-semibold"><i class="bi bi-reception-4 me-1"></i>Sinyal Optik</h6>
-                <button class="btn btn-sm btn-outline-secondary py-0" id="btnSignal" onclick="loadSignal()">
-                    <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+        <div class="card !mb-0">
+            <div class="card-header">
+                <div class="card-title"><i data-lucide="activity" class="w-4 h-4 text-slate-400"></i> Sinyal Optik</div>
+                <button class="btn btn-secondary btn-sm" id="btnSignal" onclick="loadSignal()">
+                    <i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i> Refresh
                 </button>
             </div>
-            <div class="card-body" id="signalBox">
-                <div class="text-center py-2">
-                    <span class="spinner-border spinner-border-sm text-secondary"></span>
-                    <span class="text-muted small ms-2">Mengambil sinyal dari OLT...</span>
+            <div id="signalBox">
+                <div class="flex items-center justify-center gap-2 py-3 text-xs text-slate-400">
+                    <span class="spin spin-dark"></span> Mengambil sinyal dari OLT...
                 </div>
             </div>
         </div>
 
         <!-- Status ACS -->
-        <div class="card border-0 shadow-sm">
-            <div class="card-header bg-white border-bottom py-3 d-flex align-items-center justify-content-between">
-                <h6 class="mb-0 fw-semibold"><i class="bi bi-cloud-check me-1"></i>Status ACS</h6>
+        <div class="card !mb-0">
+            <div class="card-header">
+                <div class="card-title"><i data-lucide="cloud" class="w-4 h-4 text-slate-400"></i> Status ACS</div>
                 <?php if ($acsUpdatedAt): ?>
-                    <span class="small text-muted">Cache: <?= date('d/m H:i', strtotime($acsUpdatedAt)) ?></span>
+                    <span class="text-[10px] text-slate-400">Cache: <?= date('d/m H:i', strtotime($acsUpdatedAt)) ?></span>
                 <?php endif; ?>
             </div>
-            <div class="card-body" id="acsStatusBox">
+            <div id="acsStatusBox">
                 <?php if ($acsInfo): ?>
                 <?php
                     $online  = $acsInfo['online'];
                     $lastInf = $acsInfo['last_inform'] ? date('d/m/Y H:i', strtotime($acsInfo['last_inform'])) : '-';
                 ?>
-                <div class="mb-2 d-flex align-items-center gap-2">
+                <div class="mb-2 flex items-center gap-2 flex-wrap">
                     <?php if ($online): ?>
-                        <span class="badge bg-success fs-6 py-1 px-2"><i class="bi bi-wifi me-1"></i>Online</span>
+                        <span class="chip chip-success"><span class="pulsing-dot"></span> Online</span>
                     <?php else: ?>
-                        <span class="badge bg-secondary fs-6 py-1 px-2"><i class="bi bi-wifi-off me-1"></i>Offline</span>
+                        <span class="chip chip-neutral">Offline</span>
                     <?php endif; ?>
-                    <small class="text-muted">Last inform: <?= $lastInf ?></small>
+                    <span class="text-[10px] text-slate-400">Last inform: <?= $lastInf ?></span>
                 </div>
-                <table class="table table-sm mb-0">
-                    <?php if (!empty($acsInfo['model'])): ?>
-                    <tr><th class="text-muted" style="width:45%">Model</th>
-                        <td><?= esc($acsInfo['model']) ?> (<?= esc($acsInfo['manufacturer'] ?? '-') ?>)</td></tr>
-                    <?php endif; ?>
-                </table>
-                <div class="mt-2 small text-muted"><i class="bi bi-info-circle me-1"></i>Data dari cache. Klik "Refresh ACS" untuk info lengkap (WAN IP, PPPoE, WiFi).</div>
+                <?php if (!empty($acsInfo['model'])): ?>
+                <div class="text-xs text-slate-500"><?= esc($acsInfo['model']) ?> <span class="text-slate-400">(<?= esc($acsInfo['manufacturer'] ?? '-') ?>)</span></div>
+                <?php endif; ?>
+                <div class="mt-2 text-[11px] text-slate-400"><i data-lucide="info" class="w-3 h-3 inline"></i> Data dari cache. Klik "Refresh ACS" untuk info lengkap (WAN IP, PPPoE, WiFi).</div>
                 <?php else: ?>
-                <div class="text-muted small">
+                <div class="text-xs text-slate-400">
                     <?php if ($acsUpdatedAt): ?>
                         ONU tidak ditemukan di ACS cache. Klik "Refresh ACS" untuk cek live.
                     <?php else: ?>
@@ -164,195 +166,178 @@
         </div>
     </div>
 
-    <!-- Edit PPPoE & WiFi -->
-    <div class="col-lg-7">
-        <div class="card border-0 shadow-sm mb-4">
-            <div class="card-header bg-white border-bottom py-3">
-                <h6 class="mb-0 fw-semibold"><i class="bi bi-ethernet me-1"></i>Edit PPPoE (WAN)</h6>
+    <!-- Kolom kanan: PPPoE, WiFi, Clients -->
+    <div class="lg:col-span-7 space-y-3">
+        <!-- Edit PPPoE -->
+        <div class="card !mb-0">
+            <div class="card-header">
+                <div class="card-title"><i data-lucide="ethernet" class="w-4 h-4 text-slate-400"></i> Edit PPPoE (WAN)</div>
             </div>
-            <div class="card-body">
+            <div>
                 <?php if ($onu['vlan_internet'] || $onu['vlan_acs'] || $onu['tcont_profile']): ?>
-                <div class="d-flex flex-wrap gap-2 mb-3 p-2 rounded" style="background:#f8fafc;border:1px solid #e2e8f0">
+                <div class="flex flex-wrap gap-2 mb-3 p-2.5 rounded-lg bg-slate-50 border border-slate-200">
                     <?php if ($onu['vlan_internet']): ?>
-                    <span class="badge bg-primary py-1 px-2">
-                        <i class="bi bi-diagram-3 me-1"></i>VLAN Internet: <?= $onu['vlan_internet'] ?>
-                    </span>
+                    <span class="chip chip-info">VLAN Internet: <?= $onu['vlan_internet'] ?></span>
                     <?php endif; ?>
                     <?php if ($onu['vlan_acs']): ?>
-                    <span class="badge bg-info text-dark py-1 px-2">
-                        <i class="bi bi-hdd-network me-1"></i>VLAN ACS: <?= $onu['vlan_acs'] ?>
-                    </span>
+                    <span class="chip chip-neutral">VLAN ACS: <?= $onu['vlan_acs'] ?></span>
                     <?php endif; ?>
                     <?php if ($onu['tcont_profile']): ?>
-                    <span class="badge bg-secondary py-1 px-2">
-                        <i class="bi bi-speedometer2 me-1"></i>TCONT: <?= esc($onu['tcont_profile']) ?>
-                    </span>
+                    <span class="chip chip-neutral">TCONT: <?= esc($onu['tcont_profile']) ?></span>
                     <?php endif; ?>
                 </div>
                 <?php else: ?>
-                <div class="alert alert-warning py-1 px-2 small mb-3">
-                    <i class="bi bi-exclamation-triangle me-1"></i>VLAN belum diset.
-                    <a href="#" onclick="toggleEdit();return false">Edit Info ONU</a> untuk mengisi VLAN/TCONT.
+                <div class="mb-3 p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs">
+                    <i data-lucide="alert-triangle" class="w-3.5 h-3.5 inline"></i> VLAN belum diset.
+                    <a href="#" class="font-bold underline" onclick="toggleEdit();return false">Edit Info ONU</a> untuk mengisi VLAN/TCONT.
                 </div>
                 <?php endif; ?>
-                <div class="row g-3">
-                    <div class="col-6">
-                        <label class="form-label small fw-medium">PPPoE Username</label>
-                        <input type="text" id="pppoe_user" class="form-control"
-                               value="<?= esc($onu['pppoe_user'] ?? '') ?>" placeholder="username@isp">
+                <div class="form-grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr))">
+                    <div class="form-group">
+                        <label class="form-label">PPPoE Username</label>
+                        <input type="text" id="pppoe_user" class="form-input font-mono" value="<?= esc($onu['pppoe_user'] ?? '') ?>" placeholder="username@isp">
                     </div>
-                    <div class="col-6">
-                        <label class="form-label small fw-medium">PPPoE Password</label>
-                        <div class="input-group">
-                            <input type="password" id="pppoe_pass" class="form-control"
-                                   value="<?= esc($onu['pppoe_pass'] ?? '') ?>" placeholder="password">
-                            <button class="btn btn-outline-secondary" type="button"
-                                    onclick="togglePass('pppoe_pass',this)" tabindex="-1">
-                                <i class="bi bi-eye"></i>
+                    <div class="form-group">
+                        <label class="form-label">PPPoE Password</label>
+                        <div class="flex gap-1.5">
+                            <input type="password" id="pppoe_pass" class="form-input font-mono" value="<?= esc($onu['pppoe_pass'] ?? '') ?>" placeholder="password">
+                            <button class="btn btn-secondary btn-icon-only shrink-0" type="button" onclick="togglePass('pppoe_pass',this)" tabindex="-1">
+                                <i data-lucide="eye" class="w-4 h-4"></i>
                             </button>
                         </div>
                     </div>
                 </div>
-                <div class="form-text">
+                <div class="text-[11px] text-slate-400 mt-1">
                     <?php
                         $oltB     = strtoupper($onu['brand'] ?? '');
                         $isFhOnu  = strncasecmp($onu['sn'] ?? '', 'FHTT', 4) === 0 || strncasecmp($onu['sn'] ?? '', 'FHSC', 4) === 0;
                         $isZteOnu = strncasecmp($onu['sn'] ?? '', 'ZTEG', 4) === 0;
                     ?>
                     <?php if ($oltB === 'ZTE' && $isZteOnu): ?>
-                        <i class="bi bi-info-circle me-1"></i>ONU ZTE di OLT ZTE: PPPoE + VLAN dipush via <strong>OLT pon-onu-mng</strong> (OMCI).
+                        ONU ZTE di OLT ZTE: PPPoE + VLAN dipush via <strong>OLT pon-onu-mng</strong> (OMCI).
                     <?php elseif (($oltB === 'FIBERHOME' || $oltB === 'FH') && $isFhOnu): ?>
-                        <i class="bi bi-info-circle me-1"></i>ONU FiberHome di OLT FiberHome: PPPoE + VLAN dipush via <strong>OLT (onu wan-cfg)</strong>.
+                        ONU FiberHome di OLT FiberHome: PPPoE + VLAN dipush via <strong>OLT (onu wan-cfg)</strong>.
                     <?php else: ?>
-                        <i class="bi bi-info-circle me-1"></i>PPPoE dipush via <strong>TR-069/GenieACS</strong>.
+                        PPPoE dipush via <strong>TR-069/GenieACS</strong>.
                     <?php endif; ?>
                 </div>
-                <div id="pppoeResult" class="mt-2 d-none small"></div>
+                <div id="pppoeResult" class="hidden"></div>
                 <button class="btn btn-primary btn-sm mt-3" onclick="setPppoe()">
-                    <i class="bi bi-cloud-upload me-1"></i>Push ke ONU
+                    <i data-lucide="cloud-upload" class="w-3.5 h-3.5"></i> Push ke ONU
                 </button>
             </div>
         </div>
 
-        <div class="card border-0 shadow-sm" id="wifiCard">
-            <div class="card-header bg-white border-bottom py-3">
-                <h6 class="mb-0 fw-semibold"><i class="bi bi-wifi me-1"></i>Edit WiFi</h6>
+        <!-- Edit WiFi -->
+        <div class="card !mb-0" id="wifiCard">
+            <div class="card-header">
+                <div class="card-title"><i data-lucide="wifi" class="w-4 h-4 text-slate-400"></i> Edit WiFi</div>
             </div>
-            <div class="card-body">
+            <div>
                 <!-- Info WiFi saat ini (diisi oleh Refresh ACS) -->
-                <div id="wifiInfoRow" class="d-none mb-3">
-                    <div class="row g-2">
-                        <div class="col-6">
-                            <div class="rounded p-2" style="background:#f0f9ff;border:1px solid #bae6fd">
-                                <div class="d-flex align-items-center gap-1 mb-1">
-                                    <i class="bi bi-wifi text-primary small"></i>
-                                    <small class="fw-semibold text-primary">2.4GHz</small>
-                                </div>
-                                <div class="font-monospace small text-truncate" id="wifiInfo24" title="">—</div>
-                            </div>
+                <div id="wifiInfoRow" class="hidden mb-3 grid grid-cols-2 gap-2">
+                    <div class="rounded-lg p-2.5 bg-sky-50 border border-sky-200">
+                        <div class="flex items-center gap-1.5 mb-1 text-sky-600">
+                            <i data-lucide="wifi" class="w-3.5 h-3.5"></i>
+                            <span class="text-xs font-bold">2.4GHz</span>
                         </div>
-                        <div class="col-6">
-                            <div class="rounded p-2" style="background:#f0fdf4;border:1px solid #bbf7d0">
-                                <div class="d-flex align-items-center gap-1 mb-1">
-                                    <i class="bi bi-wifi text-success small"></i>
-                                    <small class="fw-semibold text-success">5GHz</small>
-                                </div>
-                                <div class="font-monospace small text-truncate" id="wifiInfo5" title="">—</div>
-                            </div>
+                        <div class="font-mono text-xs text-slate-600 truncate" id="wifiInfo24" title="">—</div>
+                    </div>
+                    <div class="rounded-lg p-2.5 bg-emerald-50 border border-emerald-200">
+                        <div class="flex items-center gap-1.5 mb-1 text-emerald-600">
+                            <i data-lucide="wifi" class="w-3.5 h-3.5"></i>
+                            <span class="text-xs font-bold">5GHz</span>
                         </div>
+                        <div class="font-mono text-xs text-slate-600 truncate" id="wifiInfo5" title="">—</div>
                     </div>
                 </div>
 
                 <!-- Toggle mode -->
-                <div class="form-check mb-3">
-                    <input class="form-check-input" type="checkbox" id="wifi_dual_band" checked onchange="toggleWifiMode()">
-                    <label class="form-check-label small" for="wifi_dual_band">
-                        Terapkan ke <strong>2.4GHz &amp; 5GHz</strong> sekaligus (SSID &amp; password sama)
-                    </label>
-                </div>
+                <label class="flex items-center gap-2 mb-3 cursor-pointer select-none">
+                    <input type="checkbox" id="wifi_dual_band" checked class="accent-blue-600 w-4 h-4" onchange="toggleWifiMode()">
+                    <span class="text-xs text-slate-600">Terapkan ke <strong>2.4GHz &amp; 5GHz</strong> sekaligus (SSID &amp; password sama)</span>
+                </label>
 
-                <!-- Mode single: satu SSID + password untuk kedua band -->
+                <!-- Mode single -->
                 <div id="wifiSingleForm">
-                    <div class="row g-3">
-                        <div class="col-6">
-                            <label class="form-label small fw-medium">SSID (Nama WiFi)</label>
-                            <input type="text" id="wifi_ssid" class="form-control" placeholder="Nama-WiFi">
+                    <div class="form-grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr))">
+                        <div class="form-group">
+                            <label class="form-label">SSID (Nama WiFi)</label>
+                            <input type="text" id="wifi_ssid" class="form-input" placeholder="Nama-WiFi">
                         </div>
-                        <div class="col-6">
-                            <label class="form-label small fw-medium">Password WiFi</label>
-                            <div class="input-group">
-                                <input type="password" id="wifi_key" class="form-control" placeholder="min 8 karakter">
-                                <button class="btn btn-outline-secondary" type="button"
-                                        onclick="togglePass('wifi_key',this)" tabindex="-1">
-                                    <i class="bi bi-eye"></i>
+                        <div class="form-group">
+                            <label class="form-label">Password WiFi</label>
+                            <div class="flex gap-1.5">
+                                <input type="password" id="wifi_key" class="form-input font-mono" placeholder="min 8 karakter">
+                                <button class="btn btn-secondary btn-icon-only shrink-0" type="button" onclick="togglePass('wifi_key',this)" tabindex="-1">
+                                    <i data-lucide="eye" class="w-4 h-4"></i>
                                 </button>
                             </div>
                         </div>
                     </div>
-                    <div class="form-text">SSID &amp; password sama untuk 2.4GHz dan 5GHz.</div>
-                    <div id="wifiResult" class="mt-2 d-none small"></div>
+                    <div class="text-[11px] text-slate-400">SSID &amp; password sama untuk 2.4GHz dan 5GHz.</div>
+                    <div id="wifiResult" class="hidden"></div>
                     <button class="btn btn-primary btn-sm mt-3" onclick="setWifi('both')">
-                        <i class="bi bi-cloud-upload me-1"></i>Push ke ONU (2.4GHz &amp; 5GHz)
+                        <i data-lucide="cloud-upload" class="w-3.5 h-3.5"></i> Push ke ONU (2.4GHz &amp; 5GHz)
                     </button>
                 </div>
 
-                <!-- Mode terpisah: form sendiri per band -->
-                <div id="wifiSeparateForm" class="d-none">
-                    <div class="row g-3">
-                        <div class="col-6">
-                            <div class="fw-semibold small mb-2"><i class="bi bi-wifi text-primary me-1"></i>2.4GHz</div>
-                            <div class="mb-2">
-                                <label class="form-label small fw-medium">SSID</label>
-                                <input type="text" id="wifi_ssid_24" class="form-control form-control-sm" placeholder="Nama-WiFi-2.4">
+                <!-- Mode terpisah -->
+                <div id="wifiSeparateForm" class="hidden">
+                    <div class="grid sm:grid-cols-2 gap-4">
+                        <div>
+                            <div class="text-xs font-bold text-sky-600 mb-2 flex items-center gap-1.5"><i data-lucide="wifi" class="w-3.5 h-3.5"></i> 2.4GHz</div>
+                            <div class="form-group">
+                                <label class="form-label">SSID</label>
+                                <input type="text" id="wifi_ssid_24" class="form-input" placeholder="Nama-WiFi-2.4">
                             </div>
-                            <div class="mb-2">
-                                <label class="form-label small fw-medium">Password</label>
-                                <div class="input-group input-group-sm">
-                                    <input type="password" id="wifi_key_24" class="form-control" placeholder="min 8 karakter">
-                                    <button class="btn btn-outline-secondary" type="button"
-                                            onclick="togglePass('wifi_key_24',this)" tabindex="-1">
-                                        <i class="bi bi-eye"></i>
+                            <div class="form-group">
+                                <label class="form-label">Password</label>
+                                <div class="flex gap-1.5">
+                                    <input type="password" id="wifi_key_24" class="form-input font-mono" placeholder="min 8 karakter">
+                                    <button class="btn btn-secondary btn-icon-only shrink-0" type="button" onclick="togglePass('wifi_key_24',this)" tabindex="-1">
+                                        <i data-lucide="eye" class="w-4 h-4"></i>
                                     </button>
                                 </div>
                             </div>
-                            <div id="wifiResult24" class="mb-2 d-none small"></div>
-                            <button class="btn btn-outline-primary btn-sm w-100" onclick="setWifi('24')">
-                                <i class="bi bi-cloud-upload me-1"></i>Push 2.4GHz
+                            <div id="wifiResult24" class="hidden"></div>
+                            <button class="btn btn-sm bg-sky-600 hover:bg-sky-700 text-white border-0 w-full" onclick="setWifi('24')">
+                                <i data-lucide="cloud-upload" class="w-3.5 h-3.5"></i> Push 2.4GHz
                             </button>
                         </div>
-                        <div class="col-6">
-                            <div class="fw-semibold small mb-2"><i class="bi bi-wifi text-success me-1"></i>5GHz</div>
-                            <div class="mb-2">
-                                <label class="form-label small fw-medium">SSID</label>
-                                <input type="text" id="wifi_ssid_5" class="form-control form-control-sm" placeholder="Nama-WiFi-5G">
+                        <div>
+                            <div class="text-xs font-bold text-emerald-600 mb-2 flex items-center gap-1.5"><i data-lucide="wifi" class="w-3.5 h-3.5"></i> 5GHz</div>
+                            <div class="form-group">
+                                <label class="form-label">SSID</label>
+                                <input type="text" id="wifi_ssid_5" class="form-input" placeholder="Nama-WiFi-5G">
                             </div>
-                            <div class="mb-2">
-                                <label class="form-label small fw-medium">Password</label>
-                                <div class="input-group input-group-sm">
-                                    <input type="password" id="wifi_key_5" class="form-control" placeholder="min 8 karakter">
-                                    <button class="btn btn-outline-secondary" type="button"
-                                            onclick="togglePass('wifi_key_5',this)" tabindex="-1">
-                                        <i class="bi bi-eye"></i>
+                            <div class="form-group">
+                                <label class="form-label">Password</label>
+                                <div class="flex gap-1.5">
+                                    <input type="password" id="wifi_key_5" class="form-input font-mono" placeholder="min 8 karakter">
+                                    <button class="btn btn-secondary btn-icon-only shrink-0" type="button" onclick="togglePass('wifi_key_5',this)" tabindex="-1">
+                                        <i data-lucide="eye" class="w-4 h-4"></i>
                                     </button>
                                 </div>
                             </div>
-                            <div id="wifiResult5" class="mb-2 d-none small"></div>
-                            <button class="btn btn-outline-success btn-sm w-100" onclick="setWifi('5')">
-                                <i class="bi bi-cloud-upload me-1"></i>Push 5GHz
+                            <div id="wifiResult5" class="hidden"></div>
+                            <button class="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white border-0 w-full" onclick="setWifi('5')">
+                                <i data-lucide="cloud-upload" class="w-3.5 h-3.5"></i> Push 5GHz
                             </button>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
+
         <!-- Connected Clients -->
-        <div class="card border-0 shadow-sm mt-4" id="clientCard">
-            <div class="card-header bg-white border-bottom py-2 d-flex align-items-center justify-content-between">
-                <h6 class="mb-0 fw-semibold small"><i class="bi bi-people me-1"></i>Client Terhubung</h6>
-                <small class="text-muted">via Refresh ACS</small>
+        <div class="card !mb-0" id="clientCard">
+            <div class="card-header">
+                <div class="card-title"><i data-lucide="users" class="w-4 h-4 text-slate-400"></i> Client Terhubung</div>
+                <span class="text-[10px] text-slate-400">via Refresh ACS</span>
             </div>
-            <div class="card-body p-0" id="clientsBox">
-                <div class="p-3 text-muted small">Klik <strong>Refresh ACS</strong> untuk muat data client.</div>
+            <div id="clientsBox">
+                <div class="text-xs text-slate-400 p-1">Klik <strong>Refresh ACS</strong> untuk muat data client.</div>
             </div>
         </div>
     </div>
@@ -360,68 +345,56 @@
 
 <?php if (strtoupper($onu['brand'] ?? '') === 'ZTE' && strncasecmp($onu['sn'], 'ZTEG', 4) === 0): ?>
 <!-- Konfigurasi OLT (ZTE) — dari Database, tidak perlu Telnet. Hanya ONU ZTE di OLT ZTE. -->
-<div class="row mt-4">
-    <div class="col-12">
-        <div class="card border-0 shadow-sm">
-            <div class="card-header bg-white border-bottom py-3 d-flex align-items-center justify-content-between">
-                <h6 class="mb-0 fw-semibold"><i class="bi bi-terminal me-1"></i>Konfigurasi OLT</h6>
-                <div class="d-flex gap-2 align-items-center">
-                    <span class="badge bg-light text-muted small fw-normal">dari database</span>
-                    <button class="btn btn-sm btn-outline-secondary py-0" onclick="toggleOltConfig()" id="btnToggleOltConfig">
-                        <i class="bi bi-pencil me-1"></i>Edit
-                    </button>
+<div class="card !mb-0">
+    <div class="card-header">
+        <div class="card-title"><i data-lucide="terminal" class="w-4 h-4 text-slate-400"></i> Konfigurasi OLT</div>
+        <div class="flex gap-2 items-center">
+            <span class="chip chip-neutral">dari database</span>
+            <button class="btn btn-secondary btn-sm" onclick="toggleOltConfig()" id="btnToggleOltConfig">
+                <i data-lucide="pencil" class="w-3.5 h-3.5"></i> Edit
+            </button>
+        </div>
+    </div>
+    <div class="terminal-window !mb-0">
+        <div class="terminal-header">
+            <span class="term-dot red"></span><span class="term-dot yellow"></span><span class="term-dot green"></span>
+            <span class="text-slate-500 text-[10px] ml-2">olt-config</span>
+        </div>
+        <div id="oltConfigPre" class="terminal-body" style="min-height:80px"></div>
+    </div>
+    <div id="oltConfigEdit" class="hidden border-t border-slate-100">
+        <div class="p-3">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label">VLAN Internet</label>
+                    <input type="number" id="cfg_vlan_internet" class="form-input" value="<?= esc($onu['vlan_internet'] ?? '') ?>" oninput="renderOltConfig()">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">VLAN ACS</label>
+                    <input type="number" id="cfg_vlan_acs" class="form-input" value="<?= esc($onu['vlan_acs'] ?? '') ?>" oninput="renderOltConfig()">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">TCONT Profile</label>
+                    <input type="text" id="cfg_tcont" class="form-input" value="<?= esc($onu['tcont_profile'] ?? '') ?>" oninput="renderOltConfig()">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">PPPoE Username</label>
+                    <input type="text" id="cfg_pppoe_user" class="form-input" value="<?= esc($onu['pppoe_user'] ?? '') ?>" oninput="renderOltConfig()">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">PPPoE Password</label>
+                    <input type="text" id="cfg_pppoe_pass" class="form-input" value="<?= esc($onu['pppoe_pass'] ?? '') ?>" oninput="renderOltConfig()">
                 </div>
             </div>
-            <div class="card-body p-0">
-                <pre id="oltConfigPre"
-                     class="mb-0 px-3 py-3 font-monospace"
-                     style="background:#1a1b26;color:#a9b1d6;font-size:0.73rem;border-radius:0 0 8px 8px;line-height:1.75;min-height:80px;white-space:pre-wrap"></pre>
-            </div>
-            <div id="oltConfigEdit" class="d-none border-top">
-                <div class="p-3">
-                    <div class="row g-2">
-                        <div class="col-sm-3 col-6">
-                            <label class="form-label small fw-medium">VLAN Internet</label>
-                            <input type="number" id="cfg_vlan_internet" class="form-control form-control-sm"
-                                   value="<?= esc($onu['vlan_internet'] ?? '') ?>"
-                                   oninput="renderOltConfig()">
-                        </div>
-                        <div class="col-sm-3 col-6">
-                            <label class="form-label small fw-medium">VLAN ACS</label>
-                            <input type="number" id="cfg_vlan_acs" class="form-control form-control-sm"
-                                   value="<?= esc($onu['vlan_acs'] ?? '') ?>"
-                                   oninput="renderOltConfig()">
-                        </div>
-                        <div class="col-sm-3 col-6">
-                            <label class="form-label small fw-medium">TCONT Profile</label>
-                            <input type="text" id="cfg_tcont" class="form-control form-control-sm"
-                                   value="<?= esc($onu['tcont_profile'] ?? '') ?>"
-                                   oninput="renderOltConfig()">
-                        </div>
-                        <div class="col-sm-3 col-6">
-                            <label class="form-label small fw-medium">PPPoE Username</label>
-                            <input type="text" id="cfg_pppoe_user" class="form-control form-control-sm"
-                                   value="<?= esc($onu['pppoe_user'] ?? '') ?>"
-                                   oninput="renderOltConfig()">
-                        </div>
-                        <div class="col-sm-4 col-6">
-                            <label class="form-label small fw-medium">PPPoE Password</label>
-                            <input type="text" id="cfg_pppoe_pass" class="form-control form-control-sm"
-                                   value="<?= esc($onu['pppoe_pass'] ?? '') ?>"
-                                   oninput="renderOltConfig()">
-                        </div>
-                    </div>
-                    <div id="oltCfgResult" class="mt-2 d-none small"></div>
-                    <div class="mt-3 d-flex gap-2 flex-wrap">
-                        <button class="btn btn-sm btn-warning" onclick="saveAndPushOlt()">
-                            <i class="bi bi-cloud-upload me-1"></i>Simpan &amp; Push ke OLT
-                        </button>
-                        <button class="btn btn-sm btn-outline-primary" onclick="saveOltConfigOnly()">
-                            <i class="bi bi-floppy me-1"></i>Simpan ke DB saja
-                        </button>
-                        <button class="btn btn-sm btn-light" onclick="toggleOltConfig()">Batal</button>
-                    </div>
-                </div>
+            <div id="oltCfgResult" class="hidden"></div>
+            <div class="mt-3 flex gap-2 flex-wrap">
+                <button class="btn btn-sm bg-amber-500 hover:bg-amber-600 text-white border-0" onclick="saveAndPushOlt()">
+                    <i data-lucide="cloud-upload" class="w-3.5 h-3.5"></i> Simpan &amp; Push ke OLT
+                </button>
+                <button class="btn btn-primary btn-sm" onclick="saveOltConfigOnly()">
+                    <i data-lucide="save" class="w-3.5 h-3.5"></i> Simpan ke DB saja
+                </button>
+                <button class="btn btn-secondary btn-sm" onclick="toggleOltConfig()">Batal</button>
             </div>
         </div>
     </div>
@@ -429,52 +402,54 @@
 <?php endif; ?>
 
 <!-- Modal Set ACS -->
-<div id="setAcsModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1055;align-items:center;justify-content:center">
-    <div class="card border-0 shadow-lg" style="width:360px;max-width:95vw">
-        <div class="card-header d-flex align-items-center justify-content-between py-3">
-            <h6 class="mb-0 fw-semibold"><i class="bi bi-plug me-1"></i>Push pon-onu-mng ke ONU</h6>
-            <button type="button" class="btn-close" onclick="closeSetAcsModal()"></button>
+<div id="setAcsModal" class="modal-overlay">
+    <div class="modal-card" style="max-width:460px">
+        <div class="card-header !mb-2">
+            <div class="card-title"><i data-lucide="plug" class="w-4 h-4 text-amber-500"></i> Push pon-onu-mng ke ONU</div>
+            <button type="button" class="btn btn-secondary btn-sm btn-icon-only" onclick="closeSetAcsModal()">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
         </div>
-        <div class="card-body">
-            <p class="small text-muted mb-2">
+        <div>
+            <p class="text-xs text-slate-500 mb-2">
                 Set service mapping VLAN via OMCI langsung dari OLT:
             </p>
-            <ul class="small mb-3">
+            <ul class="text-xs space-y-1.5 mb-3 list-disc pl-4">
                 <?php if (in_array(strtoupper($onu['brand'] ?? ''), ['FIBERHOME', 'FH'])): ?>
                     <?php $isFhOnu = (bool)preg_match('/^FH(TT|SC)/i', $onu['sn'] ?? ''); ?>
                     <?php if ($isFhOnu): // ONU FH: WAN penuh di OLT ?>
                         <?php if ($onu['vlan_acs']): ?>
-                        <li><code>onu wan-cfg <?= $onu['onu_index'] ?> index 1 mode tr069 ... <?= $onu['vlan_acs'] ?> ... dsp dhcp</code></li>
+                        <li class="font-mono text-[11px]">onu wan-cfg <?= $onu['onu_index'] ?> index 1 mode tr069 ... <?= $onu['vlan_acs'] ?> ... dsp dhcp</li>
                         <?php endif; ?>
                         <?php if ($onu['vlan_internet']): ?>
-                        <li><code>onu wan-cfg <?= $onu['onu_index'] ?> index 2 mode internet ... <?= $onu['vlan_internet'] ?> ...</code></li>
+                        <li class="font-mono text-[11px]">onu wan-cfg <?= $onu['onu_index'] ?> index 2 mode internet ... <?= $onu['vlan_internet'] ?> ...</li>
                         <?php endif; ?>
-                    <?php else: // ONU non-FH: bridge VLAN ke veip (ONU pakai TR-069/PPPoE sendiri via ACS) ?>
+                    <?php else: // ONU non-FH: bridge VLAN ke veip ?>
                         <?php if ($onu['vlan_acs']): ?>
-                        <li><code>onu veip <?= $onu['onu_index'] ?> cvlan-id <?= $onu['vlan_acs'] ?> cvlan-cos 65535 svlan-tpid 33024 svlan-vid <?= $onu['vlan_acs'] ?> svlan-cos 65535</code></li>
+                        <li class="font-mono text-[11px]">onu veip <?= $onu['onu_index'] ?> cvlan-id <?= $onu['vlan_acs'] ?> ... svlan-vid <?= $onu['vlan_acs'] ?> ...</li>
                         <?php endif; ?>
                         <?php if ($onu['vlan_internet']): ?>
-                        <li><code>onu veip <?= $onu['onu_index'] ?> cvlan-id <?= $onu['vlan_internet'] ?> ... svlan-vid <?= $onu['vlan_internet'] ?> ...</code></li>
+                        <li class="font-mono text-[11px]">onu veip <?= $onu['onu_index'] ?> cvlan-id <?= $onu['vlan_internet'] ?> ... svlan-vid <?= $onu['vlan_internet'] ?> ...</li>
                         <?php endif; ?>
                     <?php endif; ?>
                 <?php else: ?>
                     <?php if ($onu['vlan_internet']): ?>
-                    <li><code>service hsi gemport 1 vlan <?= $onu['vlan_internet'] ?></code></li>
+                    <li class="font-mono text-[11px]">service hsi gemport 1 vlan <?= $onu['vlan_internet'] ?></li>
                     <?php endif; ?>
                     <?php if ($onu['vlan_acs']): ?>
-                    <li><code>service acs gemport 1 vlan <?= $onu['vlan_acs'] ?></code></li>
+                    <li class="font-mono text-[11px]">service acs gemport 1 vlan <?= $onu['vlan_acs'] ?></li>
                     <?php endif; ?>
-                    <li><code>vlan port veip_1 mode hybrid</code></li>
+                    <li class="font-mono text-[11px]">vlan port veip_1 mode hybrid</li>
                 <?php endif; ?>
             </ul>
-            <p class="small text-muted">Setelah ONU konek ACS, PPPoE bisa di-push (FH ONU: via OLT; brand lain: via GenieACS).</p>
-            <div id="setAcsResult" class="mt-2 small" style="min-height:1.5rem"></div>
+            <p class="text-xs text-slate-500">Setelah ONU konek ACS, PPPoE bisa di-push (FH ONU: via OLT; brand lain: via GenieACS).</p>
+            <div id="setAcsResult" class="hidden"></div>
         </div>
-        <div class="card-footer d-flex gap-2">
-            <button id="btnDoSetAcs" class="btn btn-warning btn-sm" onclick="doSetAcs()">
-                <i class="bi bi-check-circle me-1"></i>Push pon-onu-mng
+        <div class="flex gap-2 mt-4">
+            <button id="btnDoSetAcs" class="btn bg-amber-500 hover:bg-amber-600 text-white border-0 btn-sm" onclick="doSetAcs()">
+                <i data-lucide="check-circle" class="w-3.5 h-3.5"></i> Push pon-onu-mng
             </button>
-            <button class="btn btn-light btn-sm" onclick="closeSetAcsModal()">Batal</button>
+            <button class="btn btn-secondary btn-sm" onclick="closeSetAcsModal()">Batal</button>
         </div>
     </div>
 </div>
@@ -528,9 +503,7 @@ function buildOltConfigText(vlanInt, vlanAcs, tcont, pppoeUser, pppoePass) {
 }
 
 function cfgHL(txt) {
-    // Escape HTML dulu
     txt = txt.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    // Syntax highlight sederhana
     txt = txt.replace(/^(interface|pon-onu-mng)(\s)/gm,
         '<span style="color:#7dcfff;font-weight:600">$1</span>$2');
     txt = txt.replace(/\b(tcont|gemport|service|vlan|wan-ip|mode|username|password|dns|primary-dns|port|hybrid)\b/g,
@@ -547,7 +520,7 @@ function cfgHL(txt) {
 function renderOltConfig() {
     const pre = document.getElementById('oltConfigPre');
     if (!pre) return;
-    const editOpen = !document.getElementById('oltConfigEdit')?.classList.contains('d-none');
+    const editOpen = !document.getElementById('oltConfigEdit')?.classList.contains('hidden');
     const vlanInt   = editOpen ? (document.getElementById('cfg_vlan_internet')?.value || '') : (OLT_CFG.vlanInt || '');
     const vlanAcs   = editOpen ? (document.getElementById('cfg_vlan_acs')?.value      || '') : (OLT_CFG.vlanAcs || '');
     const tcont     = editOpen ? (document.getElementById('cfg_tcont')?.value          || '') : OLT_CFG.tcont;
@@ -560,12 +533,13 @@ function toggleOltConfig() {
     const edit = document.getElementById('oltConfigEdit');
     const btn  = document.getElementById('btnToggleOltConfig');
     if (!edit) return;
-    const show = edit.classList.contains('d-none');
-    edit.classList.toggle('d-none', !show);
+    const show = edit.classList.contains('hidden');
+    edit.classList.toggle('hidden', !show);
     btn.innerHTML = show
-        ? '<i class="bi bi-x-circle me-1"></i>Tutup'
-        : '<i class="bi bi-pencil me-1"></i>Edit';
-    if (show) document.getElementById('oltCfgResult')?.classList.add('d-none');
+        ? '<i data-lucide="x-circle" class="w-3.5 h-3.5"></i> Tutup'
+        : '<i data-lucide="pencil" class="w-3.5 h-3.5"></i> Edit';
+    App.refreshIcons();
+    if (show) document.getElementById('oltCfgResult')?.classList.add('hidden');
     renderOltConfig();
 }
 
@@ -576,49 +550,38 @@ async function doSaveOltConfig() {
     fd.append('tcont_profile', document.getElementById('cfg_tcont').value.trim());
     fd.append('pppoe_user',    document.getElementById('cfg_pppoe_user').value.trim());
     fd.append('pppoe_pass',    document.getElementById('cfg_pppoe_pass').value.trim());
-    fd.append('name',          '');  // kosong = controller pakai nama existing
-    fd.append('<?= csrf_token() ?>', '<?= csrf_hash() ?>');
+    fd.append('name',          '');
     try {
-        const r = await fetch(`/onus/${ONU_ID}/update-info`, { method: 'POST', body: fd });
-        const d = await r.json();
+        const d = await App.readJson(await App.fetch(`/onus/${ONU_ID}/update-info`, { method: 'POST', body: fd }));
         return d.success;
     } catch { return false; }
 }
 
 async function saveOltConfigOnly() {
     const res = document.getElementById('oltCfgResult');
-    res.className = 'mt-2 small text-muted';
-    res.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Menyimpan...';
-    res.classList.remove('d-none');
+    App.setMsg(res, 'loading', 'Menyimpan...');
     if (await doSaveOltConfig()) {
-        res.className = 'mt-2 small alert alert-success py-1';
-        res.textContent = 'Tersimpan ke database.';
+        App.setMsg(res, 'success', 'Tersimpan ke database.');
     } else {
-        res.className = 'mt-2 small alert alert-danger py-1';
-        res.textContent = 'Gagal menyimpan.';
+        App.setMsg(res, 'error', 'Gagal menyimpan.');
     }
 }
 
 async function saveAndPushOlt() {
     const res = document.getElementById('oltCfgResult');
-    res.className = 'mt-2 small text-muted';
-    res.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Menyimpan ke DB...';
-    res.classList.remove('d-none');
+    App.setMsg(res, 'loading', 'Menyimpan ke DB...');
 
     if (!(await doSaveOltConfig())) {
-        res.className = 'mt-2 small alert alert-danger py-1';
-        res.textContent = 'Gagal menyimpan ke DB.';
+        App.setMsg(res, 'error', 'Gagal menyimpan ke DB.');
         return;
     }
 
-    res.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Push ke OLT...';
+    App.setMsg(res, 'loading', 'Push ke OLT...');
 
     const pppoeUser = document.getElementById('cfg_pppoe_user').value.trim();
     const pppoePass = document.getElementById('cfg_pppoe_pass').value.trim();
 
     const fd = new FormData();
-    fd.append('<?= csrf_token() ?>', '<?= csrf_hash() ?>');
-
     let url;
     if (pppoeUser) {
         fd.append('action', 'pppoe');
@@ -630,146 +593,124 @@ async function saveAndPushOlt() {
     }
 
     try {
-        const r    = await fetch(url, { method: 'POST', body: fd });
-        const data = await r.json();
-        res.className = `mt-2 small alert alert-${data.success ? 'success' : 'danger'} py-1`;
-        res.innerHTML = data.message || (data.success ? 'Berhasil dipush ke OLT.' : 'Gagal push ke OLT.');
+        const data = await App.readJson(await App.fetch(url, { method: 'POST', body: fd }));
+        App.setMsg(res, data.success ? 'success' : 'error',
+            App.escapeHtml(data.message || (data.success ? 'Berhasil dipush ke OLT.' : 'Gagal push ke OLT.')));
     } catch (e) {
-        res.className = 'mt-2 small alert alert-danger py-1';
-        res.textContent = 'Error: ' + e.message;
+        App.setMsg(res, 'error', 'Error: ' + App.escapeHtml(e.message));
     }
 }
 // === End Konfigurasi OLT ===
 
-function loadSignal() {
+async function loadSignal() {
     const box = document.getElementById('signalBox');
     const btn = document.getElementById('btnSignal');
-    box.innerHTML = '<div class="text-center py-2"><span class="spinner-border spinner-border-sm text-secondary"></span><span class="text-muted small ms-2">Mengambil sinyal dari OLT...</span></div>';
-    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>'; }
+    box.innerHTML = '<div class="flex items-center justify-center gap-2 py-3 text-xs text-slate-400"><span class="spin spin-dark"></span> Mengambil sinyal dari OLT...</div>';
+    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin"></span>'; }
 
-    fetch(`/onus/${ONU_ID}/signal`)
-        .then(r => r.json())
-        .then(data => {
-            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Refresh'; }
-            if (!data.success) {
-                box.innerHTML = `<div class="text-muted small"><i class="bi bi-x-circle me-1 text-danger"></i>${data.message}</div>`;
-                return;
-            }
-            const s = data.signal;
-            const qClass = { good: 'text-success', warn: 'text-warning', bad: 'text-danger' }[data.quality] ?? 'text-muted';
-            const qIcon  = { good: 'bi-reception-4', warn: 'bi-reception-2', bad: 'bi-reception-0' }[data.quality] ?? 'bi-reception-4';
-            const head = `
-                <div class="d-flex align-items-center gap-3 mb-2">
-                    <i class="bi ${qIcon} fs-3 ${qClass}"></i>
-                    <div>
-                        <div class="fw-semibold ${qClass}">${s.onu_rx ?? '?'} dBm</div>
-                        <div class="small text-muted">ONU RX (sinyal di pelanggan)</div>
-                    </div>
-                </div>`;
-            if (data.source === 'acs') {
-                // Fiberhome: RX dibaca dari ACS (TR-069). OLT-side RX/TX tidak tersedia.
-                box.innerHTML = head + `
-                    <table class="table table-sm mb-0">
-                        ${s.temperature ? `<tr><th class="text-muted" style="width:50%">Suhu Transceiver</th><td class="font-monospace">${s.temperature} &deg;C</td></tr>` : ''}
-                    </table>
-                    <div class="small text-muted mt-2"><i class="bi bi-cloud-check me-1"></i>Dari ACS/TR-069 (OLT Fiberhome).</div>`;
-            } else {
-                box.innerHTML = head + `
-                    <table class="table table-sm mb-0">
-                        <tr><th class="text-muted" style="width:50%">OLT RX (dari pelanggan)</th><td class="font-monospace">${s.olt_rx ?? '?'} dBm</td></tr>
-                        <tr><th class="text-muted">ONU TX (kirim ke OLT)</th><td class="font-monospace">${s.onu_tx ?? '?'} dBm</td></tr>
-                        <tr><th class="text-muted">OLT TX (kirim ke pelanggan)</th><td class="font-monospace">${s.olt_tx ?? '?'} dBm</td></tr>
-                    </table>`;
-            }
-        })
-        .catch(e => {
-            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Refresh'; }
-            box.innerHTML = `<div class="text-muted small"><i class="bi bi-x-circle me-1 text-danger"></i>Error: ${e.message}</div>`;
-        });
+    try {
+        const data = await App.readJson(await App.fetch(`/onus/${ONU_ID}/signal`));
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i> Refresh'; App.refreshIcons(); }
+        if (!data.success) {
+            box.innerHTML = `<div class="text-xs text-rose-600">✖ ${App.escapeHtml(data.message)}</div>`;
+            return;
+        }
+        const s = data.signal;
+        const rx = s.onu_rx !== null && s.onu_rx !== undefined ? parseFloat(s.onu_rx) : null;
+        const qColor  = { good: '#188038', warn: '#b06000', bad: '#d93025' }[data.quality] ?? '#5f6368';
+        const qLabel  = { good: 'Bagus', warn: 'Waspada', bad: 'Kritis' }[data.quality] ?? '-';
+        const badge   = App.getSignalBadgeHtml(rx, data.quality !== 'bad' && rx !== null && rx >= -32);
+        const head = `
+            <div class="flex items-center gap-3 mb-3">
+                <div class="font-mono font-bold text-2xl" style="color:${qColor}">${s.onu_rx ?? '?'} <span class="text-sm font-medium">dBm</span></div>
+                ${badge}
+            </div>
+            <div class="text-[11px] text-slate-400 mb-2">ONU RX (sinyal di pelanggan) · kualitas: <strong style="color:${qColor}">${qLabel}</strong></div>`;
+        if (data.source === 'acs') {
+            box.innerHTML = head + `
+                ${s.temperature ? `<div class="text-xs text-slate-500">Suhu Transceiver: <span class="font-mono">${s.temperature} &deg;C</span></div>` : ''}
+                <div class="text-[11px] text-slate-400 mt-2">☁ Dari ACS/TR-069 (OLT Fiberhome).</div>`;
+        } else {
+            box.innerHTML = head + `
+                <table class="data-table !min-w-0">
+                    <tr><th class="!bg-transparent">OLT RX (dari pelanggan)</th><td class="font-mono text-xs">${s.olt_rx ?? '?'} dBm</td></tr>
+                    <tr><th class="!bg-transparent">ONU TX (kirim ke OLT)</th><td class="font-mono text-xs">${s.onu_tx ?? '?'} dBm</td></tr>
+                    <tr><th class="!bg-transparent">OLT TX (kirim ke pelanggan)</th><td class="font-mono text-xs">${s.olt_tx ?? '?'} dBm</td></tr>
+                </table>`;
+        }
+    } catch (e) {
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i> Refresh'; App.refreshIcons(); }
+        box.innerHTML = `<div class="text-xs text-rose-600">✖ Error: ${App.escapeHtml(e.message)}</div>`;
+    }
 }
 
-function fetchConfigFromOlt() {
+async function fetchConfigFromOlt() {
     const btn = document.getElementById('btnFetchConfig');
     const res = document.getElementById('fetchConfigResult');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Mengambil...';
-    res.className = 'mb-2 small text-muted';
-    res.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Menghubungi OLT...';
-    res.classList.remove('d-none');
+    App.setLoading(btn, true, 'Mengambil...');
+    App.setMsg(res, 'loading', 'Menghubungi OLT...');
 
-    fetch(`/onus/${ONU_ID}/fetch-config`)
-        .then(r => r.json())
-        .then(data => {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-cloud-download me-1"></i>Ambil dari OLT';
-            if (!data.success) {
-                res.className = 'mb-2 small alert alert-danger py-1';
-                res.textContent = 'Gagal: ' + data.message;
-                return;
-            }
-            const c = data.config;
-            if (c.tcont_profile)   document.getElementById('edit_tcont').value          = c.tcont_profile;
-            if (c.vlan_internet)   document.getElementById('edit_vlan_internet').value  = c.vlan_internet;
-            if (c.vlan_acs)        document.getElementById('edit_vlan_acs').value        = c.vlan_acs;
-            if (data.pppoe_user) {
-                document.getElementById('edit_pppoe_user').value = data.pppoe_user;
-                // Isi juga form PPPoE di section WAN
-                const pppoeField = document.getElementById('pppoe_user');
-                if (pppoeField && !pppoeField.value) pppoeField.value = data.pppoe_user;
-            }
+    try {
+        const data = await App.readJson(await App.fetch(`/onus/${ONU_ID}/fetch-config`));
+        App.setLoading(btn, false);
+        if (!data.success) {
+            App.setMsg(res, 'error', 'Gagal: ' + App.escapeHtml(data.message));
+            return;
+        }
+        const c = data.config;
+        if (c.tcont_profile)   document.getElementById('edit_tcont').value          = c.tcont_profile;
+        if (c.vlan_internet)   document.getElementById('edit_vlan_internet').value  = c.vlan_internet;
+        if (c.vlan_acs)        document.getElementById('edit_vlan_acs').value        = c.vlan_acs;
+        if (data.pppoe_user) {
+            document.getElementById('edit_pppoe_user').value = data.pppoe_user;
+            const pppoeField = document.getElementById('pppoe_user');
+            if (pppoeField && !pppoeField.value) pppoeField.value = data.pppoe_user;
+        }
 
-            const spList = Object.entries(c.service_ports || {});
-            const spInfo = spList.map(([sp, vlan]) => `SP${sp}=VLAN${vlan}`).join(', ');
-
-            res.className = 'mb-2 small alert alert-success py-1';
-            res.innerHTML = `<i class="bi bi-check-circle me-1"></i>Data dari ${data.source === 'olt' ? 'OLT' : 'DB'}: `
-                + `TCONT <strong>${c.tcont_profile || '—'}</strong>`
-                + (c.vlan_internet  ? `, VLAN Internet <strong>${c.vlan_internet}</strong>` : '')
-                + (c.vlan_acs       ? `, VLAN ACS <strong>${c.vlan_acs}</strong>`           : '')
-                + (data.pppoe_user  ? `, PPPoE <strong>${data.pppoe_user}</strong>`         : '')
-                + (data.note        ? `<br><span class="text-muted">${data.note}</span>`    : '');
-        })
-        .catch(e => {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-cloud-download me-1"></i>Ambil dari OLT';
-            res.className = 'mb-2 small alert alert-danger py-1';
-            res.textContent = 'Error: ' + e.message;
-        });
+        App.setMsg(res, 'success',
+            `Data dari ${data.source === 'olt' ? 'OLT' : 'DB'}: `
+            + `TCONT <strong>${App.escapeHtml(c.tcont_profile || '—')}</strong>`
+            + (c.vlan_internet  ? `, VLAN Internet <strong>${c.vlan_internet}</strong>` : '')
+            + (c.vlan_acs       ? `, VLAN ACS <strong>${c.vlan_acs}</strong>`           : '')
+            + (data.pppoe_user  ? `, PPPoE <strong>${App.escapeHtml(data.pppoe_user)}</strong>` : '')
+            + (data.note        ? `<br><span class="opacity-70">${App.escapeHtml(data.note)}</span>` : ''));
+    } catch (e) {
+        App.setLoading(btn, false);
+        App.setMsg(res, 'error', 'Error: ' + App.escapeHtml(e.message));
+    }
 }
 
 function toggleEdit() {
     const form = document.getElementById('editForm');
     const btn  = document.getElementById('btnToggleEdit');
-    const show = form.classList.contains('d-none');
-    form.classList.toggle('d-none', !show);
+    const show = form.classList.contains('hidden');
+    form.classList.toggle('hidden', !show);
     btn.innerHTML = show
-        ? '<i class="bi bi-x-circle me-1"></i>Batal'
-        : '<i class="bi bi-pencil me-1"></i>Edit';
-    if (show) document.getElementById('editResult').classList.add('d-none');
+        ? '<i data-lucide="x-circle" class="w-3.5 h-3.5"></i> Batal'
+        : '<i data-lucide="pencil" class="w-3.5 h-3.5"></i> Edit';
+    App.refreshIcons();
+    if (show) document.getElementById('editResult').classList.add('hidden');
 }
 
 // Ubah nama saja — kirim HANYA field name, sisanya tidak disentuh sama sekali.
-function renameOnly() {
+async function renameOnly() {
     const current = <?= json_encode($onu['name'] ?? '') ?>;
     const val = prompt('Nama pelanggan baru:', current);
     if (val === null) return;
     const name = val.trim();
-    if (name === '') { alert('Nama tidak boleh kosong.'); return; }
+    if (name === '') { App.showToast('Nama tidak boleh kosong.', 'warning'); return; }
     if (name === current) return;
 
     const fd = new FormData();
     fd.append('name', name);
-    fd.append('<?= csrf_token() ?>', '<?= csrf_hash() ?>');
 
-    fetch(`/onus/${ONU_ID}/update-info`, { method: 'POST', body: fd })
-        .then(r => r.json())
-        .then(d => {
-            if (!d.success) { alert(d.message || 'Gagal menyimpan.'); return; }
-            // Nama didorong ke OLT juga; kalau OLT menolak, jangan diam-diam kelihatan sukses.
-            if (d.olt_warning) alert(d.message);
-            location.reload();
-        })
-        .catch(e => alert('Error: ' + e.message));
+    try {
+        const d = await App.readJson(await App.fetch(`/onus/${ONU_ID}/update-info`, { method: 'POST', body: fd }));
+        if (!d.success) { App.showToast(d.message || 'Gagal menyimpan.', 'error'); return; }
+        // Nama didorong ke OLT juga; kalau OLT menolak, jangan diam-diam kelihatan sukses.
+        if (d.olt_warning) App.showToast(d.message, 'warning', 6000);
+        location.reload();
+    } catch (e) { App.showToast('Error: ' + e.message, 'error'); }
 }
 
 const ONU_CURRENT = <?= json_encode([
@@ -778,7 +719,7 @@ const ONU_CURRENT = <?= json_encode([
     'tcont_profile' => (string)($onu['tcont_profile'] ?? ''),
 ]) ?>;
 
-function saveInfo(autoReload = false) {
+async function saveInfo(autoReload = false) {
     const vi = document.getElementById('edit_vlan_internet').value.trim();
     const va = document.getElementById('edit_vlan_acs').value.trim();
     const tc = document.getElementById('edit_tcont').value.trim();
@@ -800,35 +741,24 @@ function saveInfo(autoReload = false) {
     fd.append('vlan_acs',       va);
     fd.append('tcont_profile',  tc);
     fd.append('pppoe_user',     document.getElementById('edit_pppoe_user').value.trim());
-    fd.append('<?= csrf_token() ?>', '<?= csrf_hash() ?>');
 
     const el = document.getElementById('editResult');
-    if (!autoReload) {
-        el.className = 'mt-2 small';
-        el.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Menyimpan...';
-        el.classList.remove('d-none');
-    }
+    if (!autoReload) App.setMsg(el, 'loading', 'Menyimpan...');
 
-    fetch(`/onus/${ONU_ID}/update-info`, { method: 'POST', body: fd })
-        .then(r => r.json())
-        .then(data => {
-            if (data.success) {
-                if (data.olt_warning) alert(data.message);
-                location.reload();
-            } else {
-                el.className = 'mt-2 small alert alert-danger py-1';
-                el.textContent = data.message || 'Gagal menyimpan.';
-                el.classList.remove('d-none');
-            }
-        })
-        .catch(e => {
-            el.className = 'mt-2 small alert alert-danger py-1';
-            el.textContent = 'Error: ' + e.message;
-            el.classList.remove('d-none');
-        });
+    try {
+        const data = await App.readJson(await App.fetch(`/onus/${ONU_ID}/update-info`, { method: 'POST', body: fd }));
+        if (data.success) {
+            if (data.olt_warning) App.showToast(data.message, 'warning', 6000);
+            location.reload();
+        } else {
+            App.setMsg(el, 'error', App.escapeHtml(data.message || 'Gagal menyimpan.'));
+        }
+    } catch (e) {
+        App.setMsg(el, 'error', 'Error: ' + App.escapeHtml(e.message));
+    }
 }
 
-function loadAcsInfo() {
+async function loadAcsInfo() {
     const box = document.getElementById('acsStatusBox');
     const btn = document.getElementById('btnLoadAcs');
     // Tambah spinner di bawah konten yang ada (jangan hapus cache dulu)
@@ -836,171 +766,150 @@ function loadAcsInfo() {
     if (!spinner) {
         spinner = document.createElement('div');
         spinner.id = 'acsLoadingRow';
-        spinner.className = 'mt-2 small text-muted';
-        spinner.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Memuat data live dari ACS...';
+        spinner.className = 'mt-2 text-xs text-slate-400 flex items-center gap-1.5';
+        spinner.innerHTML = '<span class="spin spin-dark"></span> Memuat data live dari ACS...';
         box.appendChild(spinner);
     }
-    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Loading...'; }
+    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Loading...'; }
 
-    fetch(`/onus/${ONU_ID}/acs-info`)
-        .then(r => r.json())
-        .then(data => {
-            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Refresh ACS'; }
-            document.getElementById('acsLoadingRow')?.remove();
-            if (!data.success) {
-                // Gagal: tambah pesan error di bawah cache yang ada
-                const err = document.createElement('div');
-                err.className = 'mt-2 small text-danger';
-                err.innerHTML = `<i class="bi bi-x-circle me-1"></i>${data.message}`;
-                box.appendChild(err);
-                return;
-            }
-            const i = data.info;
-            const online  = i.online
-                ? '<span class="badge bg-success fs-6 py-1 px-2"><i class="bi bi-wifi me-1"></i>Online</span>'
-                : '<span class="badge bg-secondary fs-6 py-1 px-2"><i class="bi bi-wifi-off me-1"></i>Offline</span>';
-            const lastInf = i.last_inform ? new Date(i.last_inform).toLocaleString('id') : '-';
-
-            box.innerHTML = `
-                <div class="mb-2 d-flex align-items-center gap-2">${online}
-                    <small class="text-muted">Last Inform: ${lastInf}</small>
-                </div>
-                <table class="table table-sm mb-0">
-                    <tr><th class="text-muted" style="width:45%">Model</th><td>${i.model || '-'} (${i.manufacturer || '-'})</td></tr>
-                    <tr><th class="text-muted">WAN IP (PPPoE)</th><td class="font-monospace">${i.wan?.ip || '-'}</td></tr>
-                    <tr><th class="text-muted">PPPoE User</th><td>${i.wan?.pppoe_user || '-'}</td></tr>
-                    <tr><th class="text-muted">WAN Status</th><td>${i.wan?.status || '-'}</td></tr>
-                    <tr><th class="text-muted">Uptime</th><td>${i.wan?.uptime ? Math.floor(i.wan.uptime/3600)+'j '+Math.floor((i.wan.uptime%3600)/60)+'m' : '-'}</td></tr>
-                    <tr><th class="text-muted">WiFi SSID</th><td>${i.wifi?.ssid || '-'}</td></tr>
-                </table>`;
-
-            // Isi form WiFi (single + separate)
-            if (i.wifi?.ssid) {
-                document.getElementById('wifi_ssid').value    = i.wifi.ssid;
-                document.getElementById('wifi_ssid_24').value = i.wifi.ssid;
-            }
-            if (i.wifi?.password) {
-                document.getElementById('wifi_key').value    = i.wifi.password;
-                document.getElementById('wifi_key_24').value = i.wifi.password;
-            }
-            if (i.wifi5?.ssid)     document.getElementById('wifi_ssid_5').value = i.wifi5.ssid;
-            if (i.wifi5?.password) document.getElementById('wifi_key_5').value  = i.wifi5.password;
-
-            // Tampilkan info WiFi saat ini di atas form
-            const infoRow = document.getElementById('wifiInfoRow');
-            const has24   = i.wifi?.ssid  != null;
-            const has5    = i.wifi5?.ssid != null;
-            if (infoRow && (has24 || has5)) {
-                const el24 = document.getElementById('wifiInfo24');
-                const el5  = document.getElementById('wifiInfo5');
-                el24.textContent = has24 ? i.wifi.ssid  : '—';
-                el5.textContent  = has5  ? i.wifi5.ssid : '—';
-                el24.title = has24 ? i.wifi.ssid  : '';
-                el5.title  = has5  ? i.wifi5.ssid : '';
-                infoRow.classList.remove('d-none');
-            }
-
-            if (i.wan?.pppoe_user) document.getElementById('pppoe_user').value = i.wan.pppoe_user;
-            if (i.wan?.pppoe_pass) document.getElementById('pppoe_pass').value = i.wan.pppoe_pass;
-
-            // Sembunyikan WiFi section jika ONU tidak punya WiFi (bridge-only, mis. F609)
-            const wifiCard = document.getElementById('wifiCard');
-            if (wifiCard) {
-                const hasWifi = i.wifi?.ssid !== null && i.wifi?.ssid !== undefined;
-                wifiCard.style.display = hasWifi ? '' : 'none';
-                if (!hasWifi) {
-                    const clientCard = document.getElementById('clientCard');
-                    if (clientCard) clientCard.style.display = 'none';
-                }
-            }
-
-            // Tampilkan connected clients
-            const clientBox = document.getElementById('clientsBox');
-            if (clientBox && i.clients) {
-                if (!i.clients.length) {
-                    clientBox.innerHTML = '<span class="text-muted small">Tidak ada client terhubung.</span>';
-                } else {
-                    const rows = i.clients.map(c => `
-                        <tr>
-                            <td class="small">${c.hostname || '<span class="text-muted">—</span>'}</td>
-                            <td class="font-monospace small">${c.ip}</td>
-                            <td class="font-monospace small" style="font-size:.7rem">${c.mac}</td>
-                            <td class="small">${c.band ? `<span class="badge bg-light text-dark">${c.band}</span>` : '<span class="text-muted">LAN</span>'}</td>
-                        </tr>`).join('');
-                    clientBox.innerHTML = `<table class="table table-sm mb-0">
-                        <thead class="table-light"><tr><th>Hostname</th><th>IP</th><th>MAC</th><th>Band</th></tr></thead>
-                        <tbody>${rows}</tbody></table>`;
-                }
-            }
-        })
-        .catch(e => {
-            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Refresh ACS'; }
-            document.getElementById('acsLoadingRow')?.remove();
+    try {
+        const data = await App.readJson(await App.fetch(`/onus/${ONU_ID}/acs-info`));
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i> Refresh ACS'; App.refreshIcons(); }
+        document.getElementById('acsLoadingRow')?.remove();
+        if (!data.success) {
             const err = document.createElement('div');
-            err.className = 'mt-2 small text-danger';
-            err.innerHTML = `<i class="bi bi-x-circle me-1"></i>Error: ${e.message}`;
+            err.className = 'mt-2 text-xs text-rose-600';
+            err.textContent = '✖ ' + data.message;
             box.appendChild(err);
-        });
+            return;
+        }
+        const i = data.info;
+        const online  = i.online
+            ? '<span class="chip chip-success"><span class="pulsing-dot"></span> Online</span>'
+            : '<span class="chip chip-neutral">Offline</span>';
+        const lastInf = i.last_inform ? new Date(i.last_inform).toLocaleString('id') : '-';
+
+        box.innerHTML = `
+            <div class="mb-2 flex items-center gap-2 flex-wrap">${online}
+                <span class="text-[10px] text-slate-400">Last Inform: ${lastInf}</span>
+            </div>
+            <table class="data-table !min-w-0">
+                <tr><th class="!bg-transparent">Model</th><td class="text-xs">${App.escapeHtml(i.model || '-')} (${App.escapeHtml(i.manufacturer || '-')})</td></tr>
+                <tr><th class="!bg-transparent">WAN IP (PPPoE)</th><td class="font-mono text-xs">${App.escapeHtml(i.wan?.ip || '-')}</td></tr>
+                <tr><th class="!bg-transparent">PPPoE User</th><td class="text-xs font-mono">${App.escapeHtml(i.wan?.pppoe_user || '-')}</td></tr>
+                <tr><th class="!bg-transparent">WAN Status</th><td class="text-xs">${App.escapeHtml(i.wan?.status || '-')}</td></tr>
+                <tr><th class="!bg-transparent">Uptime</th><td class="text-xs">${i.wan?.uptime ? Math.floor(i.wan.uptime/3600)+'j '+Math.floor((i.wan.uptime%3600)/60)+'m' : '-'}</td></tr>
+                <tr><th class="!bg-transparent">WiFi SSID</th><td class="text-xs">${App.escapeHtml(i.wifi?.ssid || '-')}</td></tr>
+            </table>`;
+
+        // Isi form WiFi (single + separate)
+        if (i.wifi?.ssid) {
+            document.getElementById('wifi_ssid').value    = i.wifi.ssid;
+            document.getElementById('wifi_ssid_24').value = i.wifi.ssid;
+        }
+        if (i.wifi?.password) {
+            document.getElementById('wifi_key').value    = i.wifi.password;
+            document.getElementById('wifi_key_24').value = i.wifi.password;
+        }
+        if (i.wifi5?.ssid)     document.getElementById('wifi_ssid_5').value = i.wifi5.ssid;
+        if (i.wifi5?.password) document.getElementById('wifi_key_5').value  = i.wifi5.password;
+
+        // Tampilkan info WiFi saat ini di atas form
+        const infoRow = document.getElementById('wifiInfoRow');
+        const has24   = i.wifi?.ssid  != null;
+        const has5    = i.wifi5?.ssid != null;
+        if (infoRow && (has24 || has5)) {
+            const el24 = document.getElementById('wifiInfo24');
+            const el5  = document.getElementById('wifiInfo5');
+            el24.textContent = has24 ? i.wifi.ssid  : '—';
+            el5.textContent  = has5  ? i.wifi5.ssid : '—';
+            el24.title = has24 ? i.wifi.ssid  : '';
+            el5.title  = has5  ? i.wifi5.ssid : '';
+            infoRow.classList.remove('hidden');
+        }
+
+        if (i.wan?.pppoe_user) document.getElementById('pppoe_user').value = i.wan.pppoe_user;
+        if (i.wan?.pppoe_pass) document.getElementById('pppoe_pass').value = i.wan.pppoe_pass;
+
+        // Sembunyikan WiFi section jika ONU tidak punya WiFi (bridge-only, mis. F609)
+        const wifiCard = document.getElementById('wifiCard');
+        if (wifiCard) {
+            const hasWifi = i.wifi?.ssid !== null && i.wifi?.ssid !== undefined;
+            wifiCard.style.display = hasWifi ? '' : 'none';
+            if (!hasWifi) {
+                const clientCard = document.getElementById('clientCard');
+                if (clientCard) clientCard.style.display = 'none';
+            }
+        }
+
+        // Tampilkan connected clients
+        const clientBox = document.getElementById('clientsBox');
+        if (clientBox && i.clients) {
+            if (!i.clients.length) {
+                clientBox.innerHTML = '<span class="text-xs text-slate-400">Tidak ada client terhubung.</span>';
+            } else {
+                const rows = i.clients.map(c => `
+                    <tr>
+                        <td class="text-xs">${App.escapeHtml(c.hostname || '—')}</td>
+                        <td class="font-mono text-xs">${App.escapeHtml(c.ip)}</td>
+                        <td class="font-mono text-[10px]">${App.escapeHtml(c.mac)}</td>
+                        <td class="text-xs">${c.band ? `<span class="chip chip-neutral">${App.escapeHtml(c.band)}</span>` : '<span class="text-slate-400">LAN</span>'}</td>
+                    </tr>`).join('');
+                clientBox.innerHTML = `<div class="table-container"><table class="data-table">
+                    <thead><tr><th>Hostname</th><th>IP</th><th>MAC</th><th>Band</th></tr></thead>
+                    <tbody>${rows}</tbody></table></div>`;
+            }
+        }
+    } catch (e) {
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i> Refresh ACS'; App.refreshIcons(); }
+        document.getElementById('acsLoadingRow')?.remove();
+        const err = document.createElement('div');
+        err.className = 'mt-2 text-xs text-rose-600';
+        err.textContent = '✖ Error: ' + e.message;
+        box.appendChild(err);
+    }
 }
 
 function togglePass(id, btn) {
     const inp = document.getElementById(id);
     const show = inp.type === 'password';
     inp.type = show ? 'text' : 'password';
-    btn.querySelector('i').className = show ? 'bi bi-eye-slash' : 'bi bi-eye';
+    btn.querySelector('svg')?.remove();
+    btn.innerHTML = `<i data-lucide="${show ? 'eye-off' : 'eye'}" class="w-4 h-4"></i>`;
+    App.refreshIcons();
 }
 
-function setPppoe() {
+async function setPppoe() {
     const user = document.getElementById('pppoe_user').value.trim();
     const pass = document.getElementById('pppoe_pass').value.trim();
     const el   = document.getElementById('pppoeResult');
 
-    if (!user) {
-        el.className = 'mt-2 small alert alert-warning';
-        el.textContent = 'Username PPPoE wajib diisi sebelum push.';
-        el.classList.remove('d-none');
-        return;
-    }
-    if (!pass) {
-        el.className = 'mt-2 small alert alert-warning';
-        el.textContent = 'Password PPPoE wajib diisi sebelum push.';
-        el.classList.remove('d-none');
-        return;
-    }
+    if (!user) { App.setMsg(el, 'warning', 'Username PPPoE wajib diisi sebelum push.'); return; }
+    if (!pass) { App.setMsg(el, 'warning', 'Password PPPoE wajib diisi sebelum push.'); return; }
 
     const fd = new FormData();
     fd.append('action', 'pppoe');
     fd.append('pppoe_user', user);
     fd.append('pppoe_pass', pass);
-    fd.append('<?= csrf_token() ?>', '<?= csrf_hash() ?>');
 
-    el.className = 'mt-2';
-    el.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Memproses...';
-    el.classList.remove('d-none');
+    App.setMsg(el, 'loading', 'Memproses...');
 
-    fetch(`/onus/${ONU_ID}/acs-set`, { method: 'POST', body: fd })
-        .then(r => r.text().then(text => {
-            try { return JSON.parse(text); } catch(e) {
-                throw new Error(`Server error (${r.status}): ${text.substring(0, 200)}`);
-            }
-        }))
-        .then(data => {
-            el.className = `mt-2 small alert alert-${data.success ? 'success' : 'danger'}`;
-            el.textContent = data.message || (data.success ? 'PPPoE berhasil dipush ke ONU.' : 'Gagal.');
-        })
-        .catch(err => {
-            el.className = 'mt-2 small alert alert-danger';
-            el.textContent = 'Error: ' + err.message;
-        });
+    try {
+        const data = await App.readJson(await App.fetch(`/onus/${ONU_ID}/acs-set`, { method: 'POST', body: fd }));
+        App.setMsg(el, data.success ? 'success' : 'error',
+            App.escapeHtml(data.message || (data.success ? 'PPPoE berhasil dipush ke ONU.' : 'Gagal.')));
+    } catch (err) {
+        App.setMsg(el, 'error', 'Error: ' + App.escapeHtml(err.message));
+    }
 }
 
 function toggleWifiMode() {
     const dual = document.getElementById('wifi_dual_band').checked;
-    document.getElementById('wifiSingleForm').classList.toggle('d-none', !dual);
-    document.getElementById('wifiSeparateForm').classList.toggle('d-none', dual);
+    document.getElementById('wifiSingleForm').classList.toggle('hidden', !dual);
+    document.getElementById('wifiSeparateForm').classList.toggle('hidden', dual);
 }
 
-function setWifi(band = 'both') {
+async function setWifi(band = 'both') {
     let ssid, key, el;
     if (band === '24') {
         ssid = document.getElementById('wifi_ssid_24').value.trim();
@@ -1016,94 +925,68 @@ function setWifi(band = 'both') {
         el   = document.getElementById('wifiResult');
     }
 
-    if (!ssid || !key) {
-        el.className = 'mt-2 small alert alert-warning';
-        el.textContent = 'SSID dan password wajib diisi.';
-        el.classList.remove('d-none');
-        return;
-    }
-    if (key.length < 8) {
-        el.className = 'mt-2 small alert alert-warning';
-        el.textContent = 'Password WiFi minimal 8 karakter.';
-        el.classList.remove('d-none');
-        return;
-    }
+    if (!ssid || !key) { App.setMsg(el, 'warning', 'SSID dan password wajib diisi.'); return; }
+    if (key.length < 8) { App.setMsg(el, 'warning', 'Password WiFi minimal 8 karakter.'); return; }
 
     const fd = new FormData();
     fd.append('action',   'wifi');
     fd.append('ssid',     ssid);
     fd.append('wifi_key', key);
     fd.append('band',     band);
-    fd.append('<?= csrf_token() ?>', '<?= csrf_hash() ?>');
 
     const bandLabel = { both: '2.4GHz & 5GHz', '24': '2.4GHz', '5': '5GHz' }[band] ?? band;
-    el.className = 'mt-2';
-    el.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Memproses...';
-    el.classList.remove('d-none');
+    App.setMsg(el, 'loading', 'Memproses...');
 
-    fetch(`/onus/${ONU_ID}/acs-set`, { method: 'POST', body: fd })
-        .then(r => r.json())
-        .then(data => {
-            el.className = `mt-2 small alert alert-${data.success ? 'success' : 'danger'}`;
-            el.textContent = data.success ? `WiFi (${bandLabel}) berhasil diubah.` : (data.message || 'Gagal.');
-        })
-        .catch(err => {
-            el.className = 'mt-2 small alert alert-danger';
-            el.textContent = 'Error: ' + err.message;
-        });
+    try {
+        const data = await App.readJson(await App.fetch(`/onus/${ONU_ID}/acs-set`, { method: 'POST', body: fd }));
+        App.setMsg(el, data.success ? 'success' : 'error',
+            App.escapeHtml(data.success ? `WiFi (${bandLabel}) berhasil diubah.` : (data.message || 'Gagal.')));
+    } catch (err) {
+        App.setMsg(el, 'error', 'Error: ' + App.escapeHtml(err.message));
+    }
 }
 
 function setAcsMng() {
-    document.getElementById('setAcsModal').style.display = 'flex';
+    App.openModal('setAcsModal');
 }
 
 function closeSetAcsModal() {
-    document.getElementById('setAcsModal').style.display = 'none';
+    App.closeModal('setAcsModal');
 }
 
-function doSetAcs() {
+async function doSetAcs() {
     const btn = document.getElementById('btnDoSetAcs');
     const res = document.getElementById('setAcsResult');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Pushing...';
-    res.className = 'mt-2 small text-muted';
-    res.textContent = 'Menghubungi OLT...';
+    App.setLoading(btn, true, 'Pushing...');
+    App.setMsg(res, 'loading', 'Menghubungi OLT...');
 
-    const fd = new FormData();
-    fd.append('<?= csrf_token() ?>', '<?= csrf_hash() ?>');
-
-    fetch(`/onus/${ONU_ID}/set-acs`, { method: 'POST', body: fd })
-        .then(r => r.json())
-        .then(data => {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-check-circle me-1"></i>Push pon-onu-mng';
-            res.className = 'mt-2 small alert alert-' + (data.success ? 'success' : 'danger') + ' py-1';
-            res.textContent = data.message;
-            if (data.success) setTimeout(() => { closeSetAcsModal(); loadAcsInfo(); }, 2000);
-        })
-        .catch(e => {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-check-circle me-1"></i>Push pon-onu-mng';
-            res.className = 'mt-2 small alert alert-danger py-1';
-            res.textContent = 'Error: ' + e.message;
-        });
+    try {
+        const data = await App.readJson(await App.fetch(`/onus/${ONU_ID}/set-acs`, { method: 'POST' }));
+        App.setLoading(btn, false);
+        App.setMsg(res, data.success ? 'success' : 'error', App.escapeHtml(data.message));
+        if (data.success) setTimeout(() => { closeSetAcsModal(); loadAcsInfo(); }, 2000);
+    } catch (e) {
+        App.setLoading(btn, false);
+        App.setMsg(res, 'error', 'Error: ' + App.escapeHtml(e.message));
+    }
 }
 
-function reboot() {
+async function reboot() {
     if (!confirm('Reboot ONU ini via ACS? ONU akan mati sebentar.')) return;
     const btn = document.getElementById('btnReboot');
     btn.disabled = true;
 
     const fd = new FormData();
     fd.append('action', 'reboot');
-    fd.append('<?= csrf_token() ?>', '<?= csrf_hash() ?>');
 
-    fetch(`/onus/${ONU_ID}/acs-set`, { method: 'POST', body: fd })
-        .then(r => r.json())
-        .then(data => {
-            btn.disabled = false;
-            alert(data.success ? 'Perintah reboot terkirim ke ONU.' : ('Gagal: ' + data.message));
-        });
+    try {
+        const data = await App.readJson(await App.fetch(`/onus/${ONU_ID}/acs-set`, { method: 'POST', body: fd }));
+        btn.disabled = false;
+        App.showToast(data.success ? 'Perintah reboot terkirim ke ONU.' : ('Gagal: ' + data.message), data.success ? 'success' : 'error');
+    } catch (e) {
+        btn.disabled = false;
+        App.showToast('Error: ' + e.message, 'error');
+    }
 }
 </script>
 <?= $this->endSection() ?>

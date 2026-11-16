@@ -2,62 +2,101 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Register — GPON Manager</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-    <style>
-        body { background: #0f172a; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
-        .card { width: 420px; background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 36px; }
-        .brand { color: #fff; font-weight: 700; font-size: 1.3rem; }
-        .brand span { color: #3b82f6; }
-        .form-control { background: #0f172a; border-color: #334155; color: #e2e8f0; }
-        .form-control:focus { background: #0f172a; border-color: #3b82f6; color: #e2e8f0; box-shadow: 0 0 0 3px rgba(59,130,246,.15); }
-        .form-label { color: #94a3b8; font-size: .875rem; }
-        ::placeholder { color: #475569; }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Daftar — GPON Manager</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="https://unpkg.com/lucide@0.462.0/dist/umd/lucide.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        brand: { 50: '#eff6ff', 100: '#dbeafe', 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8' }
+                    }
+                }
+            }
+        }
+    </script>
 </head>
-<body>
-<div class="card">
-    <div class="text-center mb-4">
-        <div class="brand mb-1"><i class="bi bi-broadcast-pin me-1"></i>GPON <span>Manager</span></div>
-        <small class="text-secondary">Daftar akun baru</small>
+<body class="bg-slate-50 font-sans text-slate-800 antialiased min-h-screen flex items-center justify-center p-4">
+    <div class="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-xl p-8 space-y-6">
+        <!-- Brand Header -->
+        <div class="flex items-center space-x-3.5 pb-4 border-b border-slate-100">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-600 to-purple-500 flex items-center justify-center text-white shadow-xs shrink-0">
+                <i data-lucide="radio" class="w-5 h-5"></i>
+            </div>
+            <div>
+                <h1 class="text-base font-extrabold text-slate-900 leading-tight">GPON MANAGER</h1>
+                <p class="text-xs text-slate-500 font-medium">Daftar akun baru</p>
+            </div>
+        </div>
+
+        <?php if (session()->getFlashdata('error')): ?>
+            <div class="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-medium flex items-center space-x-2">
+                <i data-lucide="alert-circle" class="w-4 h-4 shrink-0 text-rose-500"></i>
+                <span><?= esc(session()->getFlashdata('error')) ?></span>
+            </div>
+        <?php endif; ?>
+
+        <form action="/register/save" method="POST" class="space-y-4">
+            <?= csrf_field() ?>
+            <div>
+                <label for="name" class="block text-xs font-semibold text-slate-700 mb-1.5">Nama Lengkap</label>
+                <div class="relative">
+                    <i data-lucide="id-card" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                    <input type="text" id="name" name="name" required value="<?= esc(old('name')) ?>"
+                           class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3.5 py-2.5 text-sm text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition placeholder-slate-400"
+                           placeholder="Nama lengkap">
+                </div>
+            </div>
+            <div>
+                <label for="username" class="block text-xs font-semibold text-slate-700 mb-1.5">Username</label>
+                <div class="relative">
+                    <i data-lucide="user" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                    <input type="text" id="username" name="username" required value="<?= esc(old('username')) ?>"
+                           class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3.5 py-2.5 text-sm text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition placeholder-slate-400"
+                           placeholder="Username">
+                </div>
+            </div>
+            <div>
+                <label for="email" class="block text-xs font-semibold text-slate-700 mb-1.5">Email</label>
+                <div class="relative">
+                    <i data-lucide="mail" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                    <input type="email" id="email" name="email" required value="<?= esc(old('email')) ?>"
+                           class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3.5 py-2.5 text-sm text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition placeholder-slate-400"
+                           placeholder="email@domain.com">
+                </div>
+            </div>
+            <div>
+                <label for="password" class="block text-xs font-semibold text-slate-700 mb-1.5">Password</label>
+                <div class="relative">
+                    <i data-lucide="lock" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                    <input type="password" id="password" name="password" required
+                           class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3.5 py-2.5 text-sm text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition placeholder-slate-400"
+                           placeholder="Min. 6 karakter">
+                </div>
+            </div>
+
+            <button type="submit" class="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm rounded-xl shadow-xs hover:shadow-md transition flex items-center justify-center space-x-2">
+                <span>Daftar</span>
+                <i data-lucide="user-plus" class="w-4 h-4"></i>
+            </button>
+
+            <div class="text-center pt-2">
+                <p class="text-[11px] text-slate-400">Sudah punya akun? <a href="/login" class="font-semibold text-blue-600 hover:underline">Login</a></p>
+            </div>
+        </form>
     </div>
 
-    <?php if (session()->getFlashdata('error')): ?>
-        <div class="alert alert-danger py-2 small"><?= esc(session()->getFlashdata('error')) ?></div>
-    <?php endif; ?>
-
-    <form action="/register/save" method="POST">
-        <?= csrf_field() ?>
-        <div class="mb-3">
-            <label class="form-label">Nama Lengkap</label>
-            <input type="text" name="name" class="form-control" placeholder="Nama lengkap"
-                   value="<?= esc(old('name')) ?>" required>
-        </div>
-        <div class="mb-3">
-            <label class="form-label">Username</label>
-            <input type="text" name="username" class="form-control" placeholder="Username"
-                   value="<?= esc(old('username')) ?>" required>
-        </div>
-        <div class="mb-3">
-            <label class="form-label">Email</label>
-            <input type="email" name="email" class="form-control" placeholder="email@domain.com"
-                   value="<?= esc(old('email')) ?>" required>
-        </div>
-        <div class="mb-4">
-            <label class="form-label">Password</label>
-            <input type="password" name="password" class="form-control" placeholder="Min. 6 karakter" required>
-        </div>
-        <button type="submit" class="btn btn-primary w-100">
-            <i class="bi bi-person-plus me-1"></i> Daftar
-        </button>
-    </form>
-
-    <div class="text-center mt-3">
-        <small class="text-secondary">Sudah punya akun? <a href="/login" class="text-primary">Login</a></small>
-    </div>
-</div>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        lucide.createIcons();
+    </script>
 </body>
 </html>

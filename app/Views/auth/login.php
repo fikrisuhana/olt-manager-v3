@@ -2,56 +2,93 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login — GPON Manager</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-    <style>
-        body { background: #0f172a; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
-        .login-card { width: 380px; background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 36px; }
-        .brand { color: #fff; font-weight: 700; font-size: 1.3rem; }
-        .brand span { color: #3b82f6; }
-        .form-control { background: #0f172a; border-color: #334155; color: #e2e8f0; }
-        .form-control:focus { background: #0f172a; border-color: #3b82f6; color: #e2e8f0; box-shadow: 0 0 0 3px rgba(59,130,246,.15); }
-        .form-label { color: #94a3b8; font-size: .875rem; }
-        ::placeholder { color: #475569; }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Masuk — GPON Manager</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="https://unpkg.com/lucide@0.462.0/dist/umd/lucide.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        brand: { 50: '#eff6ff', 100: '#dbeafe', 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8' }
+                    }
+                }
+            }
+        }
+    </script>
 </head>
-<body>
-<div class="login-card">
-    <div class="text-center mb-4">
-        <div class="brand mb-1"><i class="bi bi-broadcast-pin me-1"></i>GPON <span>Manager</span></div>
-        <small class="text-secondary">OLT Provisioning System</small>
+<body class="bg-slate-50 font-sans text-slate-800 antialiased min-h-screen flex items-center justify-center p-4">
+    <div class="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-xl p-8 space-y-6">
+        <!-- Brand Header -->
+        <div class="flex items-center space-x-3.5 pb-4 border-b border-slate-100">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-600 to-purple-500 flex items-center justify-center text-white shadow-xs shrink-0">
+                <i data-lucide="radio" class="w-5 h-5"></i>
+            </div>
+            <div>
+                <h1 class="text-base font-extrabold text-slate-900 leading-tight">GPON MANAGER</h1>
+                <p class="text-xs text-slate-500 font-medium">OLT Provisioning System</p>
+            </div>
+        </div>
+
+        <?php if (session()->getFlashdata('error')): ?>
+            <div class="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-medium flex items-center space-x-2">
+                <i data-lucide="alert-circle" class="w-4 h-4 shrink-0 text-rose-500"></i>
+                <span><?= esc(session()->getFlashdata('error')) ?></span>
+            </div>
+        <?php endif; ?>
+
+        <?php if (session()->getFlashdata('success')): ?>
+            <div class="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-700 font-medium flex items-center space-x-2">
+                <i data-lucide="check-circle" class="w-4 h-4 shrink-0 text-emerald-500"></i>
+                <span><?= esc(session()->getFlashdata('success')) ?></span>
+            </div>
+        <?php endif; ?>
+
+        <!-- Login Form -->
+        <form action="/login/process" method="POST" class="space-y-4">
+            <?= csrf_field() ?>
+            <div>
+                <label for="username" class="block text-xs font-semibold text-slate-700 mb-1.5">Username</label>
+                <div class="relative">
+                    <i data-lucide="user" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                    <input type="text" id="username" name="username" autocomplete="username" required autofocus
+                           value="<?= esc(old('username')) ?>"
+                           class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3.5 py-2.5 text-sm text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition placeholder-slate-400"
+                           placeholder="Masukkan username">
+                </div>
+            </div>
+
+            <div>
+                <label for="password" class="block text-xs font-semibold text-slate-700 mb-1.5">Password</label>
+                <div class="relative">
+                    <i data-lucide="lock" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                    <input type="password" id="password" name="password" autocomplete="current-password" required
+                           class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3.5 py-2.5 text-sm text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition placeholder-slate-400"
+                           placeholder="••••••••">
+                </div>
+            </div>
+
+            <button type="submit" class="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm rounded-xl shadow-xs hover:shadow-md transition flex items-center justify-center space-x-2">
+                <span>Masuk ke Dashboard</span>
+                <i data-lucide="arrow-right" class="w-4 h-4"></i>
+            </button>
+
+            <div class="text-center pt-2">
+                <p class="text-[11px] text-slate-400">Belum punya akun? <a href="/register" class="font-semibold text-blue-600 hover:underline">Daftar</a></p>
+            </div>
+        </form>
     </div>
 
-    <?php if (session()->getFlashdata('error')): ?>
-        <div class="alert alert-danger py-2 small"><?= esc(session()->getFlashdata('error')) ?></div>
-    <?php endif; ?>
-
-    <?php if (session()->getFlashdata('success')): ?>
-        <div class="alert alert-success py-2 small"><?= esc(session()->getFlashdata('success')) ?></div>
-    <?php endif; ?>
-
-    <form action="/login/process" method="POST">
-        <?= csrf_field() ?>
-        <div class="mb-3">
-            <label class="form-label">Username</label>
-            <input type="text" name="username" class="form-control" placeholder="Masukkan username"
-                   value="<?= esc(old('username')) ?>" required autofocus>
-        </div>
-        <div class="mb-4">
-            <label class="form-label">Password</label>
-            <input type="password" name="password" class="form-control" placeholder="Masukkan password" required>
-        </div>
-        <button type="submit" class="btn btn-primary w-100">
-            <i class="bi bi-box-arrow-in-right me-1"></i> Login
-        </button>
-    </form>
-
-    <div class="text-center mt-3">
-        <small class="text-secondary">Belum punya akun? <a href="/register" class="text-primary">Daftar</a></small>
-    </div>
-</div>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        lucide.createIcons();
+    </script>
 </body>
 </html>

@@ -1,307 +1,285 @@
 <?= $this->extend('layouts/main') ?>
 <?= $this->section('content') ?>
 
-<div class="card border-0 shadow-sm">
-    <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
-        <h6 class="mb-0 fw-semibold"><i class="bi bi-router me-1"></i>Semua ONU Terdaftar</h6>
-        <div class="d-flex align-items-center gap-2">
-            <span class="badge bg-primary" title="Total semua ONU"><?= $totalAll ?></span>
-            <button class="btn btn-sm btn-outline-secondary" id="btnSyncAllNames" title="Sync semua nama dari OLT">
-                <i class="bi bi-cloud-download me-1"></i>Sync Nama
-            </button>
-            <button class="btn btn-sm btn-outline-secondary" id="btnSyncPppoe" title="Sync PPPoE username dari OLT/ACS ke database">
-                <i class="bi bi-person-check me-1"></i>Sync PPPoE
-            </button>
+<!-- Page Header -->
+<div class="flex items-center justify-between flex-wrap gap-3">
+    <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100">
+            <i data-lucide="cpu" class="w-5 h-5"></i>
+        </div>
+        <div>
+            <h1 class="text-lg font-bold text-slate-900 leading-tight">ONU Terdaftar</h1>
+            <p class="text-xs text-slate-500"><?= $totalAll ?> ONU di seluruh OLT</p>
         </div>
     </div>
-    <div class="card-body p-0">
-        <?php if (empty($onus) && !$filter && !$q): ?>
-            <div class="text-center py-5 text-muted">
-                <i class="bi bi-router fs-1 d-block mb-2"></i>
-                Belum ada ONU. Scan ONU dari halaman OLT.
-                <div class="mt-2"><a href="/olts" class="btn btn-primary btn-sm">Ke Halaman OLT</a></div>
+    <div class="flex items-center gap-2">
+        <button class="btn btn-secondary btn-sm" id="btnSyncAllNames" title="Sync semua nama dari OLT">
+            <i data-lucide="cloud-download" class="w-3.5 h-3.5"></i> Sync Nama
+        </button>
+        <button class="btn btn-secondary btn-sm" id="btnSyncPppoe" title="Sync PPPoE username dari OLT/ACS ke database">
+            <i data-lucide="user-check" class="w-3.5 h-3.5"></i> Sync PPPoE
+        </button>
+    </div>
+</div>
+
+<div class="card !mb-0">
+    <?php if (empty($onus) && !$filter && !$q): ?>
+        <div class="empty-state">
+            <i data-lucide="cpu"></i>
+            Belum ada ONU. Scan ONU dari halaman OLT.
+            <div class="mt-3"><a href="/olts" class="btn btn-primary btn-sm">Ke Halaman OLT</a></div>
+        </div>
+    <?php else: ?>
+        <div class="pb-3">
+            <!-- Filter pills -->
+            <div class="flex gap-2 mb-3 flex-wrap">
+                <a href="/onus" class="px-3.5 py-1.5 rounded-full text-xs font-semibold border transition <?= !$filter ? 'bg-blue-600 text-white border-blue-600 shadow-xs' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50' ?>">
+                    Semua <span class="<?= !$filter ? 'text-blue-100' : 'text-slate-400' ?> font-mono"><?= $counts['all'] ?></span>
+                </a>
+                <a href="/onus?filter=no_pppoe" class="px-3.5 py-1.5 rounded-full text-xs font-semibold border transition <?= $filter === 'no_pppoe' ? 'bg-amber-500 text-white border-amber-500 shadow-xs' : 'bg-white text-amber-600 border-amber-200 hover:bg-amber-50' ?>">
+                    Belum PPPoE <span class="<?= $filter === 'no_pppoe' ? 'text-amber-100' : 'text-slate-400' ?> font-mono"><?= $counts['no_pppoe'] ?></span>
+                </a>
+                <a href="/onus?filter=no_acs" class="px-3.5 py-1.5 rounded-full text-xs font-semibold border transition <?= $filter === 'no_acs' ? 'bg-rose-600 text-white border-rose-600 shadow-xs' : 'bg-white text-rose-600 border-rose-200 hover:bg-rose-50' ?>">
+                    Belum di ACS <span class="<?= $filter === 'no_acs' ? 'text-rose-100' : 'text-slate-400' ?> font-mono"><?= $counts['no_acs'] ?></span>
+                </a>
             </div>
-        <?php else: ?>
-            <div class="p-3 pb-0">
-                <!-- Filter tabs -->
-                <div class="d-flex gap-2 mb-3 flex-wrap">
-                    <a href="/onus" class="btn btn-sm <?= !$filter ? 'btn-primary' : 'btn-outline-secondary' ?>">
-                        Semua <span class="badge bg-white text-dark ms-1"><?= $counts['all'] ?></span>
-                    </a>
-                    <a href="/onus?filter=no_pppoe" class="btn btn-sm <?= $filter === 'no_pppoe' ? 'btn-warning' : 'btn-outline-warning' ?>">
-                        Belum PPPoE <span class="badge bg-white text-dark ms-1"><?= $counts['no_pppoe'] ?></span>
-                    </a>
-                    <a href="/onus?filter=no_acs" class="btn btn-sm <?= $filter === 'no_acs' ? 'btn-danger' : 'btn-outline-danger' ?>">
-                        Belum di ACS <span class="badge bg-white text-dark ms-1"><?= $counts['no_acs'] ?></span>
-                    </a>
+
+            <!-- Search -->
+            <form method="get" action="/onus" class="flex gap-2 mb-3">
+                <?php if ($filter): ?><input type="hidden" name="filter" value="<?= esc($filter) ?>"><?php endif; ?>
+                <div class="relative flex-1 max-w-md">
+                    <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                    <input type="text" name="q" class="form-input pl-9" placeholder="Cari SN, nama, OLT ..." value="<?= esc($q) ?>">
                 </div>
-                <form method="get" action="/onus" class="d-flex gap-2 mb-3">
-                    <?php if ($filter): ?><input type="hidden" name="filter" value="<?= esc($filter) ?>"><?php endif; ?>
-                    <input type="text" name="q" class="form-control form-control-sm"
-                           placeholder="Cari SN, nama, OLT ..."
-                           value="<?= esc($q) ?>">
-                    <button class="btn btn-sm btn-outline-primary px-3">Cari</button>
-                    <?php if ($q || $filter): ?>
-                    <a href="/onus" class="btn btn-sm btn-outline-secondary">Reset</a>
-                    <?php endif; ?>
-                </form>
+                <button class="btn btn-primary btn-sm">Cari</button>
                 <?php if ($q || $filter): ?>
-                <div class="small text-muted mb-2">
-                    <?php if ($filter === 'no_pppoe'): ?>
-                        ONU belum dikonfigurasi PPPoE:
-                    <?php elseif ($filter === 'no_acs'): ?>
-                        ONU belum terdaftar di ACS:
-                    <?php elseif ($q): ?>
-                        Hasil pencarian "<strong><?= esc($q) ?></strong>":
-                    <?php endif; ?>
-                    <strong><?= $total ?></strong> ONU
-                </div>
+                <a href="/onus" class="btn btn-secondary btn-sm">Reset</a>
                 <?php endif; ?>
-            </div>
-            <?php
-            function sortLink(string $col, string $label, string $currentSort, string $currentDir, string $q, int $page, string $filter = ''): string {
-                $active  = $currentSort === $col;
-                $newDir  = ($active && $currentDir === 'ASC') ? 'DESC' : 'ASC';
-                $icon    = $active ? ($currentDir === 'ASC' ? '↑' : '↓') : '<span style="opacity:.3">↕</span>';
-                $qs      = http_build_query(array_filter(['sort' => $col, 'dir' => $newDir, 'q' => $q, 'filter' => $filter]));
-                $cls     = $active ? 'fw-semibold text-primary' : 'text-dark';
-                return "<a href=\"/onus?{$qs}\" class=\"text-decoration-none {$cls}\">{$label} {$icon}</a>";
-            }
-            ?>
-            <div class="table-responsive">
-                <table class="table table-hover mb-0" id="onuTable">
-                    <thead class="table-light">
-                        <tr>
-                            <th class="ps-3"><?= sortLink('sn', 'SN', $sort, $dir, $q, $page, $filter) ?></th>
-                            <th><?= sortLink('name', 'Nama', $sort, $dir, $q, $page, $filter) ?> <small class="text-muted fw-normal">(klik untuk edit)</small></th>
-                            <th><?= sortLink('olt_name', 'OLT', $sort, $dir, $q, $page, $filter) ?></th>
-                            <th>PPPoE Username</th>
-                            <th><?= sortLink('onu_type', 'Tipe', $sort, $dir, $q, $page, $filter) ?></th>
-                            <th>ACS</th>
-                            <th><?= sortLink('registered_at', 'Terdaftar', $sort, $dir, $q, $page, $filter) ?></th>
-                            <th></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($onus as $onu): ?>
-                        <?php
-                            $acsInfo = $acsData[strtoupper($onu['sn'])] ?? null;
-                        ?>
-                            <tr data-search="<?= esc(strtolower("{$onu['sn']} {$onu['name']} {$onu['olt_name']}")) ?>">
-                                <td class="font-monospace small ps-3">
-                                    <a href="/onus/<?= $onu['id'] ?>" class="text-decoration-none"><?= esc($onu['sn']) ?></a>
-                                </td>
-                                <td class="onu-name-cell" data-id="<?= $onu['id'] ?>" data-name="<?= esc($onu['name'] ?? '', 'attr') ?>">
-                                    <span class="onu-name-text" style="cursor:pointer" title="Klik untuk edit nama">
-                                        <?= esc($onu['name'] ?? '—') ?>
-                                    </span>
-                                    <button class="btn btn-link btn-sm p-0 ms-1 text-muted sync-name-btn"
-                                            title="Ambil nama dari OLT" style="font-size:.7rem;vertical-align:middle">
-                                        <i class="bi bi-cloud-download"></i>
-                                    </button>
-                                </td>
-                                <td>
-                                    <a href="/olts/<?= $onu['olt_id'] ?>" class="text-decoration-none small">
-                                        <?= esc($onu['olt_name']) ?>
-                                    </a>
-                                    <div class="text-muted" style="font-size:.7rem"><?= esc($onu['olt_ip']) ?></div>
-                                </td>
-                                <?php
-                                    $snUp = strtoupper($onu['sn']);
-                                    $pppUser = $acsData[$snUp]['pppoe_user'] ?? $onu['pppoe_user'] ?? null;
-                                ?>
-                                <td class="small">
-                                    <?= $pppUser ? esc($pppUser) : '<span class="text-muted">—</span>' ?>
-                                </td>
-                                <td><span class="badge bg-light text-dark"><?= esc($onu['onu_type'] ?? '-') ?></span></td>
-                                <td>
-                                    <?php if ($acsInfo): ?>
-                                        <?php if ($acsInfo['online']): ?>
-                                            <span class="badge bg-success"><i class="bi bi-wifi me-1"></i>Online</span>
-                                        <?php else: ?>
-                                            <?php $lastInf = $acsInfo['last_inform'] ? date('d/m H:i', strtotime($acsInfo['last_inform'])) : '?'; ?>
-                                            <span class="badge bg-secondary" title="Last inform: <?= $lastInf ?>">
-                                                <i class="bi bi-wifi-off me-1"></i>Offline
-                                            </span>
-                                        <?php endif; ?>
-                                        <?php if (!empty($acsInfo['model'])): ?>
-                                            <div class="text-muted" style="font-size:.7rem"><?= esc($acsInfo['model']) ?></div>
-                                        <?php endif; ?>
-                                    <?php else: ?>
-                                        <span class="text-muted small">—</span>
-                                    <?php endif; ?>
-                                </td>
-                                <td class="small text-muted"><?= date('d/m/y H:i', strtotime($onu['registered_at'])) ?></td>
-                                <td class="text-nowrap">
-                                    <a href="/onus/<?= $onu['id'] ?>" class="btn btn-sm btn-outline-secondary py-0" title="Detail">
-                                        <i class="bi bi-eye"></i>
-                                    </a>
-                                    <?php if (strncasecmp($onu['sn'], 'ZTEG', 4) === 0 && !$acsInfo): ?>
-                                    <button class="btn btn-sm btn-outline-primary py-0 ms-1 btn-set-acs"
-                                            data-id="<?= $onu['id'] ?>" data-sn="<?= esc($onu['sn'], 'attr') ?>"
-                                            title="Push ACS management ke ONU ini (pon-onu-mng)">
-                                        <i class="bi bi-broadcast"></i>
-                                    </button>
-                                    <?php endif; ?>
-                                    <button class="btn btn-sm btn-outline-danger py-0 ms-1"
-                                            title="Hapus ONU dari OLT"
-                                            onclick="deleteOnu(<?= $onu['id'] ?>, '<?= esc($onu['sn'], 'js') ?>', this)">
-                                        <i class="bi bi-trash"></i>
-                                    </button>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
-            <?php
-            $totalPages = (int)ceil($total / $perPage);
-            if ($totalPages > 1):
-                $extraParams = array_filter(['q' => $q, 'filter' => $filter, 'sort' => ($sort !== 'registered_at' ? $sort : null), 'dir' => ($dir !== 'DESC' ? $dir : null)]);
-                $qStr = $extraParams ? '&' . http_build_query($extraParams) : '';
-            ?>
-            <div class="d-flex justify-content-between align-items-center px-3 py-2 border-top">
-                <small class="text-muted">
-                    Menampilkan <?= (($page-1)*$perPage)+1 ?>–<?= min($page*$perPage, $total) ?> dari <?= $total ?> ONU
-                </small>
-                <nav>
-                    <ul class="pagination pagination-sm mb-0">
-                        <li class="page-item <?= $page<=1 ? 'disabled' : '' ?>">
-                            <a class="page-link" href="/onus?page=<?= $page-1 ?><?= $qStr ?>">‹</a>
-                        </li>
-                        <?php
-                        $start = max(1, $page - 2);
-                        $end   = min($totalPages, $page + 2);
-                        if ($start > 1): ?><li class="page-item disabled"><span class="page-link">…</span></li><?php endif;
-                        for ($i = $start; $i <= $end; $i++): ?>
-                        <li class="page-item <?= $i==$page ? 'active' : '' ?>">
-                            <a class="page-link" href="/onus?page=<?= $i ?><?= $qStr ?>"><?= $i ?></a>
-                        </li>
-                        <?php endfor;
-                        if ($end < $totalPages): ?><li class="page-item disabled"><span class="page-link">…</span></li><?php endif; ?>
-                        <li class="page-item <?= $page>=$totalPages ? 'disabled' : '' ?>">
-                            <a class="page-link" href="/onus?page=<?= $page+1 ?><?= $qStr ?>">›</a>
-                        </li>
-                    </ul>
-                </nav>
+            </form>
+
+            <?php if ($q || $filter): ?>
+            <div class="text-xs text-slate-400 mb-2">
+                <?php if ($filter === 'no_pppoe'): ?>
+                    ONU belum dikonfigurasi PPPoE:
+                <?php elseif ($filter === 'no_acs'): ?>
+                    ONU belum terdaftar di ACS:
+                <?php elseif ($q): ?>
+                    Hasil pencarian "<strong class="text-slate-600"><?= esc($q) ?></strong>":
+                <?php endif; ?>
+                <strong class="text-slate-600"><?= $total ?></strong> ONU
             </div>
             <?php endif; ?>
+        </div>
+
+        <?php
+        function sortLink(string $col, string $label, string $currentSort, string $currentDir, string $q, int $page, string $filter = ''): string {
+            $active  = $currentSort === $col;
+            $newDir  = ($active && $currentDir === 'ASC') ? 'DESC' : 'ASC';
+            $icon    = $active ? ($currentDir === 'ASC' ? '▲' : '▼') : '<span style="opacity:.3">↕</span>';
+            $qs      = http_build_query(array_filter(['sort' => $col, 'dir' => $newDir, 'q' => $q, 'filter' => $filter]));
+            $cls     = $active ? 'text-blue-600' : 'text-slate-400 hover:text-slate-600';
+            return "<a href=\"/onus?{$qs}\" class=\"text-decoration-none {$cls}\">{$label} <span class=\"text-[9px]\">{$icon}</span></a>";
+        }
+        ?>
+        <div class="table-container">
+            <table class="data-table" id="onuTable">
+                <thead>
+                    <tr>
+                        <th><?= sortLink('sn', 'SN', $sort, $dir, $q, $page, $filter) ?></th>
+                        <th><?= sortLink('name', 'Nama', $sort, $dir, $q, $page, $filter) ?> <span class="normal-case font-normal tracking-normal opacity-60">(klik untuk edit)</span></th>
+                        <th><?= sortLink('olt_name', 'OLT', $sort, $dir, $q, $page, $filter) ?></th>
+                        <th>PPPoE Username</th>
+                        <th><?= sortLink('onu_type', 'Tipe', $sort, $dir, $q, $page, $filter) ?></th>
+                        <th>ACS</th>
+                        <th><?= sortLink('registered_at', 'Terdaftar', $sort, $dir, $q, $page, $filter) ?></th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($onus as $onu): ?>
+                    <?php
+                        $acsInfo = $acsData[strtoupper($onu['sn'])] ?? null;
+                    ?>
+                        <tr data-search="<?= esc(strtolower("{$onu['sn']} {$onu['name']} {$onu['olt_name']}")) ?>">
+                            <td class="font-mono text-xs">
+                                <a href="/onus/<?= $onu['id'] ?>" class="text-blue-600 hover:underline font-semibold"><?= esc($onu['sn']) ?></a>
+                            </td>
+                            <td class="onu-name-cell" data-id="<?= $onu['id'] ?>" data-name="<?= esc($onu['name'] ?? '', 'attr') ?>">
+                                <span class="onu-name-text text-xs font-medium" style="cursor:pointer" title="Klik untuk edit nama">
+                                    <?= esc($onu['name'] ?? '—') ?>
+                                </span>
+                                <button class="btn btn-secondary btn-sm btn-icon-only sync-name-btn !min-w-[26px] !min-h-[26px] !p-1 align-middle" title="Ambil nama dari OLT">
+                                    <i data-lucide="cloud-download" class="w-3 h-3"></i>
+                                </button>
+                            </td>
+                            <td>
+                                <a href="/olts/<?= $onu['olt_id'] ?>" class="text-xs font-medium text-slate-700 hover:text-blue-600">
+                                    <?= esc($onu['olt_name']) ?>
+                                </a>
+                                <div class="text-[10px] text-slate-400 font-mono"><?= esc($onu['olt_ip']) ?></div>
+                            </td>
+                            <?php
+                                $snUp = strtoupper($onu['sn']);
+                                $pppUser = $acsData[$snUp]['pppoe_user'] ?? $onu['pppoe_user'] ?? null;
+                            ?>
+                            <td class="font-mono text-xs">
+                                <?= $pppUser ? esc($pppUser) : '<span class="text-slate-300">—</span>' ?>
+                            </td>
+                            <td><span class="chip chip-neutral"><?= esc($onu['onu_type'] ?? '-') ?></span></td>
+                            <td>
+                                <?php if ($acsInfo): ?>
+                                    <?php if ($acsInfo['online']): ?>
+                                        <span class="chip chip-success"><span class="pulsing-dot"></span> Online</span>
+                                    <?php else: ?>
+                                        <?php $lastInf = $acsInfo['last_inform'] ? date('d/m H:i', strtotime($acsInfo['last_inform'])) : '?'; ?>
+                                        <span class="chip chip-neutral" title="Last inform: <?= $lastInf ?>">Offline</span>
+                                    <?php endif; ?>
+                                    <?php if (!empty($acsInfo['model'])): ?>
+                                        <div class="text-[10px] text-slate-400"><?= esc($acsInfo['model']) ?></div>
+                                    <?php endif; ?>
+                                <?php else: ?>
+                                    <span class="chip chip-warning">Belum di ACS</span>
+                                <?php endif; ?>
+                            </td>
+                            <td class="text-xs text-slate-400 whitespace-nowrap"><?= date('d/m/y H:i', strtotime($onu['registered_at'])) ?></td>
+                            <td class="text-right whitespace-nowrap">
+                                <a href="/onus/<?= $onu['id'] ?>" class="btn btn-secondary btn-sm btn-icon-only" title="Detail">
+                                    <i data-lucide="eye" class="w-3.5 h-3.5"></i>
+                                </a>
+                                <?php if (strncasecmp($onu['sn'], 'ZTEG', 4) === 0 && !$acsInfo): ?>
+                                <button class="btn btn-secondary btn-sm btn-icon-only btn-set-acs ml-1"
+                                        data-id="<?= $onu['id'] ?>" data-sn="<?= esc($onu['sn'], 'attr') ?>"
+                                        title="Push ACS management ke ONU ini (pon-onu-mng)">
+                                    <i data-lucide="radio" class="w-3.5 h-3.5"></i>
+                                </button>
+                                <?php endif; ?>
+                                <button class="btn btn-danger btn-sm btn-icon-only ml-1"
+                                        title="Hapus ONU dari OLT"
+                                        onclick="deleteOnu(<?= $onu['id'] ?>, '<?= esc($onu['sn'], 'js') ?>', this)">
+                                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+
+        <?php
+        $totalPages = (int)ceil($total / $perPage);
+        if ($totalPages > 1):
+            $extraParams = array_filter(['q' => $q, 'filter' => $filter, 'sort' => ($sort !== 'registered_at' ? $sort : null), 'dir' => ($dir !== 'DESC' ? $dir : null)]);
+            $qStr = $extraParams ? '&' . http_build_query($extraParams) : '';
+        ?>
+        <div class="flex justify-between items-center px-4 py-3 border-t border-slate-100 flex-wrap gap-2">
+            <small class="text-xs text-slate-400">
+                Menampilkan <strong class="text-slate-600"><?= (($page-1)*$perPage)+1 ?>–<?= min($page*$perPage, $total) ?></strong> dari <strong class="text-slate-600"><?= $total ?></strong> ONU
+            </small>
+            <nav class="flex items-center gap-1">
+                <a class="px-2.5 py-1 rounded-lg text-xs font-semibold border transition <?= $page <= 1 ? 'bg-slate-50 text-slate-300 border-slate-100 pointer-events-none' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50' ?>" href="/onus?page=1<?= $qStr ?>">«</a>
+                <a class="px-2.5 py-1 rounded-lg text-xs font-semibold border transition <?= $page <= 1 ? 'bg-slate-50 text-slate-300 border-slate-100 pointer-events-none' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50' ?>" href="/onus?page=<?= $page-1 ?><?= $qStr ?>">‹</a>
+                <?php
+                $start = max(1, $page - 2);
+                $end   = min($totalPages, $page + 2);
+                if ($start > 1): ?><span class="px-1.5 text-slate-400 text-xs">…</span><?php endif;
+                for ($i = $start; $i <= $end; $i++): ?>
+                <a class="px-2.5 py-1 rounded-lg text-xs font-semibold border transition <?= $i == $page ? 'bg-blue-600 text-white border-blue-600 shadow-xs' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50' ?>" href="/onus?page=<?= $i ?><?= $qStr ?>"><?= $i ?></a>
+                <?php endfor;
+                if ($end < $totalPages): ?><span class="px-1.5 text-slate-400 text-xs">…</span><?php endif; ?>
+                <a class="px-2.5 py-1 rounded-lg text-xs font-semibold border transition <?= $page >= $totalPages ? 'bg-slate-50 text-slate-300 border-slate-100 pointer-events-none' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50' ?>" href="/onus?page=<?= $page+1 ?><?= $qStr ?>">›</a>
+                <a class="px-2.5 py-1 rounded-lg text-xs font-semibold border transition <?= $page >= $totalPages ? 'bg-slate-50 text-slate-300 border-slate-100 pointer-events-none' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50' ?>" href="/onus?page=<?= $totalPages ?><?= $qStr ?>">»</a>
+            </nav>
+        </div>
         <?php endif; ?>
-    </div>
+    <?php endif; ?>
 </div>
 
 <?= $this->endSection() ?>
 <?= $this->section('scripts') ?>
-<style>
-@keyframes spin { to { transform: rotate(360deg); } }
-.spin { display:inline-block; animation: spin .7s linear infinite; }
-</style>
 <script>
-const _csrf = { name: '<?= csrf_token() ?>', hash: '<?= csrf_hash() ?>' };
-
-
 document.querySelectorAll('.btn-set-acs').forEach(btn => {
-    btn.addEventListener('click', function() {
+    btn.addEventListener('click', async function() {
         const id = this.dataset.id;
         const sn = this.dataset.sn;
         if (!confirm(`Push ACS management ke ONU ${sn}?\n\nHanya push: service acs + wan-ip 2 dhcp\nPPPoE (wan-ip 1) tidak disentuh.`)) return;
-        const origHtml = this.innerHTML;
-        this.disabled = true;
-        this.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
-        const fd = new FormData();
-        fd.append(_csrf.name, _csrf.hash);
-        fetch(`/onus/${id}/set-acs`, { method: 'POST', body: fd })
-            .then(r => r.json())
-            .then(data => {
-                this.disabled = false;
-                this.innerHTML = origHtml;
-                if (data.success) {
-                    this.classList.replace('btn-outline-primary', 'btn-outline-success');
-                    this.title = 'Berhasil dipush ke ONU';
-                } else {
-                    alert('Gagal: ' + data.message);
-                }
-            })
-            .catch(() => { this.disabled = false; this.innerHTML = origHtml; });
+        App.setLoading(this, true, '');
+        try {
+            const data = await App.readJson(await App.fetch(`/onus/${id}/set-acs`, { method: 'POST' }));
+            App.setLoading(this, false);
+            if (data.success) {
+                this.style.color = 'var(--signal-good)';
+                this.style.borderColor = 'rgba(24,128,56,.3)';
+                this.title = 'Berhasil dipush ke ONU';
+                App.showToast(`Berhasil push ACS ke ${sn}`, 'success');
+            } else {
+                App.showToast('Gagal: ' + data.message, 'error');
+            }
+        } catch (e) {
+            App.setLoading(this, false);
+            App.showToast('Error: ' + e.message, 'error');
+        }
     });
 });
 
-document.getElementById('btnSyncPppoe')?.addEventListener('click', function() {
+document.getElementById('btnSyncPppoe')?.addEventListener('click', async function() {
     if (!confirm('Sync PPPoE username dari OLT (ZTE) dan ACS (FH/lainnya) ke database?\nProses ini mungkin memakan waktu beberapa menit.')) return;
-    this.disabled = true;
-    this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Syncing...';
-    const fd = new FormData();
-    fd.append(_csrf.name, _csrf.hash);
-    fetch('/onus/sync-pppoe-all', { method: 'POST', body: fd })
-        .then(r => r.json())
-        .then(data => {
-            this.disabled = false;
-            this.innerHTML = '<i class="bi bi-person-check me-1"></i>Sync PPPoE';
-            if (data.success) {
-                let msg = data.message;
-                if (data.errors && data.errors.length) msg += '\n\nError:\n' + data.errors.join('\n');
-                alert(msg);
-                if (data.updated > 0) location.reload();
-            } else {
-                alert('Gagal: ' + data.message);
-            }
-        })
-        .catch(() => {
-            this.disabled = false;
-            this.innerHTML = '<i class="bi bi-person-check me-1"></i>Sync PPPoE';
-        });
+    App.setLoading(this, true, 'Syncing...');
+    try {
+        const data = await App.readJson(await App.fetch('/onus/sync-pppoe-all', { method: 'POST' }));
+        App.setLoading(this, false);
+        if (data.success) {
+            let msg = App.escapeHtml(data.message);
+            if (data.errors && data.errors.length) msg += '<br><br>' + data.errors.map(e => '• ' + App.escapeHtml(e)).join('<br>');
+            App.showToast(msg, 'success', 8000);
+            if (data.updated > 0) setTimeout(() => location.reload(), 2500);
+        } else {
+            App.showToast('Gagal: ' + data.message, 'error');
+        }
+    } catch (e) {
+        App.setLoading(this, false);
+        App.showToast('Error: ' + e.message, 'error');
+    }
 });
 
-document.getElementById('btnSyncAllNames')?.addEventListener('click', function() {
-    this.disabled = true;
-    this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Syncing... (bisa beberapa menit)';
-    const fd = new FormData();
-    fd.append(_csrf.name, _csrf.hash);
-    fetch('/onus/sync-all-names', { method: 'POST', body: fd })
-        .then(r => r.json())
-        .then(data => {
-            this.disabled = false;
-            this.innerHTML = '<i class="bi bi-cloud-download me-1"></i>Sync Semua Nama';
-            if (data.success) {
-                let msg = `${data.updated} nama berhasil diupdate dari OLT.`;
-                if (data.errors && data.errors.length) msg += '\n\nError:\n' + data.errors.join('\n');
-                alert(msg);
-                location.reload();
-            } else {
-                alert('Gagal: ' + data.message);
-            }
-        })
-        .catch(() => {
-            this.disabled = false;
-            this.innerHTML = '<i class="bi bi-cloud-download me-1"></i>Sync Semua Nama';
-        });
+document.getElementById('btnSyncAllNames')?.addEventListener('click', async function() {
+    App.setLoading(this, true, 'Syncing... (bisa beberapa menit)');
+    try {
+        const data = await App.readJson(await App.fetch('/onus/sync-all-names', { method: 'POST' }));
+        App.setLoading(this, false);
+        if (data.success) {
+            let msg = `${data.updated} nama berhasil diupdate dari OLT.`;
+            if (data.errors && data.errors.length) msg += '<br>' + data.errors.map(e => '• ' + App.escapeHtml(e)).join('<br>');
+            App.showToast(msg, 'success', 8000);
+            setTimeout(() => location.reload(), 2500);
+        } else {
+            App.showToast('Gagal: ' + data.message, 'error');
+        }
+    } catch (e) {
+        App.setLoading(this, false);
+        App.showToast('Error: ' + e.message, 'error');
+    }
 });
 
 document.querySelectorAll('.sync-name-btn').forEach(btn => {
-    btn.addEventListener('click', function(e) {
+    btn.addEventListener('click', async function(e) {
         e.stopPropagation();
         const cell = this.closest('.onu-name-cell');
-        const icon = this.querySelector('i');
-        icon.className = 'bi bi-arrow-repeat spin';
-        this.disabled = true;
-
-        const fd = new FormData();
-        fd.append(_csrf.name, _csrf.hash);
-        fetch(`/onus/${cell.dataset.id}/sync-name`, { method: 'POST', body: fd })
-            .then(r => r.json())
-            .then(data => {
-                icon.className = 'bi bi-cloud-download';
-                this.disabled = false;
-                if (data.success) {
-                    cell.dataset.name = data.name;
-                    cell.querySelector('.onu-name-text').textContent = data.name;
-                    const tr = cell.closest('tr');
-                    tr.dataset.search = tr.dataset.search + ' ' + data.name.toLowerCase();
-                } else {
-                    alert('Sync gagal: ' + data.message);
-                }
-            })
-            .catch(() => { icon.className = 'bi bi-cloud-download'; this.disabled = false; });
+        App.setLoading(this, true, '');
+        try {
+            const data = await App.readJson(await App.fetch(`/onus/${cell.dataset.id}/sync-name`, { method: 'POST' }));
+            App.setLoading(this, false);
+            if (data.success) {
+                cell.dataset.name = data.name;
+                cell.querySelector('.onu-name-text').textContent = data.name;
+                const tr = cell.closest('tr');
+                tr.dataset.search = tr.dataset.search + ' ' + data.name.toLowerCase();
+            } else {
+                App.showToast('Sync gagal: ' + data.message, 'error');
+            }
+        } catch (err) {
+            App.setLoading(this, false);
+            App.showToast('Error: ' + err.message, 'error');
+        }
     });
 });
 
@@ -313,13 +291,13 @@ document.querySelectorAll('.onu-name-cell').forEach(cell => {
         const input = document.createElement('input');
         input.type = 'text';
         input.value = current;
-        input.className = 'form-control form-control-sm py-0';
+        input.className = 'form-input !min-h-[30px] !py-0.5 text-xs';
         input.style.minWidth = '140px';
         span.replaceWith(input);
         input.focus();
         input.select();
 
-        const save = () => {
+        const save = async () => {
             const newName = input.value.trim();
             if (!newName || newName === current) {
                 input.replaceWith(createSpan(current));
@@ -327,18 +305,17 @@ document.querySelectorAll('.onu-name-cell').forEach(cell => {
             }
             const fd = new FormData();
             fd.append('name', newName);
-            fd.append(_csrf.name, _csrf.hash);
-            fetch(`/onus/${cell.dataset.id}/update-info`, { method: 'POST', body: fd })
-                .then(r => r.json())
-                .then(data => {
-                    if (data.success) {
-                        cell.dataset.name = newName;
-                        const tr = cell.closest('tr');
-                        tr.dataset.search = tr.dataset.search.replace(current.toLowerCase(), newName.toLowerCase());
-                    }
-                    input.replaceWith(createSpan(data.success ? newName : current));
-                })
-                .catch(() => input.replaceWith(createSpan(current)));
+            try {
+                const data = await App.readJson(await App.fetch(`/onus/${cell.dataset.id}/update-info`, { method: 'POST', body: fd }));
+                if (data.success) {
+                    cell.dataset.name = newName;
+                    const tr = cell.closest('tr');
+                    tr.dataset.search = tr.dataset.search.replace(current.toLowerCase(), newName.toLowerCase());
+                }
+                input.replaceWith(createSpan(data.success ? newName : current));
+            } catch (e) {
+                input.replaceWith(createSpan(current));
+            }
         };
 
         input.addEventListener('blur', save);
@@ -351,34 +328,29 @@ document.querySelectorAll('.onu-name-cell').forEach(cell => {
 
 function createSpan(name) {
     const s = document.createElement('span');
-    s.className = 'onu-name-text text-muted fst-italic';
+    s.className = 'onu-name-text text-xs font-medium';
     s.style.cursor = 'pointer';
     s.title = 'Klik untuk edit nama';
     s.textContent = name || '—';
     return s;
 }
 
-function deleteOnu(onuId, sn, btn) {
+async function deleteOnu(onuId, sn, btn) {
     if (!confirm(`Hapus ONU ${sn} dari OLT?\nAksi ini akan menghapus konfigurasi ONU dari OLT.`)) return;
-    const origHtml = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
-
-    const fd = new FormData();
-    fd.append(_csrf.name, _csrf.hash);
-
-    fetch(`/onus/${onuId}/delete`, { method: 'POST', body: fd })
-        .then(r => r.json())
-        .then(data => {
-            if (data.success) {
-                btn.closest('tr').remove();
-            } else {
-                btn.disabled = false;
-                btn.innerHTML = origHtml;
-                alert('Gagal: ' + data.message);
-            }
-        })
-        .catch(e => { btn.disabled = false; btn.innerHTML = origHtml; alert('Error: ' + e.message); });
+    App.setLoading(btn, true, '');
+    try {
+        const data = await App.readJson(await App.fetch(`/onus/${onuId}/delete`, { method: 'POST' }));
+        if (data.success) {
+            btn.closest('tr').remove();
+            App.showToast(`ONU ${sn} dihapus dari OLT`, 'success');
+        } else {
+            App.setLoading(btn, false);
+            App.showToast('Gagal: ' + data.message, 'error');
+        }
+    } catch (e) {
+        App.setLoading(btn, false);
+        App.showToast('Error: ' + e.message, 'error');
+    }
 }
 </script>
 <?= $this->endSection() ?>
