@@ -7,9 +7,12 @@ use App\Models\OnuModel;
 use App\Models\ProvisionLogModel;
 use App\Libraries\OltDriverFactory;
 use App\Libraries\OnuCacheService;
+use App\Controllers\Concerns\ReopensSession;
 
 class MigrationController extends BaseController
 {
+    use ReopensSession;
+
     private int $userId;
 
     public function __construct()
@@ -27,7 +30,7 @@ class MigrationController extends BaseController
         $olts     = $oltModel->getByUser($this->userId);
 
         if (empty($olts)) {
-            return redirect()->to('/olts')->with('error', 'Belum ada OLT. Silakan tambahkan OLT terlebih dahulu.');
+            return $this->flashRedirect()->to('/olts')->with('error', 'Belum ada OLT. Silakan tambahkan OLT terlebih dahulu.');
         }
 
         $selectedOlt = null;

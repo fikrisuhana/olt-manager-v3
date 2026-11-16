@@ -11,9 +11,12 @@ use App\Libraries\OltDriverFactory;
 use App\Libraries\AcsService;
 use App\Libraries\OnuCacheService;
 use CodeIgniter\Controller;
+use App\Controllers\Concerns\ReopensSession;
 
 class OnuController extends Controller
 {
+    use ReopensSession;
+
     private int $userId;
 
     public function __construct()
@@ -77,7 +80,7 @@ class OnuController extends Controller
         $onu = $onuModel->getWithOlt($id);
 
         if (!$onu || $onu['user_id'] != $this->userId) {
-            return redirect()->to('/onus')->with('error', 'ONU tidak ditemukan.');
+            return $this->flashRedirect()->to('/onus')->with('error', 'ONU tidak ditemukan.');
         }
 
         $cache    = new OnuCacheService();

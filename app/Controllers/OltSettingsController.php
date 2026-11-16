@@ -6,6 +6,7 @@ use App\Models\OltModel;
 use App\Models\OnuModel;
 use App\Models\ProvisionLogModel;
 use App\Libraries\OltDriverFactory;
+use App\Controllers\Concerns\ReopensSession;
 
 /**
  * Menu "Setting OLT" — perawatan perangkat, bukan pendaftaran pelanggan:
@@ -13,6 +14,8 @@ use App\Libraries\OltDriverFactory;
  */
 class OltSettingsController extends BaseController
 {
+    use ReopensSession;
+
     private int $userId;
 
     public function __construct()
@@ -27,7 +30,7 @@ class OltSettingsController extends BaseController
         $olts     = $oltModel->getByUser($this->userId);
 
         if (empty($olts)) {
-            return redirect()->to('/olts')->with('error', 'Belum ada OLT. Silakan tambahkan OLT terlebih dahulu.');
+            return $this->flashRedirect()->to('/olts')->with('error', 'Belum ada OLT. Silakan tambahkan OLT terlebih dahulu.');
         }
 
         $selectedOlt = $oltId ? $oltModel->getByUserAndId($this->userId, $oltId) : null;

@@ -9,9 +9,12 @@ use App\Libraries\OltDriverFactory;
 use App\Libraries\OnuCacheService;
 use App\Libraries\AcsService;
 use CodeIgniter\Controller;
+use App\Controllers\Concerns\ReopensSession;
 
 class OltController extends Controller
 {
+    use ReopensSession;
+
     private int $userId;
 
     public function __construct()
@@ -40,12 +43,12 @@ class OltController extends Controller
         $data = $this->getFormData();
 
         if (!$this->validateForm($data)) {
-            return redirect()->back()->with('error', 'Nama, IP, username, dan password wajib diisi.')->withInput();
+            return $this->flashRedirect()->to('/olts/create')->with('error', 'Nama, IP, username, dan password wajib diisi.')->withInput();
         }
 
         $data['user_id'] = $this->userId;
         $oltModel->insert($data);
-        return redirect()->to('/olts')->with('success', 'OLT berhasil ditambahkan.');
+        return $this->flashRedirect()->to('/olts')->with('success', 'OLT berhasil ditambahkan.');
     }
 
     private function ensureVlanProfilesColumn(): void
@@ -72,7 +75,7 @@ class OltController extends Controller
         $onuModel = new OnuModel();
 
         $olt = $oltModel->getByUserAndId($this->userId, $id);
-        if (!$olt) return redirect()->to('/olts')->with('error', 'OLT tidak ditemukan.');
+        if (!$olt) return $this->flashRedirect()->to('/olts')->with('error', 'OLT tidak ditemukan.');
 
         $cache = new OnuCacheService();
 
@@ -92,7 +95,7 @@ class OltController extends Controller
     {
         $oltModel = new OltModel();
         $olt = $oltModel->getByUserAndId($this->userId, $id);
-        if (!$olt) return redirect()->to('/olts')->with('error', 'OLT tidak ditemukan.');
+        if (!$olt) return $this->flashRedirect()->to('/olts')->with('error', 'OLT tidak ditemukan.');
 
         return view('olt/form', ['title' => 'Edit OLT', 'olt' => $olt]);
     }
@@ -101,7 +104,7 @@ class OltController extends Controller
     {
         $oltModel = new OltModel();
         $olt = $oltModel->getByUserAndId($this->userId, $id);
-        if (!$olt) return redirect()->to('/olts')->with('error', 'OLT tidak ditemukan.');
+        if (!$olt) return $this->flashRedirect()->to('/olts')->with('error', 'OLT tidak ditemukan.');
 
         $data = $this->getFormData();
         // Jika password dikosongkan, pertahankan password lama
@@ -113,17 +116,17 @@ class OltController extends Controller
         }
 
         $oltModel->update($id, $data);
-        return redirect()->to("/olts/{$id}")->with('success', 'OLT berhasil diperbarui.');
+        return $this->flashRedirect()->to("/olts/{$id}")->with('success', 'OLT berhasil diperbarui.');
     }
 
     public function delete(int $id)
     {
         $oltModel = new OltModel();
         $olt = $oltModel->getByUserAndId($this->userId, $id);
-        if (!$olt) return redirect()->to('/olts')->with('error', 'OLT tidak ditemukan.');
+        if (!$olt) return $this->flashRedirect()->to('/olts')->with('error', 'OLT tidak ditemukan.');
 
         $oltModel->delete($id);
-        return redirect()->to('/olts')->with('success', 'OLT berhasil dihapus.');
+        return $this->flashRedirect()->to('/olts')->with('success', 'OLT berhasil dihapus.');
     }
 
     /**
