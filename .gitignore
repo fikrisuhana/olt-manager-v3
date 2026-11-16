@@ -131,3 +131,6 @@ _modules/*
 
 /results/
 /phpunit.xml
+
+# Build aset UI (hasilnya di public/assets, yang di-commit)
+node_modules/

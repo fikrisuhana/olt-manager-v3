@@ -31,3 +31,9 @@ writable/debugbar/*
 .env
 .env.*
 !.env.example
+
+# Build aset UI — hasil sudah di public/assets
+node_modules/
+resources/
+package*.json
+tailwind.config.js
